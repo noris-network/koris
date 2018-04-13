@@ -26,51 +26,61 @@ Pre-requisits
 Get started
 ~~~~~~~~~~~
 
-1. Clone your colt locally::
+1. Clone your colt locally:
 
-    $ git clone git@gitlab.noris.net:PI/colt.git
+.. code:: shell
 
-2.  Install colt to your system::
+   $ git clone git@gitlab.noris.net:PI/colt.git
 
-    $ python3 setup.py install
+2. Install colt to your system:
 
-3. edit your own configuration file::
+.. code:: shell
+
+   $ python3 setup.py install
+
+3. edit your own configuration file:
+
+.. code:: shell
 
    $ editor docs/k8s-machines-config.yml
 
 You need to have some things pre-created, but the file is self explaining.
 
-4. clone kubespray::
+4. clone kubespray:
+
+.. code:: shell
 
    $ git clone -b 'v2.4.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
 
-5. You should now edit the file `kubespray/inventory/group_vars/all.yml` and set the and set options as you like, for example::
+5. You should now edit the file `kubespray/inventory/group_vars/all.yml` and set the and set options as you like, for example:
 
-   ..code:: yaml
+.. code::
 
    bootstrap_os: ubuntu
 
-6. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml` and set the
-following options::
+6. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml` and set the following options:
 
-   ..code:: yaml
+.. code::
 
    kube_network_plugin: calico
-   cluster_name: your-cluster-name.loacl
+   cluster_name: your-cluster-name.local
    dashboard_enabled: true
 
-7. Note for people with ansible pre-knowledge, YOU DON'T need to create your own inventory file, it will be automatically created for you.
+7. Note for people with ansible pre-knowledge, **YOU DON'T** need to create your own inventory file, it will be automatically created for you.
 
-8. Run colt with your cluster configuration, this will create your inventory::
+8. Run colt with your cluster configuration, this will create your inventory
+
+.. code:: shell
 
    $ colt k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
 
-9. Run ansible kubespray on your newly created machines::
+9. Run ansible kubespray on your newly created machines:
 
+.. code:: shell
 
-  $ ansible-playbook -i hosts.ini kubespray/cluster.yml \
+   $ ansible-playbook -i hosts.ini kubespray/cluster.yml \
      --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
      -e ansible_python_interpreter="/usr/bin/python3" -b
 
@@ -91,7 +101,7 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
 
-A thank to @jlehmannrichter, who made the work preceded this project, and answered
+A thanks to @jlehmannrichter, who made the work preceded this project, and answered
 my questions about ansible and kubespray.
 
 .. highlight:: shell
