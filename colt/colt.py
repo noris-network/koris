@@ -10,7 +10,8 @@ import yaml
 from configparser import ConfigParser
 
 from novaclient import client as nvclient
-from novaclient.exceptions import NotFound as NovaNotFound
+from novaclient.exceptions import (NotFound as NovaNotFound,
+                                   BadRequest as NovaBadRequest)
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 
@@ -90,35 +91,44 @@ async def create_instance_with_volume(name, zone, flavor, image, nics,
         "destination_type": "volume",
         "delete_on_termination": True}
 
-    v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
-                              availability_zone=zone)
+    try:
+        v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
+                                  availability_zone=zone)
 
-    while v.status != 'available':
-        await asyncio.sleep(1)
-        v = cinder.volumes.get(v.id)
+        while v.status != 'available':
+            await asyncio.sleep(1)
+            v = cinder.volumes.get(v.id)
 
-    v.update(bootable=True)
-    # wait for mark as bootable
-    await asyncio.sleep(2)
+        v.update(bootable=True)
+        # wait for mark as bootable
+        await asyncio.sleep(2)
 
-    # k8s does not like swap
-    swapoff = """
+        # k8s does not like swap
+        swapoff = """
 #cloud-config
 manage_etc_hosts: true
 runcmd:
  - swapoff -a
-    """
-    bdm_v2["uuid"] = v.id
-    print("Creating instance %s... " % name)
-    instance = nova.servers.create(name=name,
-                                   availability_zone=zone,
-                                   image=None,
-                                   key_name=keypair.name,
-                                   flavor=flavor,
-                                   nics=nics, security_groups=secgroups,
-                                   block_device_mapping_v2=[bdm_v2],
-                                   userdata=swapoff,
-                                   )
+        """
+        bdm_v2["uuid"] = v.id
+        print("Creating instance %s... " % name)
+        instance = nova.servers.create(name=name,
+                                       availability_zone=zone,
+                                       image=None,
+                                       key_name=keypair.name,
+                                       flavor=flavor,
+                                       nics=nics, security_groups=secgroups,
+                                       block_device_mapping_v2=[bdm_v2],
+                                       userdata=swapoff,
+                                       )
+
+    except (NovaBadRequest):
+        print(info(red("Something weired happend, I so I didn't create %s" %
+                       name)))
+    except KeyboardInterrupt:
+        print(info(red("Oky doky, stopping as you interrupted me ...")))
+        print(info(red("Cleaning after myself")))
+        v.delete
 
     inst_status = instance.status
     print("waiting for 10 seconds for the machine to be launched ... ")
