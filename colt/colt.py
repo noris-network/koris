@@ -90,7 +90,8 @@ async def create_instance_with_volume(name, zone, flavor, image, nics,
         "destination_type": "volume",
         "delete_on_termination": True}
 
-    v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id)
+    v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
+                              availability_zone=zone)
 
     while v.status != 'available':
         await asyncio.sleep(1)
