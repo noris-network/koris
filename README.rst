@@ -87,4 +87,7 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
 
+A thank to @jlehmannrichter, who made the work preceded this project, and answered
+my questions about ansible and kubespray.
+
 .. highlight:: shell
