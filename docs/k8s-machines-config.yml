@@ -1,0 +1,17 @@
+# Use this file to configure the type of machines you want to create
+# on OpenStack
+---
+master_flavor: 'ECS.GP1.2-8'
+node_flavor: 'ECS.C1.4-8'
+private_net: 'k8s-nude'
+cluster-name: 'nude'
+availibity-zones:
+ - de-nbg6-1b
+ - de-nbg6-1a
+n-masters: 2
+n-nodes: 3
+n-etcd: 3
+keypair: 'otiram'
+security_group: 'k8s-nude-k8s-a0tp4t'
+user_data: 'cloud-init-parts/generic'
+image: "Ubuntu Xenial Server Cloudimg"
