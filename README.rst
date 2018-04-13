@@ -46,10 +46,14 @@ You need to have some things pre-created, but the file is self explaining.
 
 5. You should now edit the file `kubespray/inventory/group_vars/all.yml` and set the and set options as you like, for example::
 
+   ..code:: yaml
+
    bootstrap_os: ubuntu
 
 6. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml` and set the
 following options::
+
+   ..code:: yaml
 
    kube_network_plugin: calico
    cluster_name: your-cluster-name.loacl
