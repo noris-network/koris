@@ -110,6 +110,7 @@ runcmd:
     bdm_v2["uuid"] = v.id
     print("Creating instance %s... " % name)
     instance = nova.servers.create(name=name,
+                                   availability_zone=zone,
                                    image=None,
                                    key_name=keypair.name,
                                    flavor=flavor,
