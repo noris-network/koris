@@ -11,7 +11,7 @@ from configparser import ConfigParser
 
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound,
-                                   BadRequest as NovaBadRequest)
+                                   ClientException as NovaClientException)
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 
@@ -122,7 +122,7 @@ runcmd:
                                        userdata=swapoff,
                                        )
 
-    except (NovaBadRequest):
+    except NovaClientException:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
     except KeyboardInterrupt:
