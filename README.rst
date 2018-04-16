@@ -1,5 +1,5 @@
 ====
-colt
+kolt
 ====
 
 launch kubernetes clusters on OpenStack using ansible-kubespray
@@ -30,7 +30,7 @@ Get started
 
 .. code:: shell
 
-   $ git clone git@gitlab.noris.net:PI/colt.git
+   $ git clone git@gitlab.noris.net:PI/kolt.git
 
 2. Install colt to your system:
 
@@ -72,7 +72,7 @@ You need to have some things pre-created, but the file is self explaining.
 
 .. code:: shell
 
-   $ colt k8s-machines-config.yml -i mycluster.ini
+   $ kolt k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
 
