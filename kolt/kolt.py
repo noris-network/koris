@@ -75,7 +75,7 @@ async def create_instance_with_volume(name, zone, flavor, image, nics,
     global nova, neutron, cinder
 
     try:
-        print(que("Checking if %s does not exist already exist" % name))
+        print(que("Checking if %s does not already exist" % name))
         server = nova.servers.find(name=name)
         ip = server.interface_list()[0].fixed_ips[0]['ip_address']
         print(info("This machine already exists ... skipping"))

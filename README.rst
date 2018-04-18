@@ -80,7 +80,7 @@ This last step takes about one minute to complete.
 
 .. code:: shell
 
-   $ ansible-playbook -i hosts.ini kubespray/cluster.yml \
+   $ ansible-playbook -i mycluster.ini kubespray/cluster.yml \
      --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
      -e ansible_python_interpreter="/usr/bin/python3" -b
 
