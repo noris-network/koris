@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import os
 import uuid
+import textwrap
 import sys
 
 import yaml
@@ -19,6 +20,7 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
+from _init import CloudInit
 
 
 def chunks(l, n):
@@ -62,7 +64,8 @@ def get_host_zones(hosts, zones):
         return distribute_hosts(host_zones)
 
 
-# ugly global variables don't do this to much
+# ugly global variables!
+# don't do this to much
 # only tolerated here because we don't define any classes for the sake of
 # readablitiy. this will be refactored in v0.2
 
@@ -70,7 +73,8 @@ nova, cinder, neutron = None, None, None
 
 
 async def create_instance_with_volume(name, zone, flavor, image, nics,
-                                      keypair, secgroups, role, hosts):
+                                      keypair, secgroups, role, userdata,
+                                      hosts):
 
     global nova, neutron, cinder
 
@@ -103,13 +107,6 @@ async def create_instance_with_volume(name, zone, flavor, image, nics,
         # wait for mark as bootable
         await asyncio.sleep(2)
 
-        # k8s does not like swap
-        swapoff = """
-#cloud-config
-manage_etc_hosts: true
-runcmd:
- - swapoff -a
-        """
         bdm_v2["uuid"] = v.id
         print("Creating instance %s... " % name)
         instance = nova.servers.create(name=name,
@@ -119,7 +116,7 @@ runcmd:
                                        flavor=flavor,
                                        nics=nics, security_groups=secgroups,
                                        block_device_mapping_v2=[bdm_v2],
-                                       userdata=swapoff,
+                                       userdata=userdata,
                                        )
 
     except NovaClientException:
@@ -180,6 +177,23 @@ def get_clients():
     return nova, neutron, cinder
 
 
+def create_userdata(img_name, role):
+    """
+    Create multipart userdata for Ubuntu
+    """
+    if 'ubuntu' in img_name.lower():
+        userdata = str(CloudInit(role))
+    else:
+        userdata = """
+                   #cloud-config
+                   manage_etc_hosts: true
+                   runcmd:
+                    - swapoff -a
+                   """
+        userdata = textwrap.dedent(userdata).strip()
+    return userdata
+
+
 def create_machines(nova, neutron, cinder, config):
 
     print(info(cyan("gathering information from openstack ...")))
@@ -191,15 +205,17 @@ def create_machines(nova, neutron, cinder, config):
                                      config['security_group'])
     secgroups = [secgroup['id']]
 
+    user_data = create_userdata(config['image'])
+
     net = neutron.find_resource("network", config["private_net"])
     nics = [{'net-id': net['id']}]
     print(info(cyan("got my info, now launching machines ...")))
 
     hosts = {}
     build_args_master = [master_flavor, image, nics, keypair, secgroups,
-                         "master", hosts]
+                         "master", user_data, hosts]
     build_args_node = [node_flavor, image, nics, keypair, secgroups, "node",
-                       hosts]
+                       user_data, hosts]
     cluster = config['cluster-name']
     masters = ["master-%s-%s" % (i, cluster) for i in
                range(1, config['n-masters'] + 1)]
