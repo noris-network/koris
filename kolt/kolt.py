@@ -177,7 +177,7 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(img_name, role):
+def create_userdata(role, img_name):
     """
     Create multipart userdata for Ubuntu
     """
@@ -205,7 +205,8 @@ def create_machines(nova, neutron, cinder, config):
                                      config['security_group'])
     secgroups = [secgroup['id']]
 
-    user_data = create_userdata(config['image'])
+    node_user_data = create_userdata('node', config['image'])
+    master_user_data = create_userdata('master', config['image'])
 
     net = neutron.find_resource("network", config["private_net"])
     nics = [{'net-id': net['id']}]
@@ -213,9 +214,9 @@ def create_machines(nova, neutron, cinder, config):
 
     hosts = {}
     build_args_master = [master_flavor, image, nics, keypair, secgroups,
-                         "master", user_data, hosts]
+                         "master", master_user_data, hosts]
     build_args_node = [node_flavor, image, nics, keypair, secgroups, "node",
-                       user_data, hosts]
+                       node_user_data, hosts]
     cluster = config['cluster-name']
     masters = ["master-%s-%s" % (i, cluster) for i in
                range(1, config['n-masters'] + 1)]
