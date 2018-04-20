@@ -19,9 +19,9 @@ sudo apt-get install -y \
     apt-transport-https \
     ca-certificates \
     curl \
-    ebtables \
-    software-properties-common \
-    cloud-utils
+	ebtables \
+	software-properties-common \
+	cloud-utils
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 sudo add-apt-repository \
@@ -35,4 +35,3 @@ sudo apt-get update && apt-get install -y docker-engine=DOCKER_VERSION
 sudo systemctl enable docker
 sudo systemctl start docker
 sudo docker pull quay.io/coreos/hyperkube:${HYPERKUBE_VERSION}
-sudo docker pull quay.io/coreos/etcd:${ETCD_VERSION}
