@@ -30,7 +30,7 @@ sudo add-apt-repository \
    stable"
 
 
-sudo apt-get update && apt-get install -y docker-engine=DOCKER_VERSION
+sudo apt-get update && apt-get install -y docker-engine=${DOCKER_VERSION}
 
 sudo systemctl enable docker
 sudo systemctl start docker
