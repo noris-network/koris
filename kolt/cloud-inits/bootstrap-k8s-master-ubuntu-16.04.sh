@@ -8,8 +8,7 @@ text/x-shellscript
 
 # Specify the Kubernetes version to use.
 HYPERKUBE_VERSION="v1.9.2_coreos.0"
-DOCKER_VERSION="17.05.0~ce-0~ubuntu-xenial"
-ETCDVERSION="v3.2.4"
+ETCD_VERSION="v3.2.4"
 
 sudo apt-get remove -y docker docker-engine docker.io
 
@@ -30,7 +29,11 @@ sudo add-apt-repository \
    stable"
 
 
-sudo apt-get update && apt-get install -y docker-engine=${DOCKER_VERSION}
+sudo apt-get update
+
+DOCKER_VERSION=$(apt-cache madison docker-ce | grep 17.03 | cut -d"|" -f 2 | head -1| awk '{$1=$1};1')
+
+apt-get install -y docker-ce=${DOCKER_VERSION}
 
 sudo systemctl enable docker
 sudo systemctl start docker
