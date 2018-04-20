@@ -20,7 +20,7 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
-from _init import CloudInit
+from ._init import CloudInit
 
 
 def chunks(l, n):
