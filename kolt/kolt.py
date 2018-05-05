@@ -171,6 +171,10 @@ def get_clients():
         nova = nvclient.Client('2.1', session=sess)
         neutron = ntclient.Client(session=sess)
         cinder = cclient.Client('3.0', session=sess)
+    except TypeError:
+        print(red("Did you source your OS rc file in v3?"))
+        print(red("If your file has the key OS_ENDPOINT_TYPE it's the wrong one!"))
+        sys.exit(1)
     except KeyError:
         print(red("Did you source your OS rc file?"))
         sys.exit(1)
