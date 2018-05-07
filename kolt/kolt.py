@@ -8,6 +8,7 @@ import textwrap
 import sys
 
 import yaml
+
 from configparser import ConfigParser
 
 from novaclient import client as nvclient
@@ -273,9 +274,9 @@ def create_inventory(hosts, config):
     for master in masters:
         cfg.set("etcd", master)
 
-    if config["n-etcd"] > len(masters):
-        for node in nodes[:-len(masters)]:
-            cfg.set("etcd", node)
+    etcds_missing =  config["n-etcd"] = len(masters)
+    for node in nodes[:etcds_missing + 1]:
+        cfg.set("etcd", node)
 
     # add all cluster groups
     cfg.set("k8s-cluster:children", "kube-node")
