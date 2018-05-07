@@ -80,6 +80,7 @@ Save the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``.
 9. Run ansible kubespray on your newly created machines:
 
 .. code:: shell
+
    $ cd kubespray
    $ ansible-playbook -i  inventory/mycluster.ini cluster.yml \
      --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
