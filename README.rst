@@ -75,13 +75,13 @@ You need to have some things pre-created, but the file is self explaining.
    $ kolt k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
-Save the above inventory file ``mycluster.ini`` to ``inventory/local/``.
+Save the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``.
 
 9. Run ansible kubespray on your newly created machines:
 
 .. code:: shell
    $ cd kubespray
-   $ ansible-playbook -i  inventory/local/mycluster.ini cluster.yml \
+   $ ansible-playbook -i  inventory/mycluster.ini cluster.yml \
      --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
      -e ansible_python_interpreter="/usr/bin/python3" -b
 
