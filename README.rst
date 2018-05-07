@@ -84,7 +84,7 @@ Save the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``.
    $ cd kubespray
    $ ansible-playbook -i  inventory/mycluster.ini cluster.yml \
      --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
-     -e ansible_python_interpreter="/usr/bin/python3" -b
+     -e ansible_python_interpreter="/usr/bin/python3" -b --flush-cache
 
 
 Known Issues
