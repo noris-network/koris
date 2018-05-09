@@ -8,6 +8,7 @@ import textwrap
 import sys
 
 import yaml
+
 from configparser import ConfigParser
 
 from novaclient import client as nvclient
@@ -273,9 +274,9 @@ def create_inventory(hosts, config):
     for master in masters:
         cfg.set("etcd", master)
 
-    if config["n-etcd"] > len(masters):
-        for node in nodes[:-len(masters)]:
-            cfg.set("etcd", node)
+    etcds_missing =  config["n-etcd"] - len(masters)
+    for node in nodes[:etcds_missing]:
+        cfg.set("etcd", node)
 
     # add all cluster groups
     cfg.set("k8s-cluster:children", "kube-node")
@@ -298,6 +299,10 @@ def main():
 
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
+    
+    if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
+        print(red("You must have an odd number (>1) of etcd machines!"))
+        sys.exit(2)
 
     nova, neutron, cinder = get_clients()
     cfg = create_machines(nova, neutron, cinder, config)

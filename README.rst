@@ -17,7 +17,7 @@ Usage
 Pre-requisits
 ~~~~~~~~~~~~~~
 
-1. An OS_RC_FILE, you should download it from the openstack WebUI.
+1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
 2. A pre-created network, and security group.
 3. Basic understanding of OpenStack.
 4. Ansible installed on your system.
@@ -81,14 +81,16 @@ You must set the following option:
    $ kolt k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
+Save the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``.
 
 9. Run ansible kubespray on your newly created machines:
 
 .. code:: shell
 
-   $ ansible-playbook -i mycluster.ini kubespray/cluster.yml \
+   $ cd kubespray
+   $ ansible-playbook -i  inventory/mycluster.ini cluster.yml \
      --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
-     -e ansible_python_interpreter="/usr/bin/python3" -b
+     -e ansible_python_interpreter="/usr/bin/python3" -b --flush-cache
 
 
 Known Issues
@@ -97,6 +99,39 @@ Known Issues
 Creating OS machines with floating IPS is still not implemented. You need
 to run colt and ansible on a machine which can access your kubernetes cluster
 via ssh or your should run ansible via a bastion host.
+
+If you encounter the following message before failure:
+
+.. code:: shell
+
+   RUNNING HANDLER [kubernetes/master : Master | wait for the apiserver to be running] **********
+   Wednesday 09 May 2018  10:04:27 +0000 (0:00:00.449)       0:13:00.785 *********
+   FAILED - RETRYING: Master | wait for the apiserver to be running (20 retries left).
+   FAILED - RETRYING: Master | wait for the apiserver to be running (20 retries left).
+   FAILED - RETRYING: Master | wait for the apiserver to be running (19 retries left).
+   FAILED - RETRYING: Master | wait for the apiserver to be running (19 retries left).
+
+Check on your masters that the kubelete service can start:
+
+.. code:: shell
+
+   ssh master1
+   sudo journalctl -u kubelet
+
+This should give you some hint how to fix the problem.
+
+You should also check that you have a properly created ``cloud_config`` file:
+
+.. code:: shell
+
+   root@master-2-nude:/home/ubuntu# cat /etc/kubernetes/cloud_config
+   [Global]
+   auth-url="https://de-nbg6-1.noris.cloud:5000/v3"
+   username="*********YOUR_USER**********"
+   password="*********YOUR_PASSWORD********"
+   region="de-nbg6-1"
+   tenant-id="********YOUR_TENNANT_ID*************"
+   domain-name="noris.de"
 
 
 Credits
