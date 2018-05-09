@@ -58,6 +58,12 @@ You need to have some things pre-created, but the file is self explaining.
 
    bootstrap_os: ubuntu
 
+You must set the following option:
+
+.. code::
+
+   cloud_provider: openstack
+
 6. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml` and set the following options:
 
 .. code::
