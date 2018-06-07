@@ -81,9 +81,16 @@ You must set the following option:
    $ kolt k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
-Save the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``.
+**Important:** Copy the above inventory file ``mycluster.ini`` to ``kubespray/inventory/`` with the following command
+(you may need to adjust the path if you cloned kubespray to some other location).
 
-9. Run ansible kubespray on your newly created machines:
+.. code:: shell
+
+   $ cp mycluster.ini ../../kubespray/inventory/
+
+9. Run ansible kubespray on your newly created machines. **NOTE:** You
+** absolutely need** to call the `ansible-playbook` command from the
+`kubespray` directory :
 
 .. code:: shell
 
