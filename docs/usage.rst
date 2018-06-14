@@ -21,3 +21,12 @@ To use kolt with kubespray 2.5::
     export OS_PROJECT_NAME="PI"  # your project
 
     ansible-playbook -i inventory/local/mycluster.ini cluster.yml  --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu  -e ansible_python_interpreter="/usr/bin/python3" -b --flush-cache
+    
+Docker is not configured properly in this kubespray version. See discussion on
+[failing to build docker images here][1]. To fix it run::
+
+   sed -i '/--iptables=false/--iptables=true/' /etc/systemd/system/docker.service.d/docker-options.conf 
+
+
+
+[1]: https://github.com/kubernetes-incubator/kubespray/issues/2175
