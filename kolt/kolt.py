@@ -110,7 +110,6 @@ async def create_instance_with_volume(name, zone, flavor, image,
 
         bdm_v2["uuid"] = v.id
         print("Creating instance %s... " % name)
-
         instance = nova.servers.create(name=name,
                                        availability_zone=zone,
                                        image=None,
@@ -252,12 +251,10 @@ def create_machines(nova, neutron, cinder, config):
     loop = asyncio.get_event_loop()
     
     for idx, nic in enumerate(nics_masters):
-        nic.update({'net-id': net['id']})
-        masters_zones[idx][-1] = [nic]
+        masters_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
     
     for idx, nic in enumerate(nics_nodes):
-        nic.update({'net-id': net['id']})
-        nodes_zones[idx][-1] = [nic]
+        nodes_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
 
     tasks = [loop.create_task(create_instance_with_volume(
              name, zone, nics=nics, *build_args_master)) for (name, zone, nics) in
