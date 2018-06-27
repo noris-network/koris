@@ -110,6 +110,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
 
         bdm_v2["uuid"] = v.id
         print("Creating instance %s... " % name)
+
         instance = nova.servers.create(name=name,
                                        availability_zone=zone,
                                        image=None,
@@ -222,9 +223,8 @@ def create_machines(nova, neutron, cinder, config):
     master_user_data = create_userdata('master', config['image'])
 
     net = neutron.find_resource("network", config["private_net"])
-    nics = [{'net-id': net['id']}]
-    netid = net['id']
 
+    netid = net['id']
 
     nics_masters = list(create_nics(neutron,
                                     int(config['n-masters']),
@@ -252,17 +252,19 @@ def create_machines(nova, neutron, cinder, config):
     loop = asyncio.get_event_loop()
     
     for idx, nic in enumerate(nics_masters):
+        nic.update({'net-id': net['id']})
         masters_zones[idx][-1] = [nic]
     
     for idx, nic in enumerate(nics_nodes):
+        nic.update({'net-id': net['id']})
         nodes_zones[idx][-1] = [nic]
-    import pdb; pdb.set_trace()
+
     tasks = [loop.create_task(create_instance_with_volume(
-             name, zone, *build_args_master, nics=nics)) for (name, zone, nics) in
+             name, zone, nics=nics, *build_args_master)) for (name, zone, nics) in
              masters_zones]
 
     tasks.extend([loop.create_task(create_instance_with_volume(
-                  name, zone, *build_args_node, nics=nics)) for (name, zone, nics) in
+                  name, zone, nics=nics, *build_args_node)) for (name, zone, nics) in
                   nodes_zones])
 
     loop.run_until_complete(asyncio.wait(tasks))
