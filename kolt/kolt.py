@@ -43,7 +43,7 @@ def distribute_hosts(hosts_zones):
     for item in hosts_zones:
         hosts, zone = item[0], item[1]
         for host in hosts:
-            yield (host, zone)
+            yield [host, zone, None]
 
 
 def get_host_zones(hosts, zones):
@@ -73,9 +73,9 @@ def get_host_zones(hosts, zones):
 nova, cinder, neutron = None, None, None
 
 
-async def create_instance_with_volume(name, zone, flavor, image, nics,
+async def create_instance_with_volume(name, zone, flavor, image,
                                       keypair, secgroups, role, userdata,
-                                      hosts):
+                                      hosts, nics=None):
 
     global nova, neutron, cinder
 
@@ -199,6 +199,13 @@ def create_userdata(role, img_name):
         userdata = textwrap.dedent(userdata).strip()
     return userdata
 
+def create_nics(neutron, num, netid):
+    for i in range(num):
+        yield neutron.create_port(
+            {"port": {"admin_state_up": True,
+             "network_id": netid,
+             }},
+            )
 
 def create_machines(nova, neutron, cinder, config):
 
@@ -216,12 +223,23 @@ def create_machines(nova, neutron, cinder, config):
 
     net = neutron.find_resource("network", config["private_net"])
     nics = [{'net-id': net['id']}]
+    netid = net['id']
+
+
+    nics_masters = list(create_nics(neutron,
+                                    int(config['n-masters']),
+                                    netid))
+    
+    nics_nodes = list(create_nics(neutron,
+                                  int(config['n-nodes']),
+                                  netid))
+    
     print(info(cyan("got my info, now launching machines ...")))
 
     hosts = {}
-    build_args_master = [master_flavor, image, nics, keypair, secgroups,
+    build_args_master = [master_flavor, image, keypair, secgroups,
                          "master", master_user_data, hosts]
-    build_args_node = [node_flavor, image, nics, keypair, secgroups, "node",
+    build_args_node = [node_flavor, image, keypair, secgroups, "node",
                        node_user_data, hosts]
     cluster = config['cluster-name']
     masters = ["master-%s-%s" % (i, cluster) for i in
@@ -232,13 +250,19 @@ def create_machines(nova, neutron, cinder, config):
     masters_zones = list(get_host_zones(masters, config['availibity-zones']))
     nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
     loop = asyncio.get_event_loop()
-
+    
+    for idx, nic in enumerate(nics_masters):
+        masters_zones[idx][-1] = [nic]
+    
+    for idx, nic in enumerate(nics_nodes):
+        nodes_zones[idx][-1] = [nic]
+    import pdb; pdb.set_trace()
     tasks = [loop.create_task(create_instance_with_volume(
-             name, zone, *build_args_master)) for (name, zone) in
+             name, zone, *build_args_master, nics=nics)) for (name, zone, nics) in
              masters_zones]
 
     tasks.extend([loop.create_task(create_instance_with_volume(
-                  name, zone, *build_args_node)) for (name, zone) in
+                  name, zone, *build_args_node, nics=nics)) for (name, zone, nics) in
                   nodes_zones])
 
     loop.run_until_complete(asyncio.wait(tasks))
