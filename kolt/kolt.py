@@ -158,10 +158,10 @@ def read_os_auth_variables():
     for k, v in os.environ.items():
         if k.startswith("OS_"):
             d[k[3:].lower()] = v
-
-    not_in_default_rc = ('interface', 'region_name', 'identity_api_version')
+    not_in_default_rc = ('interface', 'region_name',
+                         'identity_api_version', 'endpoint_type',
+                         )
     [d.pop(i) for i in not_in_default_rc if i in d]
-
     return d
 
 
