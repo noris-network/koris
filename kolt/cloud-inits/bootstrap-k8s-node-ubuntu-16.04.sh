@@ -7,33 +7,3 @@ text/x-shellscript
 # --------------------------------------------------------------------------------------------------------------
 
 # Specify the Kubernetes version to use.
-HYPERKUBE_VERSION="v1.9.2_coreos.0"
-
-sudo apt-get remove -y docker docker-engine docker.io
-
-sudo apt-get update -y
-sudo apt-get install -y \
-    socat \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-	ebtables \
-	software-properties-common \
-	cloud-utils
-
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-sudo add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   $(lsb_release -cs) \
-   stable"
-
-sudo apt-get update
-
-DOCKER_VERSION=$(apt-cache madison docker-ce | grep 17.03 | cut -d"|" -f 2 | head -1| awk '{$1=$1};1')
-
-apt-get install -y docker-ce=${DOCKER_VERSION}
-
-
-sudo systemctl enable docker
-sudo systemctl start docker
-sudo docker pull quay.io/coreos/hyperkube:${HYPERKUBE_VERSION}

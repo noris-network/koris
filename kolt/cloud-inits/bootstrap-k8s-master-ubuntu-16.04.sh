@@ -29,14 +29,13 @@ HOST_NAME=$(hostname)
 # download and setup daemons ###################################################
 
 # etcd
-cd tmp
-curl ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz .
+cd /tmp
+curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
 tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
 cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
 
 for item in "etcd etcdctl"; do
-  cp ${item} ${BIN_PATH}/${item}
-  chmod +x ${BIN_PATH}/${item}
+  install -m 775 ${item} ${BIN_PATH}/
 done
 
 cat << EOF > /etc/systemd/system/etcd.service
@@ -48,10 +47,10 @@ Documentation=https://github.com/coreos
 ExecStart=/usr/bin/etcd  \
 --name $HOST_NAME \
 --data-dir=/var/lib/etcd \
---cert-file=/etc/ssl/etcd/ssl/member-master-1-userns.pem  \
---key-file=/etc/ssl/etcd/ssl/member-master-1-userns-key.pem \
---peer-cert-file=/etc/ssl/etcd/ssl/member-master-1-userns.pem \
---peer-key-file=/etc/ssl/etcd/ssl/member-master-1-userns-key.pem \
+--cert-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}.pem  \
+--key-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}-key.pem \
+--peer-cert-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}.pem \
+--peer-key-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}-key.pem \
 --trusted-ca-file=/etc/ssl/etcd/ssl/ca.pem \
 --listen-client-urls http://$CURRENT_IP:2379 \
 --advertise-client-urls http://$CURRENT_IP:2379 \
@@ -75,7 +74,6 @@ for item in "apiserver controller-manager scheduler"; do
     curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item}
     chmod +x ${BIN_PATH}/${item}
 done
-
 
 curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl -o ${BIN_PATH}/kubectl
 chmod +x ${BIN_PATH}/kubectl
@@ -176,7 +174,7 @@ EOF
 
 # setup system init scripts ####################################################
 
-systemctl daemon-reload
+# systemctl daemon-reload
 
 #for item in "etcd apiserver controller-manager scheduler"; do
 #  systemctl enable ${item}

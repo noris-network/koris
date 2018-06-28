@@ -199,11 +199,12 @@ def create_userdata(role, img_name, cluster_info=None):
         userdata = textwrap.dedent(userdata).strip()
     return userdata
 
-def create_nics(neutron, num, netid):
+def create_nics(neutron, num, netid, security_groups):
     for i in range(num):
         yield neutron.create_port(
             {"port": {"admin_state_up": True,
              "network_id": netid,
+             "security_groups": security_groups
              }},
             )
 
@@ -225,11 +226,13 @@ def create_machines(nova, neutron, cinder, config):
 
     nics_masters = list(create_nics(neutron,
                                     int(config['n-masters']),
-                                    netid))
+                                    netid,
+                                    secgroups))
 
     nics_nodes = list(create_nics(neutron,
                                   int(config['n-nodes']),
-                                  netid))
+                                  netid,
+                                  secgroups))
 
     cluster = config['cluster-name']
 
@@ -246,8 +249,6 @@ def create_machines(nova, neutron, cinder, config):
 
     master_user_data = create_userdata('master', config['image'], cluster_info)
     node_user_data = create_userdata('node', config['image'])
-
-    import pdb; pdb.set_trace()
 
     print(info(cyan("got my info, now launching machines ...")))
 

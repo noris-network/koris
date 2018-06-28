@@ -60,6 +60,7 @@ class CloudInit:
         return textwrap.dedent(cluster_info_part)
 
     def __str__(self):
+        self.cluster_info = None
 
         if self.cluster_info:
            sub_message = MIMEText(self._etcd_cluster_info(), _subtype='text/cloud-config')
