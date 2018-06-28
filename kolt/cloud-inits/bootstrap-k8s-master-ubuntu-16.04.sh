@@ -1,5 +1,5 @@
-#!/bin/bash 
-
+ /var/lib/cloud/instance/scripts/bootstrap-k8s-master-ubuntu-16.04.sh
+#!/bin/bash
 # bootstrap k8s master without kubeadm
 
 
@@ -10,20 +10,20 @@ CLUSTER_IP_RANGE=10.32.0.0/16
 
 #### Do NOT edit anything below
 
+#CURRENT_IP=%%current_ip%% 
 
-# install the K8S api server
 
-K8S_URL=https://storage.googleapis.com/kubernetes-release/release/
+K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 OS=linux
-BIN_PATH=/usr/bin/
+BIN_PATH=/usr/bin
 
-for item in "apiserver controller-manager scheduler"; do
+for item in apiserver controller-manager scheduler; do
     curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/amd64/kube-${item} -o ${BIN_PATH}/${item}
     chmod +x ${BIN_PATH}/${item}
 done
 
 
-curl ${K8S_VERSION}/bin/${OS}/amd64/kubectl -o ${BIN_PATH}/kubectl
+curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/amd64/kubectl -o ${BIN_PATH}/kubectl
 chmod +x ${BIN_PATH}/kubectl
 
 
@@ -36,7 +36,7 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 [Service]
 ExecStart=/usr/bin/kube-apiserver \
   --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \
-  --advertise-address={{ currentip }}   \
+  --advertise-address=${CURRENT_IP}   \
   --bind-address=0.0.0.0 \
   --audit-log-maxage=30 \
   --audit-log-maxbackup=3 \
