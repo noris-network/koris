@@ -51,11 +51,13 @@ class CloudInit:
 
             if '#!' in main_type:
                 _subtype = 'x-shellscript'
+		fh.seek(0)
 
             sub_message = MIMEText(fh.read(), _subtype=_subtype)
             sub_message.add_header('Content-Disposition',
                                    'attachment', filename="%s" % item)
             self.combined_message.attach(sub_message)
             fh.close()
-
+	
+        import pdb; pdb.set_trace()
         return self.combined_message.as_string()
