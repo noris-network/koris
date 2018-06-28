@@ -1,29 +1,82 @@
 text/x-shellscript
 #!/bin/bash
-# bootstrap k8s master without kubeadm
+# bootstrap k8s master without kubeadm / kubespray
 
+#################### project sources and settings ##############################
+################################################################################
 
-K8S_VERSION=v1.10.4
+OS=linux
+ARCH=amd64
 CLUSTER_IP_RANGE=10.32.0.0/16
 
+# etcd
+ETCD_URL=https://github.com/coreos/etcd/releases/download
+ETCD_VERSION=v3.3.8
 
-
-#### Do NOT edit anything below
-
-#CURRENT_IP=%%current_ip%% 
-
-
+# apiserver, controller-manager, scheduler
+K8S_VERSION=v1.10.4
 K8S_URL=https://storage.googleapis.com/kubernetes-release/release
-OS=linux
 BIN_PATH=/usr/bin
 
+
+###################### Do NOT edit anything below ##############################
+################################################################################
+
+# download and setup daemons ###################################################
+
+#CURRENT_IP=%%current_ip%%
+
+# etcd
+curl ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz .
+tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
+cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
+
+for item in "etcd etcdctl"; do
+  cp ${item} ${BIN_PATH}/${item}
+  chmod +x ${BIN_PATH}/${item}
+done
+
+rm -rf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
+rm -rf etcd-${ETCD_VERSION}-${OS}-${ARCH}
+
+cat << EOF > /etc/systemd/system/etcd.service
+[Unit]
+Description=etcd
+Documentation=https://github.com/coreos
+
+[Service]
+ExecStart=/usr/bin/etcd  \
+--name $HOST_NAME \
+--data-dir=/var/lib/etcd \
+--cert-file=$CERT_FILE  \
+--key-file=$KEY_FILE \
+--peer-cert-file=$PEER_CERT_FILE \
+--peer-key-file=$PEER_KEY_FILE \
+--trusted-ca-file=$TRUSTED_CA_FILE \
+--listen-client-urls http://$CURRENT_IP:2379 \
+--advertise-client-urls http://$CURRENT_IP:2379 \
+--listen-peer-urls http://$CURRENT_IP:2380 \
+--initial-advertise-peer-urls http://$CURRENT_IP:2380 \
+--peer-client-cert-auth \
+--client-cert-auth
+
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=30000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# other kubernetes components
+
 for item in "apiserver controller-manager scheduler"; do
-    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/amd64/kube-${item} -o ${BIN_PATH}/kube-${item}
+    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item}
     chmod +x ${BIN_PATH}/${item}
 done
 
 
-curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/amd64/kubectl -o ${BIN_PATH}/kubectl
+curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl -o ${BIN_PATH}/kubectl
 chmod +x ${BIN_PATH}/kubectl
 
 
@@ -119,3 +172,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# setup system init scripts ####################################################
+
+systemctl daemon-reload
+
+for item in "etcd apiserver controller-manager scheduler"; do
+  systemctl start ${item}
+  systemctl status ${item}
+  systemctl enable ${item}
+done
