@@ -18,15 +18,18 @@ K8S_VERSION=v1.10.4
 K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 BIN_PATH=/usr/bin
 
-
 ###################### Do NOT edit anything below ##############################
 ################################################################################
 
+source /etc/kolt.conf
+
+CURRENT_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+HOST_NAME=$(hostname)
+
 # download and setup daemons ###################################################
 
-#CURRENT_IP=%%current_ip%%
-
 # etcd
+cd tmp
 curl ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz .
 tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
 cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
@@ -35,9 +38,6 @@ for item in "etcd etcdctl"; do
   cp ${item} ${BIN_PATH}/${item}
   chmod +x ${BIN_PATH}/${item}
 done
-
-rm -rf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
-rm -rf etcd-${ETCD_VERSION}-${OS}-${ARCH}
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
@@ -48,15 +48,16 @@ Documentation=https://github.com/coreos
 ExecStart=/usr/bin/etcd  \
 --name $HOST_NAME \
 --data-dir=/var/lib/etcd \
---cert-file=$CERT_FILE  \
---key-file=$KEY_FILE \
---peer-cert-file=$PEER_CERT_FILE \
---peer-key-file=$PEER_KEY_FILE \
---trusted-ca-file=$TRUSTED_CA_FILE \
+--cert-file=/etc/ssl/etcd/ssl/member-master-1-userns.pem  \
+--key-file=/etc/ssl/etcd/ssl/member-master-1-userns-key.pem \
+--peer-cert-file=/etc/ssl/etcd/ssl/member-master-1-userns.pem \
+--peer-key-file=/etc/ssl/etcd/ssl/member-master-1-userns-key.pem \
+--trusted-ca-file=/etc/ssl/etcd/ssl/ca.pem \
 --listen-client-urls http://$CURRENT_IP:2379 \
 --advertise-client-urls http://$CURRENT_IP:2379 \
 --listen-peer-urls http://$CURRENT_IP:2380 \
 --initial-advertise-peer-urls http://$CURRENT_IP:2380 \
+--initial-cluster ${NODE01}=https://${NODE01_IP}:2380,${NODE02}=https://${NODE02_IP}:2380,$(NODE03)=https://${NODE03_IP}:2380 \
 --peer-client-cert-auth \
 --client-cert-auth
 
@@ -177,8 +178,7 @@ EOF
 
 systemctl daemon-reload
 
-for item in "etcd apiserver controller-manager scheduler"; do
-  systemctl start ${item}
-  systemctl status ${item}
-  systemctl enable ${item}
-done
+#for item in "etcd apiserver controller-manager scheduler"; do
+#  systemctl enable ${item}
+#  systemctl status ${item}
+#done

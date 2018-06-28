@@ -41,7 +41,7 @@ class CloudInit:
         """
         Write the etcd cluster info to /etc/kolt.conf
         """
-        
+
         cluster_info_part = """
         #cloud-config
         write_files:
@@ -52,7 +52,7 @@ class CloudInit:
                 NODE01_IP={n01_ip}
                 NODE02_IP={n02_ip}
                 NODE03_IP={n03_ip}
-              
+
               owner: root:root
               permissions: '0644'
               path: /etc/kolt.conf
@@ -67,7 +67,7 @@ class CloudInit:
                                   filename="/etc/kolt.conf")
 
            self.combined_message.attach(sub_message)
-         
+
         k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
                                                        self.os_type,
                                                        self.os_version)
@@ -83,12 +83,12 @@ class CloudInit:
 
             if '#!' in main_type:
                 _subtype = 'x-shellscript'
-                fh.seek(0)
+            #    fh.seek(0)
 
             sub_message = MIMEText(fh.read(), _subtype=_subtype)
             sub_message.add_header('Content-Disposition',
                                    'attachment', filename="%s" % item)
             self.combined_message.attach(sub_message)
             fh.close()
-	
+
         return self.combined_message.as_string()

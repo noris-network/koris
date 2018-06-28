@@ -226,27 +226,29 @@ def create_machines(nova, neutron, cinder, config):
     nics_masters = list(create_nics(neutron,
                                     int(config['n-masters']),
                                     netid))
-    
+
     nics_nodes = list(create_nics(neutron,
                                   int(config['n-nodes']),
                                   netid))
-    
+
     cluster = config['cluster-name']
-    
+
     masters = ["master-%s-%s" % (i, cluster) for i in
                range(1, config['n-masters'] + 1)]
     nodes = ["node-%s-%s" % (i, cluster) for i in
              range(1, config['n-nodes'] + 1)]
-    
-    cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"], 
+
+    cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"],
                         [nic['port']['fixed_ips'][0]['ip_address'] for
                          nic in nics_masters]))
 
     cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"], masters)))
-    
+
     master_user_data = create_userdata('master', config['image'], cluster_info)
-    node_user_data = create_userdata('master', config['image'])
-    
+    node_user_data = create_userdata('node', config['image'])
+
+    import pdb; pdb.set_trace()
+
     print(info(cyan("got my info, now launching machines ...")))
 
     hosts = {}
@@ -254,14 +256,14 @@ def create_machines(nova, neutron, cinder, config):
                          "master", master_user_data, hosts]
     build_args_node = [node_flavor, image, keypair, secgroups, "node",
                        node_user_data, hosts]
-    
+
     masters_zones = list(get_host_zones(masters, config['availibity-zones']))
     nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
     loop = asyncio.get_event_loop()
-    
+
     for idx, nic in enumerate(nics_masters):
         masters_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
-    
+
     for idx, nic in enumerate(nics_nodes):
         nodes_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
 
@@ -331,7 +333,7 @@ def main():
 
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
-    
+
     if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
