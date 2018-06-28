@@ -1,4 +1,4 @@
- /var/lib/cloud/instance/scripts/bootstrap-k8s-master-ubuntu-16.04.sh
+text/x-shellscript
 #!/bin/bash
 # bootstrap k8s master without kubeadm
 
@@ -17,8 +17,8 @@ K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 OS=linux
 BIN_PATH=/usr/bin
 
-for item in apiserver controller-manager scheduler; do
-    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/amd64/kube-${item} -o ${BIN_PATH}/${item}
+for item in "apiserver controller-manager scheduler"; do
+    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/amd64/kube-${item} -o ${BIN_PATH}/kube-${item}
     chmod +x ${BIN_PATH}/${item}
 done
 
