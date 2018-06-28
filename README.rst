@@ -74,7 +74,7 @@ You must set the following option:
 
 7. Note for people with ansible pre-knowledge, **YOU DON'T** need to create your own inventory file, it will be automatically created for you.
 
-8. Run colt with your cluster configuration, this will create your inventory
+8. Run colt with your cluster configuration, this will create your inventory (the file ``k8s-machines-config.yml`` can be found in the directory ``kolt/docs``, so change to this directory before issuing the next command)
 
 .. code:: shell
 
