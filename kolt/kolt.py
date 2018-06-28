@@ -183,12 +183,12 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(role, img_name):
+def create_userdata(role, img_name, cluster_info=None):
     """
     Create multipart userdata for Ubuntu
     """
     if 'ubuntu' in img_name.lower():
-        userdata = str(CloudInit(role))
+        userdata = str(CloudInit(role, cluster_info))
     else:
         userdata = """
                    #cloud-config
@@ -218,8 +218,6 @@ def create_machines(nova, neutron, cinder, config):
                                      config['security_group'])
     secgroups = [secgroup['id']]
 
-    node_user_data = create_userdata('node', config['image'])
-    master_user_data = create_userdata('master', config['image'])
 
     net = neutron.find_resource("network", config["private_net"])
 
@@ -233,6 +231,22 @@ def create_machines(nova, neutron, cinder, config):
                                   int(config['n-nodes']),
                                   netid))
     
+    cluster = config['cluster-name']
+    
+    masters = ["master-%s-%s" % (i, cluster) for i in
+               range(1, config['n-masters'] + 1)]
+    nodes = ["node-%s-%s" % (i, cluster) for i in
+             range(1, config['n-nodes'] + 1)]
+    
+    cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"], 
+                        [nic['port']['fixed_ips'][0]['ip_address'] for
+                         nic in nics_masters]))
+
+    cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"], masters)))
+    
+    master_user_data = create_userdata('master', config['image'], cluster_info)
+    node_user_data = create_userdata('master', config['image'])
+    
     print(info(cyan("got my info, now launching machines ...")))
 
     hosts = {}
@@ -240,12 +254,7 @@ def create_machines(nova, neutron, cinder, config):
                          "master", master_user_data, hosts]
     build_args_node = [node_flavor, image, keypair, secgroups, "node",
                        node_user_data, hosts]
-    cluster = config['cluster-name']
-    masters = ["master-%s-%s" % (i, cluster) for i in
-               range(1, config['n-masters'] + 1)]
-    nodes = ["node-%s-%s" % (i, cluster) for i in
-             range(1, config['n-nodes'] + 1)]
-
+    
     masters_zones = list(get_host_zones(masters, config['availibity-zones']))
     nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
     loop = asyncio.get_event_loop()
