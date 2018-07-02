@@ -5,6 +5,7 @@ provided
 """
 import os
 import textwrap
+import base64
 
 from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
@@ -23,16 +24,17 @@ INCLUSION_TYPES_MAP = {
     '#cloud-config-jsonp': 'text/cloud-config-jsonp',
 }
 
-
 class CloudInit:
 
-    def __init__(self, role, cluster_info, os_type='ubuntu', os_version="16.04"):
+    def __init__(self, role, hostname, cluster_info, os_type='ubuntu',
+            os_version="16.04"):
         self.combined_message = MIMEMultipart()
 
         if role not in ('master', 'node'):
             raise ValueError("Incorrect os_role!")
 
         self.role = role
+        self.hostname = hostname
         self.cluster_info = cluster_info
         self.os_type = os_type
         self.os_version = os_version
@@ -59,20 +61,57 @@ class CloudInit:
         """.format(**self.cluster_info)
         return textwrap.dedent(cluster_info_part)
 
-    def __str__(self):
-        self.cluster_info = None
+    def _get_certificate_info(self):
+        """
+        write certificates to destination directory
+        """
+        certificate_info = """
+        #cloud-config
+        write_files:
+            - path: /etc/ssl/ca.pem
+              encoding: b64
+              content: {CA_CERT}
+              owner: root:root
+              permissions: '0600'
+            - path: /etc/ssl/{HOST_CERT_NAME}
+              encoding: b64
+              content: {HOST_CERT}
+              owner: root:root
+              permissions: '0600'
+            - path: /etc/ssl/{HOST_KEY_NAME}
+              encoding: b64
+              content: {HOST_KEY}
+              owner: root:root
+              permissions: '0600'
+        """.format(
+            CA_CERT = base64.b64encode(open("./ca.pem", "rb").read()).decode(),
+            HOST_CERT = base64.b64encode(open("./"+self.hostname+".pem", "rb").read()).decode(),
+            HOST_CERT_NAME = self.hostname+".pem",
+            HOST_KEY = base64.b64encode(open("./"+self.hostname+"-key.pem", "rb").read()).decode(),
+            HOST_KEY_NAME = self.hostname+"-key.pem"
+        )
+        ret = textwrap.dedent(certificate_info)
+        print(ret)
+        return ret
 
+    def __str__(self):
         if self.cluster_info:
            sub_message = MIMEText(self._etcd_cluster_info(), _subtype='text/cloud-config')
            sub_message.add_header('Content-Disposition', 'attachment',
                                   filename="/etc/kolt.conf")
-
            self.combined_message.attach(sub_message)
+
+        sub_message = MIMEText(self._get_certificate_info(),
+                               _subtype='text/cloud-config')
+        sub_message.add_header('Content-Disposition', 'attachment',
+                               filename="/etc/cert.conf")
+        self.combined_message.attach(sub_message)
 
         k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
                                                        self.os_type,
                                                        self.os_version)
 
+        # process bootstrap script and generic cloud-init file
         for item in ['generic', k8s_bootstrap]:
             fh = open(resource_filename(Requirement('kolt'),
                                         os.path.join('kolt',

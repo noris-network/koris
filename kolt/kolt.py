@@ -7,6 +7,8 @@ import uuid
 import textwrap
 import sys
 
+import subprocess
+
 import yaml
 
 from configparser import ConfigParser
@@ -183,12 +185,12 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(role, img_name, cluster_info=None):
+def create_userdata(role, img_name, hostname, cluster_info=None):
     """
     Create multipart userdata for Ubuntu
     """
     if 'ubuntu' in img_name.lower():
-        userdata = str(CloudInit(role, cluster_info))
+        userdata = str(CloudInit(role, hostname, cluster_info))
     else:
         userdata = """
                    #cloud-config
@@ -219,7 +221,6 @@ def create_machines(nova, neutron, cinder, config):
                                      config['security_group'])
     secgroups = [secgroup['id']]
 
-
     net = neutron.find_resource("network", config["private_net"])
 
     netid = net['id']
@@ -241,22 +242,47 @@ def create_machines(nova, neutron, cinder, config):
     nodes = ["node-%s-%s" % (i, cluster) for i in
              range(1, config['n-nodes'] + 1)]
 
+    # create SSL certificates for master machines
+    for i in range(0, config['n-masters']):
+        host = nics_masters[i]["port"]["fixed_ips"][0]["ip_address"]
+        create_signed_cert(masters[i], host)
+
+    # create SSL certificates for node machines
+    for i in range(0, config['n-nodes']):
+        host = nics_nodes[i]["port"]["fixed_ips"][0]["ip_address"]
+        create_signed_cert(nodes[i], host)
+
     cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"],
                         [nic['port']['fixed_ips'][0]['ip_address'] for
                          nic in nics_masters]))
 
     cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"], masters)))
 
-    master_user_data = create_userdata('master', config['image'], cluster_info)
-    node_user_data = create_userdata('node', config['image'])
+    master_user_data = [
+        create_userdata('master', config['image'], master, cluster_info)
+        for master in masters
+    ]
+
+    node_user_data = [
+        create_userdata('node', config['image'], node)
+        for node in nodes
+    ]
 
     print(info(cyan("got my info, now launching machines ...")))
 
     hosts = {}
-    build_args_master = [master_flavor, image, keypair, secgroups,
-                         "master", master_user_data, hosts]
-    build_args_node = [node_flavor, image, keypair, secgroups, "node",
-                       node_user_data, hosts]
+
+    build_args_master = [
+        [master_flavor, image, keypair, secgroups, "master",
+        master_user_data[i], hosts]
+        for i in range(0, config['n-masters'])
+    ]
+
+    build_args_node = [
+        [node_flavor, image, keypair, secgroups, "node",
+        node_user_data[i], hosts]
+        for i in range(0, config['n-nodes'])
+    ]
 
     masters_zones = list(get_host_zones(masters, config['availibity-zones']))
     nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
@@ -269,63 +295,62 @@ def create_machines(nova, neutron, cinder, config):
         nodes_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
 
     tasks = [loop.create_task(create_instance_with_volume(
-             name, zone, nics=nics, *build_args_master)) for (name, zone, nics) in
-             masters_zones]
+             masters_zones[i][0], masters_zones[i][1], nics=masters_zones[i][2],
+             *(build_args_master[i])))
+             for i in range(0, config['n-masters'])]
 
     tasks.extend([loop.create_task(create_instance_with_volume(
-                  name, zone, nics=nics, *build_args_node)) for (name, zone, nics) in
-                  nodes_zones])
+                  nodes_zones[i][0], nodes_zones[i][1], nics=nodes_zones[i][2],
+                  *(build_args_node[i])))
+                  for i in range(0, config['n-nodes'])])
 
     loop.run_until_complete(asyncio.wait(tasks))
-
     loop.close()
 
-    return create_inventory(hosts, config)
+def create_ca():
+    cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
+    cmd = "cfssl gencert -initca {}  | cfssljson -bare ca"
+    cmd = cmd.format(os.path.join(cfssl, "ca-csr.json"))
 
+    proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+    if(proc.returncode != os.EX_OK):
+        raise IOError("could not generate CA certificate.")
 
-def create_inventory(hosts, config):
+def create_signed_cert(name, hostnames):
     """
-    :hosts:
-    :config: config dictionary
+    :param hostnames: comma separated list of hostnames for this certificate,
+        e.g. 10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,
+        ${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,kubernetes.default
+    :param name: name of the certificate: name.pem and name-key.pem
     """
+    cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
 
-    cfg = ConfigParser(allow_no_value=True, delimiters=('\t', ' '))
+    if (not os.path.exists("./ca.pem")) or (not os.path.exists("./ca-key.pem")):
+        raise IOError("could not find CA certificate.")
 
-    [cfg.add_section(item) for item in ["all", "kube-master", "kube-node",
-                                        "etcd", "k8s-cluster:children"]]
-    masters = []
-    nodes = []
+    cmd = "cfssl gencert \
+                -ca=./ca.pem \
+                -ca-key=./ca-key.pem \
+                -config={} \
+                -hostname={} \
+                -profile=kubernetes \
+                {} | cfssljson -bare {}"
 
-    for host, (ip, role) in hosts.items():
-        cfg.set("all", host, "ansible_ssh_host=%s  ip=%s" % (ip, ip))
-        if role == "master":
-            cfg.set("kube-master", host)
-            masters.append(host)
-        if role == "node":
-            cfg.set("kube-node", host)
-            nodes.append(host)
+    cmd = cmd.format(
+            os.path.join(cfssl, "ca-config.json"),
+            os.path.join(cfssl, hostnames),
+            os.path.join(cfssl, "cert-csr.json"),
+            "./"+name
+          )
 
-    # add etcd
-    for master in masters:
-        cfg.set("etcd", master)
-
-    etcds_missing =  config["n-etcd"] - len(masters)
-    for node in nodes[:etcds_missing]:
-        cfg.set("etcd", node)
-
-    # add all cluster groups
-    cfg.set("k8s-cluster:children", "kube-node")
-    cfg.set("k8s-cluster:children", "kube-master")
-
-    return cfg
-
+    proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+    if(proc.returncode != os.EX_OK):
+        raise IOError("could not generate certificate.")
 
 def main():
     global nova, neutron, cinder
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
-    parser.add_argument("-i", "--inventory", help="Path to Ansible inventory")
-
     args = parser.parse_args()
 
     if not args.config:
@@ -339,13 +364,10 @@ def main():
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
 
+    # create a new certificate for the CA
+    # TODO: introduce a command line option for this
+    create_ca()
+
     nova, neutron, cinder = get_clients()
     cfg = create_machines(nova, neutron, cinder, config)
-
-    if args.inventory:
-        with open(args.inventory, 'w') as f:
-            cfg.write(f)
-    else:
-        print(info("Here is your inventory ..."))
-        print(red("You can save this inventory to a file with the option -i"))
-        cfg.write(sys.stdout)
+    print(info("Cluster successfully set up."))

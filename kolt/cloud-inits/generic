@@ -3,11 +3,3 @@ text/cloud-config
 manage_etc_hosts: true
 runcmd:
  - swapoff -a
- - curl http://10.32.192.9:8000/x.tar.gz
- - tar xzvf x.tar.gz
- - cd x
- - cp -rf etc /
-users:
- - name: ubuntu
- - sudo: true
- - passwd: $6$dZxyzMus6j4ia.rM$fzWwSOGF1Wx8HonW.m0f9l79dW5lsePFZvX6OfPs0DrPXwXZ8XlA2gbVXZtt4VXb7hlETEGzCFsOl8CvlK7Ub/
