@@ -7,11 +7,8 @@ import uuid
 import textwrap
 import sys
 import shutil
-import subprocess
 
 import yaml
-
-from configparser import ConfigParser
 
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound,
@@ -176,7 +173,8 @@ def get_clients():
         cinder = cclient.Client('3.0', session=sess)
     except TypeError:
         print(red("Did you source your OS rc file in v3?"))
-        print(red("If your file has the key OS_ENDPOINT_TYPE it's the wrong one!"))
+        print(red("If your file has the key OS_ENDPOINT_TYPE it's the"
+                  " wrong one!"))
         sys.exit(1)
     except KeyError:
         print(red("Did you source your OS rc file?"))
@@ -201,14 +199,15 @@ def create_userdata(role, img_name, hostname, cluster_info=None):
         userdata = textwrap.dedent(userdata).strip()
     return userdata
 
+
 def create_nics(neutron, num, netid, security_groups):
     for i in range(num):
         yield neutron.create_port(
             {"port": {"admin_state_up": True,
-             "network_id": netid,
-             "security_groups": security_groups
-             }},
-            )
+                      "network_id": netid,
+                      "security_groups": security_groups
+                      }})
+
 
 def create_machines(nova, neutron, cinder, config):
 
@@ -256,7 +255,8 @@ def create_machines(nova, neutron, cinder, config):
                         [nic['port']['fixed_ips'][0]['ip_address'] for
                          nic in nics_masters]))
 
-    cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"], masters)))
+    cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"],
+                                 masters)))
 
     master_user_data = [
         create_userdata('master', config['image'], master, cluster_info)
@@ -274,13 +274,13 @@ def create_machines(nova, neutron, cinder, config):
 
     build_args_master = [
         [master_flavor, image, keypair, secgroups, "master",
-        master_user_data[i], hosts]
+         master_user_data[i], hosts]
         for i in range(0, config['n-masters'])
     ]
 
     build_args_node = [
         [node_flavor, image, keypair, secgroups, "node",
-        node_user_data[i], hosts]
+         node_user_data[i], hosts]
         for i in range(0, config['n-nodes'])
     ]
 
@@ -289,13 +289,16 @@ def create_machines(nova, neutron, cinder, config):
     loop = asyncio.get_event_loop()
 
     for idx, nic in enumerate(nics_masters):
-        masters_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
+        masters_zones[idx][-1] = [{'net-id': net['id'],
+                                   'port-id': nic['port']['id']}]
 
     for idx, nic in enumerate(nics_nodes):
-        nodes_zones[idx][-1] = [{'net-id': net['id'], 'port-id': nic['port']['id']}]
+        nodes_zones[idx][-1] = [{'net-id': net['id'],
+                                 'port-id': nic['port']['id']}]
 
     tasks = [loop.create_task(create_instance_with_volume(
-             masters_zones[i][0], masters_zones[i][1], nics=masters_zones[i][2],
+                              masters_zones[i][0],
+                              masters_zones[i][1], nics=masters_zones[i][2],
              *(build_args_master[i])))
              for i in range(0, config['n-masters'])]
 
@@ -335,5 +338,5 @@ def main():
     create_ca()
 
     nova, neutron, cinder = get_clients()
-    cfg = create_machines(nova, neutron, cinder, config)
+    create_machines(nova, neutron, cinder, config)
     print(info("Cluster successfully set up."))
