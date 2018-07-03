@@ -2,6 +2,7 @@ image: oz123/sphinx-server
 
 test:
   script:
+    - apk update
     - apk add alpine-sdk
     - pip3 install -r requirements_dev.txt
     - pytest -v
