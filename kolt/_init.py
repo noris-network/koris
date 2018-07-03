@@ -44,16 +44,17 @@ default_ca_config = {"signing": {
 def create_ca(ca_config):
     cmd = "cfssl gencert -initca -"
     proc = sp.Popen(cmd, shell=True, stdin=sp.PIPE,
-                          stdout=sp.PIPE, stderr=sp.PIPE)
+                    stdout=sp.PIPE, stderr=sp.PIPE)
 
     out, err = proc.communicate(json.dumps(ca_config).encode())
-    
+
     if proc.returncode:
         sys.exit("could not generate CA certificate.")
 
     # this returns a dictionary with key 'csr', 'cert', 'key'
     # they are later written as ca.csr, ca.pem, ca-key.pem
     return json.loads(out.decode())
+
 
 def create_signed_cert(name, hostnames):
     """
@@ -64,7 +65,8 @@ def create_signed_cert(name, hostnames):
     """
     cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
 
-    if (not os.path.exists("./ca.pem")) or (not os.path.exists("./ca-key.pem")):
+    if (not os.path.exists("./ca.pem")) or (
+            not os.path.exists("./ca-key.pem")):
         raise IOError("could not find CA certificate.")
 
     cmd = "cfssl gencert \
@@ -75,14 +77,13 @@ def create_signed_cert(name, hostnames):
                 -profile=kubernetes \
                 {} | cfssljson -bare {}"
 
-    cmd = cmd.format(
-            os.path.join(cfssl, "ca-config.json"),
-            os.path.join(cfssl, hostnames),
-            os.path.join(cfssl, "cert-csr.json"),
-            "./"+name
-          )
+    cmd = cmd.format(os.path.join(cfssl, "ca-config.json"),
+                     os.path.join(cfssl, hostnames),
+                     os.path.join(cfssl, "cert-csr.json"),
+                     "./" + name
+                     )
 
-    proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+    proc = sp.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
     if(proc.returncode != os.EX_OK):
         raise IOError("could not generate certificate.")
@@ -91,7 +92,8 @@ def create_signed_cert(name, hostnames):
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info, os_type='ubuntu',
-            os_version="16.04"):
+                 os_version="16.04"):
+
         self.combined_message = MIMEMultipart()
 
         if role not in ('master', 'node'):
@@ -148,22 +150,28 @@ class CloudInit:
               owner: root:root
               permissions: '0600'
         """.format(
-            CA_CERT = base64.b64encode(open("./ca.pem", "rb").read()).decode(),
-            HOST_CERT = base64.b64encode(open("./"+self.hostname+".pem", "rb").read()).decode(),
-            HOST_CERT_NAME = self.hostname+".pem",
-            HOST_KEY = base64.b64encode(open("./"+self.hostname+"-key.pem", "rb").read()).decode(),
-            HOST_KEY_NAME = self.hostname+"-key.pem"
+            CA_CERT=base64.b64encode(
+                open("./ca.pem", "rb").read()).decode(),
+            HOST_CERT=base64.b64encode(
+                open("./" + self.hostname + ".pem", "rb").read()).decode(),
+            HOST_CERT_NAME=self.hostname + ".pem",
+            HOST_KEY=base64.b64encode(
+                open("./" + self.hostname + "-key.pem", "rb").read()).decode(),
+            HOST_KEY_NAME=self.hostname + "-key.pem"
         )
         ret = textwrap.dedent(certificate_info)
         print(ret)
         return ret
 
     def __str__(self):
+
         if self.cluster_info:
-           sub_message = MIMEText(self._etcd_cluster_info(), _subtype='text/cloud-config')
-           sub_message.add_header('Content-Disposition', 'attachment',
-                                  filename="/etc/kolt.conf")
-           self.combined_message.attach(sub_message)
+            sub_message = MIMEText(
+                self._etcd_cluster_info(),
+                _subtype='text/cloud-config')
+            sub_message.add_header('Content-Disposition', 'attachment',
+                                   filename="/etc/kolt.conf")
+            self.combined_message.attach(sub_message)
 
         sub_message = MIMEText(self._get_certificate_info(),
                                _subtype='text/cloud-config')
