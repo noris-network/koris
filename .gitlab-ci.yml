@@ -1,0 +1,7 @@
+image: oz123/sphinx-server
+
+test:
+  script:
+    - pip3 install -r requirements_dev.txt
+    - pytest -v
+
