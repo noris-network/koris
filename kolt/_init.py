@@ -27,26 +27,42 @@ INCLUSION_TYPES_MAP = {
     '#cloud-config-jsonp': 'text/cloud-config-jsonp',
 }
 
+# TODO: read these values from the main config
+default_csr_config = {"CN": "Kubernetes",
+                      "key": {"algo": "rsa",
+                              "size": 4096},
+                      "names": [{"C": "US",
+                                 "L": "Portland",
+                                 "O": "Kubernetes",
+                                 "OU": "CA",
+                                 "ST": "Oregon"}
+                                ]
+                      }
+
 
 default_ca_config = {"signing": {
-                     "default": {"expiry": "8760h"},
                      "profiles": {"kubernetes":
                                   {"usages":
                                    ["signing",
                                     "key encipherment",
                                     "server auth",
                                     "client auth"],
-                                   "expiry": "8760h"
                                    }
                                   }}}
 
 
-def create_ca(ca_config):
+def get_ca_config(expiry_time):
+    ca_config = default_ca_config.copy()
+    ca_config["signing"].update({"default": {"expiry": expiry_time}})
+    ca_config["signing"]["profiles"].update({"expiry": expiry_time})
+    return ca_config
+
+
+def create_ca(expiry_time):
     cmd = "cfssl gencert -initca -"
     proc = sp.Popen(cmd, shell=True, stdin=sp.PIPE,
                     stdout=sp.PIPE, stderr=sp.PIPE)
-
-    out, err = proc.communicate(json.dumps(ca_config).encode())
+    out, err = proc.communicate(json.dumps(default_csr_config).encode())
 
     if proc.returncode:
         sys.exit("could not generate CA certificate.")

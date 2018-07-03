@@ -335,7 +335,7 @@ def main():
 
     # create a new certificate for the CA
     # TODO: introduce a command line option for this
-    create_ca(config)
+    create_ca(config.get("certificates", {}).get("expiry", "8760h"))
 
     nova, neutron, cinder = get_clients()
     create_machines(nova, neutron, cinder, config)
