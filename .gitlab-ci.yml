@@ -5,5 +5,6 @@ test:
     - apk update
     - apk add alpine-sdk python3-dev linux-headers
     - pip3 install -r requirements_dev.txt
+    - pip install -e .
     - pytest -v
 
