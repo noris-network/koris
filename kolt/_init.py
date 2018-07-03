@@ -3,9 +3,12 @@ This modules contains some helper functions to inject cloud-init
 to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
+import base64
+import json
 import os
 import textwrap
-import base64
+import subprocess as sp
+import sys
 
 from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
@@ -25,15 +28,19 @@ INCLUSION_TYPES_MAP = {
 }
 
 
-def create_ca():
-    cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
-    cmd = "cfssl gencert -initca {}  | cfssljson -bare ca"
-    cmd = cmd.format(os.path.join(cfssl, "ca-csr.json"))
+def create_ca(ca_config):
+    cmd = "cfssl gencert -initca -"
+    proc = sp.Popen(cmd, shell=True, stdin=sp.PIPE,
+                          stdout=sp.PIPE, stderr=sp.PIPE)
 
-    proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
-    if(proc.returncode != os.EX_OK):
-        raise IOError("could not generate CA certificate.")
+    out, err = proc.communicate(json.dumps(ca_config).encode())
+    
+    if proc.returncode:
+        sys.exit("could not generate CA certificate.")
 
+    # this returns a dictionary with key 'csr', 'cert', 'key'
+    # they are later written as ca.csr, ca.pem, ca-key.pem
+    return json.loads(out.decode())
 
 def create_signed_cert(name, hostnames):
     """
@@ -66,6 +73,7 @@ def create_signed_cert(name, hostnames):
 
     if(proc.returncode != os.EX_OK):
         raise IOError("could not generate certificate.")
+
 
 class CloudInit:
 

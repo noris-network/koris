@@ -6,7 +6,7 @@ import os
 import uuid
 import textwrap
 import sys
-
+import shutil
 import subprocess
 
 import yaml
@@ -310,6 +310,11 @@ def create_machines(nova, neutron, cinder, config):
 
 def main():
     global nova, neutron, cinder
+    if not shutil.which("cfssl"):
+        print(red("You must install cfssl to use kolt!"))
+        print(red("Get it from: https://cfssl.org/"))
+        sys.exit(2)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
     args = parser.parse_args()
