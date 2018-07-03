@@ -15,3 +15,5 @@ keypair: 'otiram'
 security_group: 'k8s-nude-k8s-a0tp4t'
 user_data: 'cloud-init-parts/generic'
 image: "Ubuntu Xenial Server Cloudimg"
+certificates:
+  expriry: 8760h

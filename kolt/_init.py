@@ -28,6 +28,19 @@ INCLUSION_TYPES_MAP = {
 }
 
 
+default_ca_config = {"signing": {
+                     "default": {"expiry": "8760h"},
+                     "profiles": {"kubernetes":
+                                  {"usages":
+                                   ["signing",
+                                    "key encipherment",
+                                    "server auth",
+                                    "client auth"],
+                                   "expiry": "8760h"
+                                   }
+                                  }}}
+
+
 def create_ca(ca_config):
     cmd = "cfssl gencert -initca -"
     proc = sp.Popen(cmd, shell=True, stdin=sp.PIPE,
