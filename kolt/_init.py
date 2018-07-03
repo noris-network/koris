@@ -24,6 +24,49 @@ INCLUSION_TYPES_MAP = {
     '#cloud-config-jsonp': 'text/cloud-config-jsonp',
 }
 
+
+def create_ca():
+    cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
+    cmd = "cfssl gencert -initca {}  | cfssljson -bare ca"
+    cmd = cmd.format(os.path.join(cfssl, "ca-csr.json"))
+
+    proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+    if(proc.returncode != os.EX_OK):
+        raise IOError("could not generate CA certificate.")
+
+
+def create_signed_cert(name, hostnames):
+    """
+    :param hostnames: comma separated list of hostnames for this certificate,
+        e.g. 10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,
+        ${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,kubernetes.default
+    :param name: name of the certificate: name.pem and name-key.pem
+    """
+    cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
+
+    if (not os.path.exists("./ca.pem")) or (not os.path.exists("./ca-key.pem")):
+        raise IOError("could not find CA certificate.")
+
+    cmd = "cfssl gencert \
+                -ca=./ca.pem \
+                -ca-key=./ca-key.pem \
+                -config={} \
+                -hostname={} \
+                -profile=kubernetes \
+                {} | cfssljson -bare {}"
+
+    cmd = cmd.format(
+            os.path.join(cfssl, "ca-config.json"),
+            os.path.join(cfssl, hostnames),
+            os.path.join(cfssl, "cert-csr.json"),
+            "./"+name
+          )
+
+    proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+
+    if(proc.returncode != os.EX_OK):
+        raise IOError("could not generate certificate.")
+
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info, os_type='ubuntu',
