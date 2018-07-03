@@ -6,7 +6,7 @@
 import pytest
 
 
-from colt import colt
+from kolt._init import create_ca
 
 
 @pytest.fixture
@@ -23,3 +23,11 @@ def test_content(response):
     """Sample pytest test function with the pytest fixture as an argument."""
     # from bs4 import BeautifulSoup
     # assert 'GitHub' in BeautifulSoup(response.content).title.string
+
+
+def test_create_ca():
+    with pytest.raises(SystemExit):
+        create_ca("")
+
+    assert "key" in create_ca({"CN": "K8S"})
+

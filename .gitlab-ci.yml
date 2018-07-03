@@ -1,0 +1,13 @@
+image: oz123/sphinx-server
+
+test:
+  script:
+    - apk update
+    - apk add alpine-sdk python3-dev linux-headers 
+    # cfssl does not exist in alpine 3.7
+    - wget https://pkg.cfssl.org/R1.2/cfssl_linux-amd64 
+    - install -m 0755 cfssl_linux-amd64 /usr/bin/cfssl
+    - pip3 install -r requirements_dev.txt
+    - pip install -e .
+    - pytest -v
+
