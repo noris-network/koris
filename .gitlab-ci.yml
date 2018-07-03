@@ -3,7 +3,7 @@ image: oz123/sphinx-server
 test:
   script:
     - apk update
-    - apk add alpine-sdk python3-dev linux-headers
+    - apk add alpine-sdk python3-dev linux-headers cfssl
     - pip3 install -r requirements_dev.txt
     - pip install -e .
     - pytest -v
