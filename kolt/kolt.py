@@ -20,7 +20,7 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
-from ._init import CloudInit, create_ca, create_signed_cert
+from ._init import CloudInit, create_ca, create_hosts_certificates
 
 
 def chunks(l, n):
@@ -335,8 +335,9 @@ def main():
 
     # create a new certificate for the CA
     # TODO: introduce a command line option for this
-    create_ca(config.get("certificates", {}).get("expiry", "8760h"))
-
+    key = create_ca(config.get("certificates", {}).get("expiry", "8761h"))
+    create_hosts_certificates(key, ["node-1", "node-2", "node-3"])
+    
     nova, neutron, cinder = get_clients()
     create_machines(nova, neutron, cinder, config)
     print(info("Cluster successfully set up."))

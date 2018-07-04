@@ -4,11 +4,21 @@ to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
 import base64
+import datetime
 import json
 import os
 import textwrap
 import subprocess as sp
 import sys
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
+from cryptography import utils
+
 
 from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
@@ -51,59 +61,123 @@ default_ca_config = {"signing": {
                                   }}}
 
 
-def get_ca_config(expiry_time):
-    ca_config = default_ca_config.copy()
-    ca_config["signing"].update({"default": {"expiry": expiry_time}})
-    ca_config["signing"]["profiles"].update({"expiry": expiry_time})
-    return ca_config
+def create_private_key(size=2048, public_exponent=65537):
+    """
+    Pure python creation of private keys
+
+    Taken from https://cryptography.io/en/stable/x509/tutorial/
+
+    Args:
+        size (int): the byte size of the key to create
+        public_exponent (int): the exponent size of the public key
+
+    Returns:
+       SSL key instance (see cryptography.io for more info)
+    """
+    key = rsa.generate_private_key(
+        public_exponent=public_exponent,
+        key_size=size,
+        backend=default_backend()
+    )
+
+    return key
+
+
+
+def create_certificate(key, country, state_province, locality, orga, name, hosts):
+    """
+    Pure python creation of SSL certificates
+
+    Taken from https://cryptography.io/en/stable/x509/tutorial/
+    Args:
+        key (SSL key instance): the key to sign the certificate with.
+        country (str): The country name
+        state_province (str):
+        locality (str):
+        orga (str):
+        name (str):
+
+    Returns:
+        x509.Certificate object instance (see cryptography.io for more info).
+
+    """
+    # Various details about who we are. For a self-signed certificate the
+    # subject and issuer are always the same.
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
+    ])
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        key.public_key()
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_after(
+        # Our certificate will be valid for 1800 days
+        datetime.datetime.utcnow() + datetime.timedelta(days=1800)
+    ).add_extension(
+        x509.SubjectAlternativeName([x509.DNSName(host) for host in hosts]),
+        critical=False,
+        # Sign our certificate with our private key
+    ).sign(key, hashes.SHA256(), default_backend())
+
+    return cert
+
+def write_key(key, passwd=None, filename="ca-key.pem"):
+    """
+    Write the key instance to the file as ASCII string
+
+    Args:
+        key (SSL key instance)
+        passwd (str): if given the key will be protected with this password
+        filename (str): the file to write
+    """
+    if passwd:
+        enc_algo = serialization.BestAvailableEncryption(passwd.encode())
+    else:
+        enc_algo = serialization.NoEncryption()
+
+    # Write our key to disk for safe keeping
+    with open(filename, "wb") as f:
+        f.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=enc_algo,))
+
+
+def write_cert(cert, filename):
+    """
+   Write the certifiacte instance to the file as ASCII string
+
+   Args:
+       cert (SSL certificate instance)
+       filename (str): the file to write
+   """
+
+    with open(filename, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
 def create_ca(expiry_time):
-    cmd = "cfssl gencert -initca -"
-    proc = sp.Popen(cmd, shell=True, stdin=sp.PIPE,
-                    stdout=sp.PIPE, stderr=sp.PIPE)
-    out, err = proc.communicate(json.dumps(default_csr_config).encode())
+    key = create_private_key()
+    ca_cert = create_certificate(key, "DE", "BY", "NUE", "noris", "Kubernetes", ["Kubernetes"])
+    write_key(key)
+    write_cert(ca_cert, "ca.pem")
+    return key
 
-    if proc.returncode:
-        sys.exit("could not generate CA certificate.")
-
-    # this returns a dictionary with key 'csr', 'cert', 'key'
-    # they are later written as ca.csr, ca.pem, ca-key.pem
-    return json.loads(out.decode())
-
-
-def create_signed_cert(name, hostnames):
-    """
-    :param hostnames: comma separated list of hostnames for this certificate,
-        e.g. 10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,
-        ${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,kubernetes.default
-    :param name: name of the certificate: name.pem and name-key.pem
-    """
-    cfssl = os.path.join(os.path.split(os.path.realpath(__file__))[0], "cfssl")
-
-    if (not os.path.exists("./ca.pem")) or (
-            not os.path.exists("./ca-key.pem")):
-        raise IOError("could not find CA certificate.")
-
-    cmd = "cfssl gencert \
-                -ca=./ca.pem \
-                -ca-key=./ca-key.pem \
-                -config={} \
-                -hostname={} \
-                -profile=kubernetes \
-                {} | cfssljson -bare {}"
-
-    cmd = cmd.format(os.path.join(cfssl, "ca-config.json"),
-                     os.path.join(cfssl, hostnames),
-                     os.path.join(cfssl, "cert-csr.json"),
-                     "./" + name
-                     )
-
-    proc = sp.run(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
-
-    if(proc.returncode != os.EX_OK):
-        raise IOError("could not generate certificate.")
-
+def create_hosts_certificates(key, hosts):
+    for host in hosts:
+        cert = create_certificate(key, "DE", "BY", "NUE", "noris", host, hosts)
+        write_cert(cert, host+".pem")
+    
 
 class CloudInit:
 
