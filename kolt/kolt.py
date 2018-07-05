@@ -25,6 +25,9 @@ from .hue import red, info, que, lightcyan as cyan
 from ._init import (CloudInit, create_ca, write_cert,
                     create_private_key, write_key, create_certificate
                     )
+from kolt._init import *
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -354,6 +357,7 @@ def main():
                                   {}).get("expiry", "8762h"),
                        "ca",
                        "cluster-certs")
+
     all_cluster_hosts = []
     for role in ["etcd", "node", "master"]:
         all_cluster_hosts.extend(host_names(role, config["n-%ss" % role],
@@ -365,6 +369,7 @@ def main():
 
     key = create_private_key()
     write_key(key, filename="cluster-certs/kubernetes-key.pem")
+
     sys.exit()
 
     nova, neutron, cinder = get_clients()

@@ -94,7 +94,7 @@ def create_certificate(key, country, state_province, locality, orga, name, hosts
     """
     Pure python creation of SSL certificates
 
-    Taken from https://cryptography.io/en/stable/x509/tutorial/
+    Taken from https://cryptography.io/en/stable/x510/tutorial/
     Args:
         key (SSL key instance): the key to sign the certificate with.
         country (str): The country name
