@@ -62,6 +62,17 @@ class CloudInit:
         """
         Write the etcd cluster info to /etc/kolt.conf
         """
+        ca_key = create_key()
+        ca_cert = create_certificate(ca_key, ca_key.public_key(),
+                                     "DE", "BY", "NUE",
+                                     "noris-network", "CA", ["CA"])
+
+        hostnames = [v for k, v in self.cluster_info.items() if v.endswith("_name")]
+
+        k8s_key = create_key()
+        k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
+                                     "DE", "BY", "NUE", "noris-network",
+                                     "Kubernetes", hostnames)
 
         cluster_info_part = """
         #cloud-config
