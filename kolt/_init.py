@@ -83,7 +83,6 @@ def create_private_key(size=2048, public_exponent=65537):
     return key
 
 
-
 def create_certificate(key, country, state_province, locality, orga, name, hosts):
     """
     Pure python creation of SSL certificates
@@ -131,6 +130,7 @@ def create_certificate(key, country, state_province, locality, orga, name, hosts
 
     return cert
 
+
 def write_key(key, passwd=None, filename="ca-key.pem"):
     """
     Write the key instance to the file as ASCII string
@@ -173,11 +173,12 @@ def create_ca(expiry_time):
     write_cert(ca_cert, "ca.pem")
     return key
 
+
 def create_hosts_certificates(key, hosts):
     for host in hosts:
         cert = create_certificate(key, "DE", "BY", "NUE", "noris", host, hosts)
         write_cert(cert, host+".pem")
-    
+
 
 class CloudInit:
 
