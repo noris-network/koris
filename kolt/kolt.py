@@ -8,6 +8,7 @@ import textwrap
 import sys
 import shutil
 
+from functools import lru_cache
 import yaml
 
 from novaclient import client as nvclient
@@ -209,6 +210,12 @@ def create_nics(neutron, num, netid, security_groups):
                       "security_groups": security_groups
                       }})
 
+
+@lru_cache(maxsize=10)
+def host_names(role, num, cluster_name):
+    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+               range(1, num + 1)]
+    
 
 def create_machines(nova, neutron, cinder, config):
 
