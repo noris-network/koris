@@ -6,7 +6,7 @@
 import pytest
 
 
-from kolt._init import create_ca, get_ca_config
+from kolt._init import create_ca
 
 
 @pytest.fixture
@@ -25,13 +25,8 @@ def test_content(response):
     # assert 'GitHub' in BeautifulSoup(response.content).title.string
 
 
-def test_create_ca():
+#def test_create_ca():
 
-    assert "key" in create_ca("8760h")
+#    assert "key" in create_ca("8760h")
 
 
-def test_get_ca_config():
-    ca_config = get_ca_config("8760h")
-
-    assert ca_config["signing"]["default"]["expiry"] == "8760h"
-    assert ca_config["signing"]["profiles"]["expiry"] == "8760h"
