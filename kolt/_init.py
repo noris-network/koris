@@ -6,6 +6,7 @@ provided
 import base64
 import datetime
 import json
+import logging
 import os
 import textwrap
 import subprocess as sp
@@ -24,6 +25,12 @@ from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# add ch to logger
+logger.addHandler(ch)
 
 INCLUSION_TYPES_MAP = {
     '#include': 'text/x-include-url',
@@ -166,18 +173,18 @@ def write_cert(cert, filename):
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
-def create_ca(expiry_time):
+def create_ca(expiry_time, ca_name, cert_dir):
     key = create_private_key()
-    ca_cert = create_certificate(key, "DE", "BY", "NUE", "noris", "Kubernetes", ["Kubernetes"])
-    write_key(key)
-    write_cert(ca_cert, "ca.pem")
+    ca_cert = create_certificate(key,
+                                 "DE",
+                                 "BY",
+                                 "NUE",
+                                 "noris-network",
+                                 "Kubernetes",
+                                 ["Kubernetes"])
+    write_key(key, filename=os.path.join(cert_dir, "%s-key.pem" % ca_name))
+    write_cert(ca_cert, os.path.join(cert_dir, "%s.pem" % ca_name))
     return key
-
-
-def create_hosts_certificates(key, hosts):
-    for host in hosts:
-        cert = create_certificate(key, "DE", "BY", "NUE", "noris", host, hosts)
-        write_cert(cert, host+".pem")
 
 
 class CloudInit:
@@ -264,11 +271,11 @@ class CloudInit:
                                    filename="/etc/kolt.conf")
             self.combined_message.attach(sub_message)
 
-        sub_message = MIMEText(self._get_certificate_info(),
-                               _subtype='text/cloud-config')
-        sub_message.add_header('Content-Disposition', 'attachment',
-                               filename="/etc/cert.conf")
-        self.combined_message.attach(sub_message)
+        #sub_message = MIMEText(self._get_certificate_info(),
+        #                       _subtype='text/cloud-config')
+        #sub_message.add_header('Content-Disposition', 'attachment',
+        #                       filename="/etc/cert.conf")
+        #self.combined_message.attach(sub_message)
 
         k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
                                                        self.os_type,

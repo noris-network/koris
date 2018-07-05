@@ -2,6 +2,7 @@
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
 import argparse
 import asyncio
+import logging
 import os
 import uuid
 import textwrap
@@ -21,8 +22,12 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
-from ._init import (CloudInit, create_ca, create_hosts_certificates,
+from ._init import (CloudInit, create_ca, write_cert,
+                    create_private_key, write_key, create_certificate
                     )
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def chunks(l, n):
@@ -244,10 +249,8 @@ def create_machines(nova, neutron, cinder, config):
 
     cluster = config['cluster-name']
 
-    masters = ["master-%s-%s" % (i, cluster) for i in
-               range(1, config['n-masters'] + 1)]
-    nodes = ["node-%s-%s" % (i, cluster) for i in
-             range(1, config['n-nodes'] + 1)]
+    masters = host_names("master", config["n-masters"], cluster)
+    nodes = host_names("node", config["n-nodes"], cluster)
 
     # create SSL certificates for master machines
     for i in range(0, config['n-masters']):
@@ -337,14 +340,32 @@ def main():
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
 
-    if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
+    if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
 
     # create a new certificate for the CA
     # TODO: introduce a command line option for this
-    key = create_ca(config.get("certificates", {}).get("expiry", "8761h"))
-    create_hosts_certificates(key, ["node-1", "node-2", "node-3"])
+    if os.path.exists("cluster-certs"):
+        shutil.rmtree("cluster-certs")
+
+    os.mkdir("cluster-certs")
+    ca_key = create_ca(config.get("certificates",
+                                  {}).get("expiry", "8762h"),
+                       "ca",
+                       "cluster-certs")
+    all_cluster_hosts = []
+    for role in ["etcd", "node", "master"]:
+        all_cluster_hosts.extend(host_names(role, config["n-%ss" % role],
+                                 config["cluster-name"]))
+
+    cert = create_certificate(ca_key, "DE", "BY", "NUE",
+                              "noris-network", "Kubernetes", all_cluster_hosts)
+    write_cert(cert, "cluster-certs/kubernetes.pem")
+
+    key = create_private_key()
+    write_key(key, filename="cluster-certs/kubernetes-key.pem")
+    sys.exit()
 
     nova, neutron, cinder = get_clients()
     create_machines(nova, neutron, cinder, config)
