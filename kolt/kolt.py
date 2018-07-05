@@ -347,31 +347,6 @@ def main():
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
 
-    # create a new certificate for the CA
-    # TODO: introduce a command line option for this
-    if os.path.exists("cluster-certs"):
-        shutil.rmtree("cluster-certs")
-
-    os.mkdir("cluster-certs")
-    ca_key = create_ca(config.get("certificates",
-                                  {}).get("expiry", "8762h"),
-                       "ca",
-                       "cluster-certs")
-
-    all_cluster_hosts = []
-    for role in ["etcd", "node", "master"]:
-        all_cluster_hosts.extend(host_names(role, config["n-%ss" % role],
-                                 config["cluster-name"]))
-
-    cert = create_certificate(ca_key, "DE", "BY", "NUE",
-                              "noris-network", "Kubernetes", all_cluster_hosts)
-    write_cert(cert, "cluster-certs/kubernetes.pem")
-
-    key = create_private_key()
-    write_key(key, filename="cluster-certs/kubernetes-key.pem")
-
-    sys.exit()
-
     nova, neutron, cinder = get_clients()
     create_machines(nova, neutron, cinder, config)
     print(info("Cluster successfully set up."))
