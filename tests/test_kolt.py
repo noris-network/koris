@@ -5,7 +5,7 @@
 
 import pytest
 
-from kolt._init import create_ca
+
 from kolt.kolt import host_names
 
 
