@@ -2,12 +2,14 @@
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
 import argparse
 import asyncio
+import logging
 import os
 import uuid
 import textwrap
 import sys
 import shutil
 
+from functools import lru_cache
 import yaml
 
 from novaclient import client as nvclient
@@ -20,8 +22,14 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
-from ._init import (CloudInit, create_ca, create_hosts_certificates,
+from ._init import (CloudInit,
                     )
+from kolt._init import *
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def chunks(l, n):
@@ -210,6 +218,12 @@ def create_nics(neutron, num, netid, security_groups):
                       }})
 
 
+@lru_cache(maxsize=10)
+def host_names(role, num, cluster_name):
+    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+               range(1, num + 1)]
+    
+
 def create_machines(nova, neutron, cinder, config):
 
     print(info(cyan("gathering information from openstack ...")))
@@ -237,10 +251,8 @@ def create_machines(nova, neutron, cinder, config):
 
     cluster = config['cluster-name']
 
-    masters = ["master-%s-%s" % (i, cluster) for i in
-               range(1, config['n-masters'] + 1)]
-    nodes = ["node-%s-%s" % (i, cluster) for i in
-             range(1, config['n-nodes'] + 1)]
+    masters = host_names("master", config["n-masters"], cluster)
+    nodes = host_names("node", config["n-nodes"], cluster)
 
     # create SSL certificates for master machines
     for i in range(0, config['n-masters']):
@@ -330,14 +342,9 @@ def main():
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
 
-    if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
+    if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
-
-    # create a new certificate for the CA
-    # TODO: introduce a command line option for this
-    key = create_ca(config.get("certificates", {}).get("expiry", "8761h"))
-    create_hosts_certificates(key, ["node-1", "node-2", "node-3"])
 
     nova, neutron, cinder = get_clients()
     create_machines(nova, neutron, cinder, config)

@@ -10,7 +10,7 @@ availibity-zones:
  - de-nbg6-1a
 n-masters: 3
 n-nodes: 3
-n-etcd: 3
+n-etcds: 3
 keypair: 'otiram'
 security_group: 'k8s-nude-k8s-a0tp4t'
 user_data: 'cloud-init-parts/generic'
