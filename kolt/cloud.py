@@ -27,19 +27,6 @@ ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
 
-INCLUSION_TYPES_MAP = {
-    '#include': 'text/x-include-url',
-    '#include-once': 'text/x-include-once-url',
-    '#!': 'text/x-shellscript',
-    '#cloud-config': 'text/cloud-config',
-    '#upstart-job': 'text/upstart-job',
-    '#part-handler': 'text/part-handler',
-    '#cloud-boothook': 'text/cloud-boothook',
-    '#cloud-config-archive': 'text/cloud-config-archive',
-    '#cloud-config-jsonp': 'text/cloud-config-jsonp',
-}
-
-
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info, os_type='ubuntu',
