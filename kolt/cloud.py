@@ -27,8 +27,6 @@ ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
 
-
-
 INCLUSION_TYPES_MAP = {
     '#include': 'text/x-include-url',
     '#include-once': 'text/x-include-once-url',
@@ -46,7 +44,10 @@ class CloudInit:
 
     def __init__(self, role, hostname, cluster_info, os_type='ubuntu',
                  os_version="16.04"):
-
+        """
+        cluster_info - a dictionary with infromation about the etcd cluster
+        members
+        """
         self.combined_message = MIMEMultipart()
 
         if role not in ('master', 'node'):
