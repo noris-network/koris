@@ -22,11 +22,7 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
-from ._init import (CloudInit,
-                    )
-from kolt._init import *
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
+from .cloud import CloudInit
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -221,8 +217,8 @@ def create_nics(neutron, num, netid, security_groups):
 @lru_cache(maxsize=10)
 def host_names(role, num, cluster_name):
     return ["%s-%s-%s" % (role, i, cluster_name) for i in
-               range(1, num + 1)]
-    
+            range(1, num + 1)]
+
 
 def create_machines(nova, neutron, cinder, config):
 
@@ -253,16 +249,6 @@ def create_machines(nova, neutron, cinder, config):
 
     masters = host_names("master", config["n-masters"], cluster)
     nodes = host_names("node", config["n-nodes"], cluster)
-
-    # create SSL certificates for master machines
-    for i in range(0, config['n-masters']):
-        host = nics_masters[i]["port"]["fixed_ips"][0]["ip_address"]
-        # create_signed_cert(masters[i], host)
-
-    # create SSL certificates for node machines
-    for i in range(0, config['n-nodes']):
-        host = nics_nodes[i]["port"]["fixed_ips"][0]["ip_address"]
-        # create_signed_cert(nodes[i], host)
 
     cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"],
                         [nic['port']['fixed_ips'][0]['ip_address'] for
