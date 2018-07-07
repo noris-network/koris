@@ -61,9 +61,9 @@ def b64_key(key):
 
     key_bytes = key.private_bytes(**bytes_args)
 
-    return base64.b64encode(key_bytes)
+    return base64.b64encode(key_bytes).decode()
 
 
 def b64_cert(cert):
     """encode public bytes of a cert to base64"""
-    return base64.b64encode(cert.public_bytes(serialization.Encoding.PEM))
+    return base64.b64encode(cert.public_bytes(serialization.Encoding.PEM)).decode()
