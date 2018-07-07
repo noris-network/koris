@@ -21,8 +21,6 @@ BIN_PATH=/usr/bin
 ###################### Do NOT edit anything below ##############################
 ################################################################################
 
-source /etc/kolt.conf
-
 CURRENT_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
 HOST_NAME=$(hostname)
 
@@ -42,9 +40,9 @@ cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
 Description=etcd
 Documentation=https://github.com/coreos
-EnvironmentFile=/etc/kubernetes/etcd_cluster
 
 [Service]
+EnvironmentFile=/etc/systemd/system/etcd.env
 ExecStart=/usr/bin/etcd --name=${HOSTNAME} \\
         --data-dir=/var/lib/etcd \\
         --cert-file=/etc/ssl/kubernetes/kubernetes.pem \\
