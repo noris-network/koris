@@ -1,4 +1,6 @@
+import base64
 import datetime
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -28,7 +30,7 @@ def create_certificate(private_key, public_key, country,
         x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
-    ca_cert = x509.CertificateBuilder().subject_name(
+    cert = x509.CertificateBuilder().subject_name(
         subject
     ).issuer_name(
         issuer
@@ -46,3 +48,22 @@ def create_certificate(private_key, public_key, country,
         critical=False,
         # Sign our certificate with our private key
     ).sign(private_key, hashes.SHA256(), default_backend())
+
+    return cert
+
+
+def b64_key(key):
+    """encode private bytes of a key to base64"""
+
+    bytes_args = dict(encoding=serialization.Encoding.PEM,
+                      format=serialization.PrivateFormat.TraditionalOpenSSL,
+                      encryption_algorithm=serialization.NoEncryption())
+
+    key_bytes = key.private_bytes(**bytes_args)
+
+    return base64.b64encode(key_bytes)
+
+
+def b64_cert(cert):
+    """encode public bytes of a cert to base64"""
+    return base64.b64encode(cert.public_bytes(serialization.Encoding.PEM))
