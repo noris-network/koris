@@ -38,27 +38,30 @@ for item in "etcd etcdctl"; do
   install -m 775 ${item} ${BIN_PATH}/
 done
 
-cat << EOF > /etc/systemd/system/etcd.service
+cat << "EOF" > /etc/systemd/system/etcd.service
 [Unit]
 Description=etcd
 Documentation=https://github.com/coreos
+EnvironmentFile=/etc/kubernetes/etcd_cluster
 
 [Service]
-ExecStart=/usr/bin/etcd  \
---name $HOST_NAME \
---data-dir=/var/lib/etcd \
---cert-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}.pem  \
---key-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}-key.pem \
---peer-cert-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}.pem \
---peer-key-file=/etc/ssl/etcd/ssl/member-${HOST_NAME}-key.pem \
---trusted-ca-file=/etc/ssl/etcd/ssl/ca.pem \
---listen-client-urls http://$CURRENT_IP:2379 \
---advertise-client-urls http://$CURRENT_IP:2379 \
---listen-peer-urls http://$CURRENT_IP:2380 \
---initial-advertise-peer-urls http://$CURRENT_IP:2380 \
---initial-cluster ${NODE01}=https://${NODE01_IP}:2380,${NODE02}=https://${NODE02_IP}:2380,$(NODE03)=https://${NODE03_IP}:2380 \
---peer-client-cert-auth \
---client-cert-auth
+ExecStart=/usr/bin/etcd --name=${HOSTNAME} \\
+        --data-dir=/var/lib/etcd \\
+        --cert-file=/etc/etcd/ssl/kubernetes.pem \\
+        --key-file=/etc/etcd/ssl/kubernetes-key.pem \\
+        --peer-cert-file=/etc/etcd/ssl/kubernetes.pem \\
+        --peer-key-file=/etc/etcd/ssl/kubernetes-key.pem  \\
+        --trusted-ca-file=/etc/etcd/ssl/ca.pem \\
+        --peer-trusted-ca-file=/etc/etcd/ssl/ca.pem \\
+        --listen-client-urls https://${CURRENT_IP}:2379,http://127.0.0.1:2379 \\
+        --advertise-client-urls https://${CURRENT_IP}:2379 \\
+        --listen-peer-urls https://${CURRENT_IP}:2380 \\
+        --initial-advertise-peer-urls https://${CURRENT_IP}:2380 \\
+        --initial-cluster-token kubernete-cluster \\
+        --initial-cluster ${INITIAL_CLUSTER} \\
+        --initial-cluster-state new \\
+        --peer-client-cert-auth \\
+        --client-cert-auth
 
 Restart=on-failure
 RestartSec=5
@@ -84,6 +87,7 @@ cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
 Description=Kubernetes API Server
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+EnvironmentFile=/etc/kubernetes/api_cluster
 
 [Service]
 ExecStart=/usr/bin/kube-apiserver \
