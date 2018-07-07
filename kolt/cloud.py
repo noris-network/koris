@@ -49,26 +49,19 @@ class CloudInit:
 
     def _etcd_cluster_info(self):
         """
-        Write the etcd cluster info to /etc/kubernetes/etcd_cluster
+        Write the etcd cluster info to /etc/systemd/system/etcd.env
         """
 
         cluster_info_part = """
-        #cloud-config
-        write_files:
-          - content: |
-              NODE01={n01_name}
-              NODE02={n02_name}
-              NODE03={n03_name}
-              NODE01_IP={n01_ip}
-              NODE02_IP={n02_ip}
-              NODE03_IP={n03_ip}
-              INITIAL_CLUSTER={n01_name}=https://{n01_ip}:2380,{n02_name}=https://{n02_ip}:2380,{n03_name}=https://{n03_ip}:2380
-
-            owner: root:root
-            permissions: '0644'
-            path: /etc/kubernetes/etcd_cluster
+             NODE01={n01_name}
+             NODE02={n02_name}
+             NODE03={n03_name}
+             NODE01_IP={n01_ip}
+             NODE02_IP={n02_ip}
+             NODE03_IP={n03_ip}
+             INITIAL_CLUSTER={n01_name}=https://{n01_ip}:2380,{n02_name}=https://{n02_ip}:2380,{n03_name}=https://{n03_ip}:2380
         """.format(**self.cluster_info)
-        return textwrap.dedent(cluster_info_part)
+        return cluster_info_part
 
     def _get_ca_and_certs(self):
         ca_key = create_key()
@@ -115,21 +108,19 @@ class CloudInit:
            content: {K8S_KEY}
            owner: root:root
            permissions: '0600'
+         - path: /etc/systemd/system/etcd.env
+           owner: root:root
+           permissions: '0644'
+           content: |{ETCD_CLUSTER}
         """.format(
-            CA_CERT=b64_ca_cert, K8S_KEY=b64_k8s_key, KUBERNETES_CERT=b64_k8s_cert
+            CA_CERT=b64_ca_cert.lstrip(), K8S_KEY=b64_k8s_key.lstrip(), KUBERNETES_CERT=b64_k8s_cert.lstrip(),
+            ETCD_CLUSTER=self._etcd_cluster_info()
             )
         return textwrap.dedent(certificate_info)
 
     def __str__(self):
 
         if self.cluster_info:
-            sub_message = MIMEText(
-                self._etcd_cluster_info(),
-                _subtype='text/cloud-config')
-            sub_message.add_header('Content-Disposition', 'attachment',
-                                   filename="/etc/kubernetes/etc_cluster")
-            self.combined_message.attach(sub_message)
-
             sub_message = MIMEText(self._get_certificate_info(),
                                    _subtype='text/cloud-config')
             sub_message.add_header('Content-Disposition', 'attachment')

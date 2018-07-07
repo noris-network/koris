@@ -18,7 +18,7 @@ def test_cloud_init():
     cluster_info = ci._etcd_cluster_info().lstrip("\n")
     cluster_info = yaml.load(cluster_info[cluster_info.index("\n"):])["write_files"][0]
 
-    assert cluster_info['path'] == "/etc/kubernetes/etcd_cluster"
+    assert cluster_info['path'] == "/etc/systemd/system/etcd.env"
     cluster_info_content = {k:v for k,v in
                            [item.split("=", 1) for item in
                             cluster_info["content"].split()]}
