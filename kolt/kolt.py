@@ -310,6 +310,30 @@ def create_machines(nova, neutron, cinder, config):
     loop.close()
 
 
+def delete_cluster(config):
+    print(red("You are about to destroy you cluster!!!"))
+    print(red("Are you really sure ? [y/N]"))
+    ans = input(red("ARE YOU REALLY SURE???"))
+
+    if ans.lower() == 'y':
+        cluster_suffix = "-%s" % config['cluster-name']
+        servers = [server for server in nova.servers.list() if
+                   server.name.endswith(cluster_suffix)]
+
+        async def del_server(server):
+            await asyncio.sleep(1)
+            server.delete()
+
+        loop = asyncio.get_event_loop()
+        tasks = [loop.create_task(del_server(server)) for server in servers]
+
+        if tasks:
+            loop.run_until_complete(asyncio.wait(tasks))
+        loop.close()
+    else:
+        sys.exit(1)
+
+
 def main():
     global nova, neutron, cinder
     if not shutil.which("cfssl"):
@@ -319,6 +343,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
+    parser.add_argument("--destroy", help="Delete cluster", action="store_true")
     args = parser.parse_args()
 
     if not args.config:
@@ -328,10 +353,15 @@ def main():
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
 
+    nova, neutron, cinder = get_clients()
+
+    if args.destroy:
+        delete_cluster(config)
+        sys.exit(0)
+
     if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
 
-    nova, neutron, cinder = get_clients()
     create_machines(nova, neutron, cinder, config)
     print(info("Cluster successfully set up."))
