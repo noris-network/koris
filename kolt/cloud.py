@@ -100,17 +100,17 @@ class CloudInit:
         certificate_info = """
         #cloud-config
         write_files:
-         - path: /etc/ssl/ca.pem
+         - path: /etc/ssl/kubernetes/ca.pem
            encoding: b64
            content: {CA_CERT}
            owner: root:root
            permissions: '0600'
-         - path: /etc/ssl/kubernetes.pem
-            encoding: b64
+         - path: /etc/ssl/kubernetes/kubernetes.pem
+           encoding: b64
            content: {KUBERNETES_CERT}
            owner: root:root
            permissions: '0600'
-         - path: /etc/ssl/kubernetes-key.pem
+         - path: /etc/ssl/kubernetes/kubernetes-key.pem
            encoding: b64
            content: {K8S_KEY}
            owner: root:root
@@ -132,8 +132,7 @@ class CloudInit:
 
             sub_message = MIMEText(self._get_certificate_info(),
                                    _subtype='text/cloud-config')
-            sub_message.add_header('Content-Disposition', 'attachment',
-                                   filename="/etc/cert.conf")
+            sub_message.add_header('Content-Disposition', 'attachment')
             self.combined_message.attach(sub_message)
 
         k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,

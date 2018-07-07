@@ -47,17 +47,17 @@ EnvironmentFile=/etc/kubernetes/etcd_cluster
 [Service]
 ExecStart=/usr/bin/etcd --name=${HOSTNAME} \\
         --data-dir=/var/lib/etcd \\
-        --cert-file=/etc/etcd/ssl/kubernetes.pem \\
-        --key-file=/etc/etcd/ssl/kubernetes-key.pem \\
-        --peer-cert-file=/etc/etcd/ssl/kubernetes.pem \\
-        --peer-key-file=/etc/etcd/ssl/kubernetes-key.pem  \\
-        --trusted-ca-file=/etc/etcd/ssl/ca.pem \\
-        --peer-trusted-ca-file=/etc/etcd/ssl/ca.pem \\
+        --cert-file=/etc/ssl/kubernetes/kubernetes.pem \\
+        --key-file=/etc/ssl/kubernetes/kubernetes-key.pem \\
+        --peer-cert-file=/etc/ssl/kubernetes/kubernetes.pem \\
+        --peer-key-file=/etc/ssl/kubernetes/kubernetes-key.pem  \\
+        --trusted-ca-file=/etc/ssl/kubernetes/ca.pem \\
+        --peer-trusted-ca-file=/etc/ssl/kubernetes/ca.pem \\
         --listen-client-urls https://${CURRENT_IP}:2379,http://127.0.0.1:2379 \\
         --advertise-client-urls https://${CURRENT_IP}:2379 \\
         --listen-peer-urls https://${CURRENT_IP}:2380 \\
         --initial-advertise-peer-urls https://${CURRENT_IP}:2380 \\
-        --initial-cluster-token kubernete-cluster \\
+        --initial-cluster-token kubernetes-cluster \\
         --initial-cluster \${INITIAL_CLUSTER} \\
         --initial-cluster-state new \\
         --peer-client-cert-auth \\
