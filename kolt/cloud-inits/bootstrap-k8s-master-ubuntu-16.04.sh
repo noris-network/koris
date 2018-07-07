@@ -38,7 +38,7 @@ for item in "etcd etcdctl"; do
   install -m 775 ${item} ${BIN_PATH}/
 done
 
-cat << "EOF" > /etc/systemd/system/etcd.service
+cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
 Description=etcd
 Documentation=https://github.com/coreos
@@ -58,7 +58,7 @@ ExecStart=/usr/bin/etcd --name=${HOSTNAME} \\
         --listen-peer-urls https://${CURRENT_IP}:2380 \\
         --initial-advertise-peer-urls https://${CURRENT_IP}:2380 \\
         --initial-cluster-token kubernete-cluster \\
-        --initial-cluster ${INITIAL_CLUSTER} \\
+        --initial-cluster \${INITIAL_CLUSTER} \\
         --initial-cluster-state new \\
         --peer-client-cert-auth \\
         --client-cert-auth
