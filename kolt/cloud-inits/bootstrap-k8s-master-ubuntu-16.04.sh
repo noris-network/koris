@@ -217,8 +217,10 @@ EOF
 
 # setup system init scripts ####################################################
 
-# systemctl daemon-reload
+systemctl daemon-reload
 
+systemctl enable etcd
+systemctl start etcd
 #for item in "etcd apiserver controller-manager scheduler"; do
 #  systemctl enable ${item}
 #  systemctl status ${item}
