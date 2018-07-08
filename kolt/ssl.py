@@ -1,5 +1,6 @@
 import base64
 import datetime
+import ipaddress
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -20,7 +21,7 @@ def create_key(size=2048, public_exponent=65537):
 
 
 def create_certificate(private_key, public_key, country,
-                       state_province, locality, orga, name, hosts):
+                       state_province, locality, orga, name, hosts, ips):
 
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
@@ -42,12 +43,19 @@ def create_certificate(private_key, public_key, country,
         x509.random_serial_number()
     ).not_valid_after(
         # Our certificate will be valid for 1800 days
-        datetime.datetime.utcnow() + datetime.timedelta(days=1800)
-    ).add_extension(
-        x509.SubjectAlternativeName(x509.DNSName(host) for host in hosts),
-        critical=False,
-        # Sign our certificate with our private key
-    ).sign(private_key, hashes.SHA256(), default_backend())
+        datetime.datetime.utcnow() + datetime.timedelta(days=1800))
+
+    alt_names = [x509.DNSName(host) for host in hosts]
+
+    if ips:
+        alt_names.extend(x509.IPAddress(ipaddress.IPv4Address(ip)) for ip in ips)
+
+
+    cert.add_extension(
+        x509.SubjectAlternativeName(alt_names),
+        critical=False)
+
+    cert = cert.sign(private_key, hashes.SHA256(), default_backend())
 
     return cert
 
