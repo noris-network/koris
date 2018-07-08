@@ -3,16 +3,10 @@ This modules contains some helper functions to inject cloud-init
 to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
-import base64
-import datetime
-import json
 import logging
 import os
 import textwrap
-import subprocess as sp
-import sys
 
-import yaml
 
 from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
@@ -69,14 +63,15 @@ class CloudInit:
                                      "DE", "BY", "NUE",
                                      "noris-network", "CA", ["CA"])
 
-        hostnames = [v for k, v in self.cluster_info.items() if v.endswith("_name")]
+        hostnames = [v for k, v in self.cluster_info.items() if
+                     v.endswith("_name")]
 
         k8s_key = create_key()
         k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
-                                     "DE", "BY", "NUE", "noris-network",
-                                     "Kubernetes", hostnames)
+                                      "DE", "BY", "NUE", "noris-network",
+                                      "Kubernetes", hostnames)
         self.ca_key, self.ca_cert = ca_key, ca_cert
-        self.k8s_key, self.k8s_cert =  k8s_key, k8s_cert
+        self.k8s_key, self.k8s_cert = k8s_key, k8s_cert
 
         return ca_key, ca_cert, k8s_key, k8s_cert
 
@@ -113,9 +108,10 @@ class CloudInit:
            permissions: '0644'
            content: |{ETCD_CLUSTER}
         """.format(
-            CA_CERT=b64_ca_cert.lstrip(), K8S_KEY=b64_k8s_key.lstrip(), KUBERNETES_CERT=b64_k8s_cert.lstrip(),
-            ETCD_CLUSTER=self._etcd_cluster_info()
-            )
+            CA_CERT=b64_ca_cert.lstrip(), K8S_KEY=b64_k8s_key.lstrip(),
+            KUBERNETES_CERT=b64_k8s_cert.lstrip(),
+            ETCD_CLUSTER=self._etcd_cluster_info())
+
         return textwrap.dedent(certificate_info)
 
     def __str__(self):
@@ -149,6 +145,5 @@ class CloudInit:
                                    'attachment', filename="%s" % item)
             self.combined_message.attach(sub_message)
             fh.close()
-        
 
         return self.combined_message.as_string()
