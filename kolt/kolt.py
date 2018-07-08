@@ -344,6 +344,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
     parser.add_argument("--destroy", help="Delete cluster", action="store_true")
+    parser.add_argument("--certs", help="Create cluster CA and certs only",
+                        action="store_true")
+
     args = parser.parse_args()
 
     if not args.config:
@@ -353,6 +356,9 @@ def main():
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
 
+    if args.certs:
+        create_certs(config)
+        sys.exit(0)
     nova, neutron, cinder = get_clients()
 
     if args.destroy:
