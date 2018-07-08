@@ -15,14 +15,7 @@ test_cluster = {"n01_ip": "10.32.192.101",
 def test_cloud_init():
     ci = CloudInit("master", "master-1-k8s", test_cluster)
 
-    cluster_info = ci._etcd_cluster_info().lstrip("\n")
-    cluster_info = yaml.load(cluster_info[cluster_info.index("\n"):])["write_files"][0]
+    config = ci.get_files_config()
+    config = yaml.load(config)
 
-    assert cluster_info['path'] == "/etc/systemd/system/etcd.env"
-    cluster_info_content = {k:v for k,v in
-                           [item.split("=", 1) for item in
-                            cluster_info["content"].split()]}
-
-    cluster_info_content["NODE01_IP"] == test_cluster["n01_ip"]
-
-    ci._get_certificate_info()
+    assert len(config['write_files']) == 4

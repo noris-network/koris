@@ -27,8 +27,5 @@ def test_content(response):
 
 def test_host_names():
     assert ["etcd-1-k8s", "etcd-2-k8s"] == host_names("etcd", 2, "k8s")
-#def test_create_ca():
-
-#    assert "key" in create_ca("8760h")
 
 
