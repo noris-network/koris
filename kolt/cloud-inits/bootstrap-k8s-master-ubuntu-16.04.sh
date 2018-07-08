@@ -79,6 +79,46 @@ done
 curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl -o ${BIN_PATH}/kubectl
 chmod +x ${BIN_PATH}/kubectl
 
+mkdir -pv /var/lib/kubernetes/
+##
+# link certificates from /etc/ssl/kubernetes - these are injected with cloud-init
+##
+ln -vs /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
+ln -vs /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
+ln -vs /etc/ssl/kubernetes/ca.pem /var/lib/kuberentes/ca.pem
+
+###
+# create encryption config
+###
+ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+
+cat > encryption-config.yaml <<EOF
+kind: EncryptionConfig
+iVersion: v1
+resources:
+  - resources:
+      - secrets
+    providers:
+      - aescbc:
+          keys:
+            - name: key1
+              secret: ${ENCRYPTION_KEY}
+      - identity: {}
+EOF
+
+###
+# create authentication tokens for calico, admin and kubelet service
+###
+
+adminToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head)
+calicoToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head)
+kubeletToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head)
+
+cat > /var/lib/kubernetes/token.csv << EOF
+${adminToken},admin,admin,"cluster-admin,system:masters"
+${calicoToken},calico,calico,"cluster-admin,system:masters"
+${kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
+EOF
 
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Service]
