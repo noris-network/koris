@@ -23,6 +23,8 @@ from keystoneauth1 import session
 
 from .hue import red, info, que, lightcyan as cyan
 from .cloud import CloudInit
+from .ssl import create_certificate, create_key
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -334,6 +336,14 @@ def delete_cluster(config):
         sys.exit(1)
 
 
+def create_certs(config):
+    """
+    create new certificates, useful for replacing certificates
+    and later for adding nodes ...
+    """
+    pass
+
+
 def main():
     global nova, neutron, cinder
     if not shutil.which("cfssl"):
@@ -356,10 +366,11 @@ def main():
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
 
+    nova, neutron, cinder = get_clients()
+
     if args.certs:
         create_certs(config)
         sys.exit(0)
-    nova, neutron, cinder = get_clients()
 
     if args.destroy:
         delete_cluster(config)
