@@ -23,7 +23,7 @@ from keystoneauth1 import session
 
 from .cloud import CloudInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import create_certificate, create_key
+from .ssl import create_certificate, create_key, write_key, write_cert
 from .util import EtcdHost
 
 
@@ -249,7 +249,7 @@ def create_machines(nova, neutron, cinder, config):
                                   secgroups))
 
     cluster = config['cluster-name']
-
+    
     masters = host_names("master", config["n-masters"], cluster)
     nodes = host_names("node", config["n-nodes"], cluster)
 
@@ -339,7 +339,37 @@ def create_certs(config):
     create new certificates, useful for replacing certificates
     and later for adding nodes ...
     """
-    pass
+
+    # find all servers in my cluster which are etcd or master
+    cluster_suffix = "-%s" % config['cluster-name']
+
+    servers = [server for server in nova.servers.list() if
+               server.name.endswith(cluster_suffix)]
+    import pdb; pdb.set_trace()
+    assert len(servers)
+    names = []
+    ips = []
+    for server in servers:
+        names.append(server.name)
+        ips.append(server.interface_list()[0].fixed_ips[0]['ip_address'])
+
+    ca_key = create_key()
+
+    ca_cert = create_certificate(ca_key, ca_key.public_key(),
+                                 "DE", "BY", "NUE",
+                                 "noris-network", "CA", ["CA"], None)
+
+    k8s_key = create_key()
+    k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
+                                  "DE", "BY", "NUE", "noris-network",
+                                  "Kubernetes", names, ips)
+    if not os.path.exists("certs"):
+        os.mkdir("certs")
+
+    write_key(ca_key, filename="certs/ca-key.pem")
+    write_key(k8s_key, filename="certs/k8s-key.pem")
+    write_cert(ca_cert, "certs/ca-cert.pem")
+    write_cert(k8s_cert, "certs/k8s-cert.pem")
 
 
 def main():

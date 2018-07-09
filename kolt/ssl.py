@@ -51,7 +51,7 @@ def create_certificate(private_key, public_key, country,
         alt_names.extend(x509.IPAddress(ipaddress.IPv4Address(ip))
                          for ip in ips)
 
-    cert.add_extension(
+    cert = cert.add_extension(
         x509.SubjectAlternativeName(alt_names),
         critical=False)
 
@@ -76,3 +76,39 @@ def b64_cert(cert):
     """encode public bytes of a cert to base64"""
     return base64.b64encode(
         cert.public_bytes(serialization.Encoding.PEM)).decode()
+
+
+def write_key(key, passwd=None, filename="key.pem"):
+    """
+    Write the key instance to the file as ASCII string
+    Args:
+
+        key (SSL key instance)
+        passwd (str): if given the key will be protected with this password
+        filename (str): the file to write
+    """
+    if passwd:
+        enc_algo = serialization.BestAvailableEncryption(passwd.encode())
+    else:
+        enc_algo = serialization.NoEncryption()
+
+    # Write our key to disk for safe keeping
+    with open(filename, "wb") as f:
+        f.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=enc_algo,))
+
+
+def write_cert(cert, filename):
+    """
+    Write the certifiacte instance to the file as ASCII string
+
+    Args:
+
+       cert (SSL certificate instance)
+       filename (str): the file to write
+    """
+
+    with open(filename, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
