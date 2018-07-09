@@ -55,6 +55,29 @@ def create_certificate(private_key, public_key, country,
         x509.SubjectAlternativeName(alt_names),
         critical=False)
 
+    # according to https://github.com/openshift-cherrypick-robot/openshift-ansible/commit/4805f73fd0cd2983908b06953087a19cd8e53c45
+    # this should work, hower it does not.
+    # I also tried with everything to True and ExtendedKeyUsageOID.ANY_KEY_USAGE in the second case.
+    # This does not work either... always the same error message:
+    # rejected connection from "10.32.192.42:37840" (error "remote error: tls: bad certificate", ServerName "")
+    # even the CoreOS page suggests nothing else, see:
+    # https://coreos.com/etcd/docs/latest/op-guide/security.html
+
+    cert = cert.add_extension(
+        x509.KeyUsage(
+            True, False, True, False, False, False, False, False, False
+        ),
+        critical=True
+    )
+
+    cert = cert.add_extension(
+        x509.ExtendedKeyUsage(
+            [x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH,
+             x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]
+        ),
+        critical=True
+    )
+
     cert = cert.sign(private_key, hashes.SHA256(), default_backend())
 
     return cert

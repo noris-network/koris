@@ -146,7 +146,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
         instance = nova.servers.get(instance.id)
         inst_status = instance.status
 
-    print("Instance: " + instance.name + " is in " + inst_status + "state")
+    print("Instance: " + instance.name + " is in " + inst_status + " state")
 
     ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
     print("Instance booted! Name: " + instance.name + " Status: " +
@@ -249,7 +249,7 @@ def create_machines(nova, neutron, cinder, config):
                                   secgroups))
 
     cluster = config['cluster-name']
-    
+
     masters = host_names("master", config["n-masters"], cluster)
     nodes = host_names("node", config["n-nodes"], cluster)
 
@@ -345,8 +345,9 @@ def create_certs(config):
 
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
-    import pdb; pdb.set_trace()
+
     assert len(servers)
+
     names = []
     ips = []
     for server in servers:
