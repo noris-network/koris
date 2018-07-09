@@ -21,9 +21,10 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .hue import red, info, que, lightcyan as cyan
 from .cloud import CloudInit
+from .hue import red, info, que, lightcyan as cyan
 from .ssl import create_certificate, create_key
+from .util import EtcdHost
 
 
 logger = logging.getLogger(__name__)
@@ -252,15 +253,12 @@ def create_machines(nova, neutron, cinder, config):
     masters = host_names("master", config["n-masters"], cluster)
     nodes = host_names("node", config["n-nodes"], cluster)
 
-    cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"],
-                        [nic['port']['fixed_ips'][0]['ip_address'] for
-                         nic in nics_masters]))
-
-    cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"],
-                                 masters)))
+    etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
+                      zip(masters, [nic['port']['fixed_ips'][0]['ip_address']
+                          for nic in nics_masters])]
 
     master_user_data = [
-        create_userdata('master', config['image'], master, cluster_info)
+        create_userdata('master', config['image'], master, etcd_host_list)
         for master in masters
     ]
 
@@ -353,7 +351,8 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
-    parser.add_argument("--destroy", help="Delete cluster", action="store_true")
+    parser.add_argument("--destroy", help="Delete cluster",
+                        action="store_true")
     parser.add_argument("--certs", help="Create cluster CA and certs only",
                         action="store_true")
 

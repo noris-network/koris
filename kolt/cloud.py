@@ -52,14 +52,8 @@ class CloudInit:
            owner: root:root
            permissions: '0644'
            content: |
-             NODE01={n01_name}
-             NODE02={n02_name}
-             NODE03={n03_name}
-             NODE01_IP={n01_ip}
-             NODE02_IP={n02_ip}
-             NODE03_IP={n03_ip}
-             INITIAL_CLUSTER={n01_name}=https://{n01_ip}:2380,{n02_name}=https://{n02_ip}:2380,{n03_name}=https://{n03_ip}:2380
-        """.format(**self.cluster_info)
+             INITIAL_CLUSTER={}
+        """.format(",".join(str(etcd_host) for etcd_host in self.cluster_info))
         return textwrap.dedent(cluster_info_part)
 
     def _get_ca_and_certs(self):
@@ -67,11 +61,8 @@ class CloudInit:
         ca_cert = create_certificate(ca_key, ca_key.public_key(),
                                      "DE", "BY", "NUE",
                                      "noris-network", "CA", ["CA"], None)
-        hostnames = [v for k, v in self.cluster_info.items() if
-                     k.endswith("_name")]
 
-        ips = [v for k, v in self.cluster_info.items() if
-               k.endswith("_ip")]
+        hostnames, ips = zip(*[(i.name, i.ip_address) for i in self.cluster_info])  # noqa
 
         k8s_key = create_key()
         k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
@@ -111,8 +102,7 @@ class CloudInit:
            permissions: '0600'
         """.format(
             CA_CERT=b64_ca_cert.lstrip(), K8S_KEY=b64_k8s_key.lstrip(),
-            KUBERNETES_CERT=b64_k8s_cert.lstrip(),
-            )
+            KUBERNETES_CERT=b64_k8s_cert.lstrip())
 
         return textwrap.dedent(certificate_info)
 
@@ -120,7 +110,7 @@ class CloudInit:
         """
         write the section write_files into the cloud-config
         """
-        config=textwrap.dedent("""
+        config = textwrap.dedent("""
         #cloud-config
         write_files:
         """) + self._get_certificate_info().lstrip() \
