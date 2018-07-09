@@ -23,7 +23,9 @@ from keystoneauth1 import session
 
 from .cloud import CloudInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import create_certificate, create_key, write_key, write_cert
+from .ssl import (create_certificate, create_key,
+                  create_ca,
+                  write_key, write_cert)
 from .util import EtcdHost
 
 
@@ -356,9 +358,9 @@ def create_certs(config):
 
     ca_key = create_key()
 
-    ca_cert = create_certificate(ca_key, ca_key.public_key(),
-                                 "DE", "BY", "NUE",
-                                 "noris-network", "CA", ["CA"], None)
+    ca_cert = create_ca(ca_key, ca_key.public_key(),
+                        "DE", "BY", "NUE",
+                        "noris-network", "CA")
 
     k8s_key = create_key()
     k8s_cert = create_certificate(ca_key, k8s_key.public_key(),

@@ -20,6 +20,49 @@ def create_key(size=2048, public_exponent=65537):
     return key
 
 
+def create_ca(private_key, public_key, country,
+              state_province, locality, orga, name):
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
+    ])
+
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        public_key
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_after(
+        # Our certificate will be valid for 1800 days
+        datetime.datetime.utcnow() + datetime.timedelta(days=1800))
+
+    cert = cert.add_extension(
+        x509.KeyUsage(False, False, False, False, False, True,
+                      True, False, False),
+        critical=True)
+
+    cert = cert.add_extension(x509.BasicConstraints(True, 2), critical=True)
+    cert = cert.add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(public_key),
+        critical=False)
+
+    cert = cert.add_extension(
+        x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key),
+        critical=False)
+
+    cert = cert.sign(private_key, hashes.SHA256(), default_backend())
+
+    return cert
+
+
 def create_certificate(private_key, public_key, country,
                        state_province, locality, orga, name, hosts, ips):
 
@@ -77,7 +120,6 @@ def create_certificate(private_key, public_key, country,
         ),
         critical=True
     )
-
     cert = cert.sign(private_key, hashes.SHA256(), default_backend())
 
     return cert
