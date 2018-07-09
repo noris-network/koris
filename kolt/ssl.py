@@ -48,8 +48,8 @@ def create_certificate(private_key, public_key, country,
     alt_names = [x509.DNSName(host) for host in hosts]
 
     if ips:
-        alt_names.extend(x509.IPAddress(ipaddress.IPv4Address(ip)) for ip in ips)
-
+        alt_names.extend(x509.IPAddress(ipaddress.IPv4Address(ip))
+                         for ip in ips)
 
     cert.add_extension(
         x509.SubjectAlternativeName(alt_names),
@@ -74,4 +74,5 @@ def b64_key(key):
 
 def b64_cert(cert):
     """encode public bytes of a cert to base64"""
-    return base64.b64encode(cert.public_bytes(serialization.Encoding.PEM)).decode()
+    return base64.b64encode(
+        cert.public_bytes(serialization.Encoding.PEM)).decode()

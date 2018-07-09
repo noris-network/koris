@@ -73,7 +73,6 @@ class CloudInit:
         ips = [v for k, v in self.cluster_info.items() if
                k.endswith("_ip")]
 
-
         k8s_key = create_key()
         k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
                                       "DE", "BY", "NUE", "noris-network",
