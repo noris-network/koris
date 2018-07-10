@@ -21,13 +21,23 @@ def create_key(size=2048, public_exponent=65537):
 
 
 def create_ca(private_key, public_key, country,
-              state_province, locality, orga, name):
-    subject = issuer = x509.Name([
+              state_province, locality, orga, unit, name):
+    issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
-        x509.NameAttribute(NameOID.COMMON_NAME, name),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
+        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+    ])
+
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
+        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -37,7 +47,12 @@ def create_ca(private_key, public_key, country,
     ).public_key(
         public_key
     ).not_valid_before(
-        datetime.datetime.utcnow()
+        # note to future people
+        # sometimes your desktop server will have a time
+        # deviation from the server, to avoid the certificate
+        # invalidation we introduce a little buffer in the
+        # time
+        datetime.datetime.utcnow() + datetime.timedelta(minutes=-10)
     ).serial_number(
         x509.random_serial_number()
     ).not_valid_after(
@@ -64,13 +79,23 @@ def create_ca(private_key, public_key, country,
 
 
 def create_certificate(private_key, public_key, country,
-                       state_province, locality, orga, name, hosts, ips):
+                       state_province, locality, orga, unit, name, hosts, ips):
 
-    subject = issuer = x509.Name([
+    issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
+        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+    ])
+
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
         x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
@@ -81,7 +106,12 @@ def create_certificate(private_key, public_key, country,
     ).public_key(
         public_key
     ).not_valid_before(
-        datetime.datetime.utcnow()
+        # note to future people
+        # sometimes your desktop server will have a time
+        # deviation from the server, to avoid the certificate
+        # invalidation we introduce a little buffer in the
+        # time
+        datetime.datetime.utcnow() + datetime.timedelta(minutes=-10)
     ).serial_number(
         x509.random_serial_number()
     ).not_valid_after(

@@ -347,32 +347,43 @@ def create_certs(config):
 
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
+    # TODO: remove this crappy filter in the future
+    # because we might want to put etcd on own servers
+    servers = [server for server in servers if
+               server.name.startswith("master")]
 
     assert len(servers)
 
     names = []
     ips = []
+
     for server in servers:
         names.append(server.name)
         ips.append(server.interface_list()[0].fixed_ips[0]['ip_address'])
 
+    country = "DE"
+    state = "Bayern"
+    location = "NUE"
     ca_key = create_key()
+    ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                        state, location, "Kubernetes", "CDA\PI", "kubernetes")
 
-    ca_cert = create_ca(ca_key, ca_key.public_key(),
-                        "DE", "BY", "NUE",
-                        "noris-network", "CA")
+    names.append("localhost")
+    ips.append("127.0.0.1")
 
     k8s_key = create_key()
     k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
-                                  "DE", "BY", "NUE", "noris-network",
-                                  "Kubernetes", names, ips)
+                                  country, state, location,
+                                  "Kubernetes", "CDA\PI", "kubernetes",
+                                  names, ips)
+
     if not os.path.exists("certs"):
         os.mkdir("certs")
 
     write_key(ca_key, filename="certs/ca-key.pem")
-    write_key(k8s_key, filename="certs/k8s-key.pem")
-    write_cert(ca_cert, "certs/ca-cert.pem")
-    write_cert(k8s_cert, "certs/k8s-cert.pem")
+    write_key(k8s_key, filename="certs/kubernetes-key.pem")
+    write_cert(ca_cert, "certs/ca.pem")
+    write_cert(k8s_cert, "certs/kubernetes.pem")
 
 
 def main():
