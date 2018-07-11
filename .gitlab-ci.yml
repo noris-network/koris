@@ -9,4 +9,4 @@ test:
     - install -m 0755 cfssl_linux-amd64 /usr/bin/cfssl
     - pip3 install -r requirements_dev.txt
     - pip install -e .
-    - make test
+    - make coverage

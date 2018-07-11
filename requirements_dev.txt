@@ -9,5 +9,6 @@ Sphinx==1.7.1
 twine==1.10.0
 
 pytest
+pytest-coverage
 pytest-runner
 -r requirements.txt
