@@ -12,8 +12,7 @@ from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from kolt.ssl import (create_key, create_ca, create_certificate,
-                      b64_key, b64_cert)
+from kolt.ssl import (b64_key, b64_cert)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -25,7 +24,9 @@ logger.addHandler(ch)
 
 class CloudInit:
 
-    def __init__(self, role, hostname, cluster_info, os_type='ubuntu',
+    def __init__(self, role, hostname, cluster_info,
+                 etcd_cert_bundle,
+                 os_type='ubuntu',
                  os_version="16.04"):
         """
         cluster_info - a dictionary with infromation about the etcd cluster
@@ -39,6 +40,7 @@ class CloudInit:
         self.role = role
         self.hostname = hostname
         self.cluster_info = cluster_info
+        self.etcd_cert_bundle = etcd_cert_bundle
         self.os_type = os_type
         self.os_version = os_version
 
@@ -59,34 +61,15 @@ class CloudInit:
 
     def _get_ca_and_certs(self):
 
-        ca_key = create_key()
-        country = "DE"
-        state = "Bayern"
-        location = "NUE"
-        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
-                            state, location, "Kubernetes",
-                            "PI", "kubernetes")
-
-        hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
-                                       i in self.cluster_info]))
-
-        hostnames.append("localhost")
-        ips.append("127.0.0.1")
-
-        k8s_key = create_key()
-        k8s_cert = create_certificate(ca_key, k8s_key.public_key(), country,
-                                      state, location, "noris-network", "PI",
-                                      "Kubernetes", hostnames, ips)
-        self.ca_key, self.ca_cert = ca_key, ca_cert
-        self.k8s_key, self.k8s_cert = k8s_key, k8s_cert
-
-        return ca_key, ca_cert, k8s_key, k8s_cert
+        return (self.etcd_cert_bundle.ca_cert,
+                self.etcd_cert_bundle.k8s_key,
+                self.etcd_cert_bundle.k8s_cert)
 
     def _get_certificate_info(self):
         """
         write certificates to destination directory
         """
-        ca_key, ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
+        ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
 
         b64_k8s_key = b64_key(k8s_key)
         b64_ca_cert = b64_cert(ca_cert)

@@ -26,7 +26,7 @@ from .hue import red, info, que, lightcyan as cyan
 from .ssl import (create_certificate, create_key,
                   create_ca,
                   write_key, write_cert)
-from .util import EtcdHost
+from .util import EtcdHost, EtcdCertBundle, get_etcd_info_from_openstack
 
 
 logger = logging.getLogger(__name__)
@@ -193,12 +193,13 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(role, img_name, hostname, cluster_info=None):
+def create_userdata(role, img_name, hostname, cluster_info=None,
+                    cert_bundle=None):
     """
     Create multipart userdata for Ubuntu
     """
     if 'ubuntu' in img_name.lower():
-        userdata = str(CloudInit(role, hostname, cluster_info))
+        userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle))
     else:
         userdata = """
                    #cloud-config
@@ -259,8 +260,15 @@ def create_machines(nova, neutron, cinder, config):
                       zip(masters, [nic['port']['fixed_ips'][0]['ip_address']
                           for nic in nics_masters])]
 
+    hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
+                                     i in etcd_host_list]))
+
+    _, ca_cert, k8s_key, k8s_cert = create_certs(config, hostnames, ips)
+    cert_bundle = EtcdCertBundle(ca_cert, k8s_key, k8s_cert)
+
     master_user_data = [
-        create_userdata('master', config['image'], master, etcd_host_list)
+        create_userdata('master', config['image'], master, etcd_host_list,
+                        cert_bundle)
         for master in masters
     ]
 
@@ -336,31 +344,11 @@ def delete_cluster(config):
         sys.exit(1)
 
 
-def create_certs(config):
+def create_certs(config, names, ips, write=True):
     """
     create new certificates, useful for replacing certificates
     and later for adding nodes ...
     """
-
-    # find all servers in my cluster which are etcd or master
-    cluster_suffix = "-%s" % config['cluster-name']
-
-    servers = [server for server in nova.servers.list() if
-               server.name.endswith(cluster_suffix)]
-    # TODO: remove this crappy filter in the future
-    # because we might want to put etcd on own servers
-    servers = [server for server in servers if
-               server.name.startswith("master")]
-
-    assert len(servers)
-
-    names = []
-    ips = []
-
-    for server in servers:
-        names.append(server.name)
-        ips.append(server.interface_list()[0].fixed_ips[0]['ip_address'])
-
     country = "DE"
     state = "Bayern"
     location = "NUE"
@@ -368,22 +356,23 @@ def create_certs(config):
     ca_cert = create_ca(ca_key, ca_key.public_key(), country,
                         state, location, "Kubernetes", "CDA\PI", "kubernetes")
 
-    names.append("localhost")
-    ips.append("127.0.0.1")
-
     k8s_key = create_key()
     k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
                                   country, state, location,
                                   "Kubernetes", "CDA\PI", "kubernetes",
                                   names, ips)
+    if write:
+        cert_dir = "-".join(("certs", config["cluster-name"]))
 
-    if not os.path.exists("certs"):
-        os.mkdir("certs")
+        if not os.path.exists(cert_dir):
+            os.mkdir(cert_dir)
 
-    write_key(ca_key, filename="certs/ca-key.pem")
-    write_key(k8s_key, filename="certs/kubernetes-key.pem")
-    write_cert(ca_cert, "certs/ca.pem")
-    write_cert(k8s_cert, "certs/kubernetes.pem")
+        write_key(ca_key, filename=cert_dir + "/ca-key.pem")
+        write_key(k8s_key, filename=cert_dir + "/kubernetes-key.pem")
+        write_cert(ca_cert, cert_dir + "/ca.pem")
+        write_cert(k8s_cert, cert_dir + "/kubernetes.pem")
+
+    return ca_key, ca_cert, k8s_key, k8s_cert
 
 
 def main():
@@ -412,7 +401,8 @@ def main():
     nova, neutron, cinder = get_clients()
 
     if args.certs:
-        create_certs(config)
+        names, ips = get_etcd_info_from_openstack(config, nova)
+        create_certs(config, names, ips)
         sys.exit(0)
 
     if args.destroy:
