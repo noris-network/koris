@@ -8,5 +8,5 @@ test:
     - wget https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
     - install -m 0755 cfssl_linux-amd64 /usr/bin/cfssl
     - pip3 install -r requirements_dev.txt
-    - pip install -e .
-    - make coverage
+    - pip3 install -e .
+    - make coverage PY=python3

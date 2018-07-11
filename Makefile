@@ -24,6 +24,7 @@ for line in sys.stdin:
 endef
 export PRINT_HELP_PYSCRIPT
 
+PY ?= python
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
 help:
@@ -60,7 +61,7 @@ test-all: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python
-	python -m pytest -vv --cov .
+	$(PY) -m pytest -vv --cov .
 	#coverage report -m
 	#coverage html
 	#$(BROWSER) htmlcov/index.html
