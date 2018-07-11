@@ -47,29 +47,27 @@ class CloudInit:
         """
 
         cluster_info_part = """
-             NODE01={n01_name}
-             NODE02={n02_name}
-             NODE03={n03_name}
-             NODE01_IP={n01_ip}
-             NODE02_IP={n02_ip}
-             NODE03_IP={n03_ip}
-             INITIAL_CLUSTER={n01_name}=https://{n01_ip}:2380,{n02_name}=https://{n02_ip}:2380,{n03_name}=https://{n03_ip}:2380
-        """.format(**self.cluster_info)
-        return cluster_info_part
+        # systemd env
+         - path: /etc/systemd/system/etcd.env
+           owner: root:root
+           permissions: '0644'
+           content: |
+             INITIAL_CLUSTER={}
+        """.format(",".join(str(etcd_host) for etcd_host in self.cluster_info))
+        return textwrap.dedent(cluster_info_part)
 
     def _get_ca_and_certs(self):
         ca_key = create_key()
         ca_cert = create_certificate(ca_key, ca_key.public_key(),
                                      "DE", "BY", "NUE",
-                                     "noris-network", "CA", ["CA"])
+                                     "noris-network", "CA", ["CA"], None)
 
-        hostnames = [v for k, v in self.cluster_info.items() if
-                     v.endswith("_name")]
+        hostnames, ips = zip(*[(i.name, i.ip_address) for i in self.cluster_info])  # noqa
 
         k8s_key = create_key()
         k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
                                       "DE", "BY", "NUE", "noris-network",
-                                      "Kubernetes", hostnames)
+                                      "Kubernetes", hostnames, ips)
         self.ca_key, self.ca_cert = ca_key, ca_cert
         self.k8s_key, self.k8s_cert = k8s_key, k8s_cert
 
@@ -86,8 +84,7 @@ class CloudInit:
         b64_k8s_cert = b64_cert(k8s_cert)
 
         certificate_info = """
-        #cloud-config
-        write_files:
+        # certificates
          - path: /etc/ssl/kubernetes/ca.pem
            encoding: b64
            content: {CA_CERT}
@@ -103,21 +100,28 @@ class CloudInit:
            content: {K8S_KEY}
            owner: root:root
            permissions: '0600'
-         - path: /etc/systemd/system/etcd.env
-           owner: root:root
-           permissions: '0644'
-           content: |{ETCD_CLUSTER}
         """.format(
             CA_CERT=b64_ca_cert.lstrip(), K8S_KEY=b64_k8s_key.lstrip(),
-            KUBERNETES_CERT=b64_k8s_cert.lstrip(),
-            ETCD_CLUSTER=self._etcd_cluster_info())
+            KUBERNETES_CERT=b64_k8s_cert.lstrip())
 
         return textwrap.dedent(certificate_info)
+
+    def get_files_config(self):
+        """
+        write the section write_files into the cloud-config
+        """
+        config = textwrap.dedent("""
+        #cloud-config
+        write_files:
+        """) + self._get_certificate_info().lstrip() \
+             + self._etcd_cluster_info().lstrip()
+
+        return textwrap.dedent(config)
 
     def __str__(self):
 
         if self.cluster_info:
-            sub_message = MIMEText(self._get_certificate_info(),
+            sub_message = MIMEText(self.get_files_config(),
                                    _subtype='text/cloud-config')
             sub_message.add_header('Content-Disposition', 'attachment')
             self.combined_message.attach(sub_message)

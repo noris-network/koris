@@ -1,28 +1,23 @@
+import re
 import yaml
 
 from kolt.cloud import CloudInit
+from kolt.util import EtcdHost
 
-# cluster_info is a dictionary with infromation about the
-# etcd cluster
-test_cluster = {"n01_ip": "10.32.192.101",
-                "n02_ip": "10.32.192.101",
-                "n03_ip": "10.32.192.103",
-                "n01_name": "master-1-k8s",
-                "n02_name": "master-2-k8s",
-                "n03_name": "master-3-k8s"}
+test_cluster = [EtcdHost("master-%d-k8s" % i,
+                         "10.32.192.10%d" % i) for i in range(1, 4)]
 
 
 def test_cloud_init():
     ci = CloudInit("master", "master-1-k8s", test_cluster)
 
-    cluster_info = ci._etcd_cluster_info().lstrip("\n")
-    cluster_info = yaml.load(cluster_info[cluster_info.index("\n"):])["write_files"][0]
+    config = ci.get_files_config()
+    config = yaml.load(config)
 
-    assert cluster_info['path'] == "/etc/systemd/system/etcd.env"
-    cluster_info_content = {k:v for k,v in
-                           [item.split("=", 1) for item in
-                            cluster_info["content"].split()]}
+    assert len(config['write_files']) == 4
 
-    cluster_info_content["NODE01_IP"] == test_cluster["n01_ip"]
+    etcd_host = test_cluster[0]
 
-    ci._get_certificate_info()
+    assert re.findall("%s=https://%s:%s" % (
+        etcd_host.name, etcd_host.ip_address, etcd_host.port),
+        config['write_files'][-1]['content'])

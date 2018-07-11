@@ -21,8 +21,13 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .hue import red, info, que, lightcyan as cyan
 from .cloud import CloudInit
+from .hue import red, info, que, lightcyan as cyan
+from .ssl import (create_certificate, create_key,
+                  create_ca,
+                  write_key, write_cert)
+from .util import EtcdHost
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -143,7 +148,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
         instance = nova.servers.get(instance.id)
         inst_status = instance.status
 
-    print("Instance: " + instance.name + " is in " + inst_status + "state")
+    print("Instance: " + instance.name + " is in " + inst_status + " state")
 
     ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
     print("Instance booted! Name: " + instance.name + " Status: " +
@@ -250,15 +255,12 @@ def create_machines(nova, neutron, cinder, config):
     masters = host_names("master", config["n-masters"], cluster)
     nodes = host_names("node", config["n-nodes"], cluster)
 
-    cluster_info = dict(zip(["n01_ip", "n02_ip", "n03_ip"],
-                        [nic['port']['fixed_ips'][0]['ip_address'] for
-                         nic in nics_masters]))
-
-    cluster_info.update(dict(zip(["n01_name", "n02_name", "n03_name"],
-                                 masters)))
+    etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
+                      zip(masters, [nic['port']['fixed_ips'][0]['ip_address']
+                          for nic in nics_masters])]
 
     master_user_data = [
-        create_userdata('master', config['image'], master, cluster_info)
+        create_userdata('master', config['image'], master, etcd_host_list)
         for master in masters
     ]
 
@@ -334,6 +336,56 @@ def delete_cluster(config):
         sys.exit(1)
 
 
+def create_certs(config):
+    """
+    create new certificates, useful for replacing certificates
+    and later for adding nodes ...
+    """
+
+    # find all servers in my cluster which are etcd or master
+    cluster_suffix = "-%s" % config['cluster-name']
+
+    servers = [server for server in nova.servers.list() if
+               server.name.endswith(cluster_suffix)]
+    # TODO: remove this crappy filter in the future
+    # because we might want to put etcd on own servers
+    servers = [server for server in servers if
+               server.name.startswith("master")]
+
+    assert len(servers)
+
+    names = []
+    ips = []
+
+    for server in servers:
+        names.append(server.name)
+        ips.append(server.interface_list()[0].fixed_ips[0]['ip_address'])
+
+    country = "DE"
+    state = "Bayern"
+    location = "NUE"
+    ca_key = create_key()
+    ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                        state, location, "Kubernetes", "CDA\PI", "kubernetes")
+
+    names.append("localhost")
+    ips.append("127.0.0.1")
+
+    k8s_key = create_key()
+    k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
+                                  country, state, location,
+                                  "Kubernetes", "CDA\PI", "kubernetes",
+                                  names, ips)
+
+    if not os.path.exists("certs"):
+        os.mkdir("certs")
+
+    write_key(ca_key, filename="certs/ca-key.pem")
+    write_key(k8s_key, filename="certs/kubernetes-key.pem")
+    write_cert(ca_cert, "certs/ca.pem")
+    write_cert(k8s_cert, "certs/kubernetes.pem")
+
+
 def main():
     global nova, neutron, cinder
     if not shutil.which("cfssl"):
@@ -343,7 +395,11 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
-    parser.add_argument("--destroy", help="Delete cluster", action="store_true")
+    parser.add_argument("--destroy", help="Delete cluster",
+                        action="store_true")
+    parser.add_argument("--certs", help="Create cluster CA and certs only",
+                        action="store_true")
+
     args = parser.parse_args()
 
     if not args.config:
@@ -354,6 +410,10 @@ def main():
         config = yaml.load(stream)
 
     nova, neutron, cinder = get_clients()
+
+    if args.certs:
+        create_certs(config)
+        sys.exit(0)
 
     if args.destroy:
         delete_cluster(config)
