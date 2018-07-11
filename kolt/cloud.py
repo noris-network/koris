@@ -12,7 +12,8 @@ from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from kolt.ssl import create_key, create_certificate, b64_key, b64_cert
+from kolt.ssl import (create_key, create_ca, create_certificate,
+                      b64_key, b64_cert)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -57,16 +58,24 @@ class CloudInit:
         return textwrap.dedent(cluster_info_part)
 
     def _get_ca_and_certs(self):
-        ca_key = create_key()
-        ca_cert = create_certificate(ca_key, ca_key.public_key(),
-                                     "DE", "BY", "NUE",
-                                     "noris-network", "CA", ["CA"], None)
 
-        hostnames, ips = zip(*[(i.name, i.ip_address) for i in self.cluster_info])  # noqa
+        ca_key = create_key()
+        country = "DE"
+        state = "Bayern"
+        location = "NUE"
+        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                            state, location, "Kubernetes",
+                            "PI", "kubernetes")
+
+        hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
+                                       i in self.cluster_info]))
+
+        hostnames.append("localhost")
+        ips.append("127.0.0.1")
 
         k8s_key = create_key()
-        k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
-                                      "DE", "BY", "NUE", "noris-network",
+        k8s_cert = create_certificate(ca_key, k8s_key.public_key(), country,
+                                      state, location, "noris-network", "PI",
                                       "Kubernetes", hostnames, ips)
         self.ca_key, self.ca_cert = ca_key, ca_cert
         self.k8s_key, self.k8s_cert = k8s_key, k8s_cert
@@ -101,7 +110,8 @@ class CloudInit:
            owner: root:root
            permissions: '0600'
         """.format(
-            CA_CERT=b64_ca_cert.lstrip(), K8S_KEY=b64_k8s_key.lstrip(),
+            CA_CERT=b64_ca_cert.lstrip(),
+            K8S_KEY=b64_k8s_key.lstrip(),
             KUBERNETES_CERT=b64_k8s_cert.lstrip())
 
         return textwrap.dedent(certificate_info)
