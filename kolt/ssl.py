@@ -180,7 +180,7 @@ def b64_cert(cert):
         cert.public_bytes(serialization.Encoding.PEM)).decode()
 
 
-def write_key(key, passwd=None, filename="key.pem"):
+def write_key(key, passwd=None, filename="key.pem"):  # pragma: no coverage
     """
     Write the key instance to the file as ASCII string
     Args:
@@ -202,7 +202,7 @@ def write_key(key, passwd=None, filename="key.pem"):
             encryption_algorithm=enc_algo,))
 
 
-def write_cert(cert, filename):
+def write_cert(cert, filename):  # pragma: no coverage
     """
     Write the certifiacte instance to the file as ASCII string
 

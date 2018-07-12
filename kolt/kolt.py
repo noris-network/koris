@@ -380,7 +380,7 @@ def create_certs(config, names, ips, write=True):
                                         hosts="",
                                         ips="")
 
-    if write:
+    if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
         if not os.path.exists(cert_dir):
