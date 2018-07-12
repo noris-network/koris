@@ -15,12 +15,39 @@ class EtcdHost:
         return self._connection_uri()
 
 
-class EtcdCertBundle:
+class CertBundle:
+
+    def __init__(self, key, cert):
+        self.key = key
+        self.cert = cert
+
+
+class EtcdCertBundle(CertBundle):
 
     def __init__(self, ca_cert, k8s_key, k8s_cert):
+        super().__init__(k8s_key, k8s_cert)
         self.ca_cert = ca_cert
-        self.k8s_key = k8s_key
-        self.k8s_cert = k8s_cert
+
+
+class ServiceAccountCertBundle(CertBundle):
+
+    def __init__(self, key, cert):
+        super().__init__(key, cert)
+
+
+encryption_config_tmpl = """
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+      - secrets
+    providers:
+      - aescbc:
+          keys:
+            - name: key1
+              secret: %%ENCRYPTION_KEY%%
+      - identity: {}
+"""
 
 
 def get_etcd_info_from_openstack(config, nova):

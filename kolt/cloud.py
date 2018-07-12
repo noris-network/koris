@@ -3,8 +3,10 @@ This modules contains some helper functions to inject cloud-init
 to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
+import base64
 import logging
 import os
+import re
 import textwrap
 
 
@@ -13,6 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
+from kolt.util import encryption_config_tmpl
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -25,7 +28,7 @@ logger.addHandler(ch)
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info,
-                 etcd_cert_bundle,
+                 cert_bundle, encryption_key,
                  os_type='ubuntu',
                  os_version="16.04"):
         """
@@ -40,9 +43,12 @@ class CloudInit:
         self.role = role
         self.hostname = hostname
         self.cluster_info = cluster_info
-        self.etcd_cert_bundle = etcd_cert_bundle
+        if cert_bundle:
+            self.etcd_cert_bundle = cert_bundle[0]
+            self.svc_accnt_cert_bundle = cert_bundle[1]
         self.os_type = os_type
         self.os_version = os_version
+        self.encryption_key = encryption_key
 
     def _etcd_cluster_info(self):
         """
@@ -55,15 +61,21 @@ class CloudInit:
            owner: root:root
            permissions: '0644'
            content: |
+             NODE01_IP={}
+             NODE02_IP={}
+             NODE03_IP={}
              INITIAL_CLUSTER={}
-        """.format(",".join(str(etcd_host) for etcd_host in self.cluster_info))
+        """.format(self.cluster_info[0].ip_address,
+                   self.cluster_info[1].ip_address,
+                   self.cluster_info[2].ip_address,
+                   ",".join(str(etcd_host) for etcd_host in self.cluster_info))
         return textwrap.dedent(cluster_info_part)
 
     def _get_ca_and_certs(self):
 
         return (self.etcd_cert_bundle.ca_cert,
-                self.etcd_cert_bundle.k8s_key,
-                self.etcd_cert_bundle.k8s_cert)
+                self.etcd_cert_bundle.key,
+                self.etcd_cert_bundle.cert)
 
     def _get_certificate_info(self):
         """
@@ -99,6 +111,43 @@ class CloudInit:
 
         return textwrap.dedent(certificate_info)
 
+    def _get_encryption_config(self):
+
+        encryption_config = re.sub("%%ENCRYPTION_KEY%%",
+                                   self.encryption_key,
+                                   encryption_config_tmpl).encode()
+        encryption_config_part = """
+        # encryption_config
+         - path: /var/lib/kubernetes/encryption-config.yaml
+           encoding: b64
+           content: {}
+           owner: root:root
+        """.format(
+            base64.b64encode(encryption_config).decode())
+
+        return textwrap.dedent(encryption_config_part)
+
+    def _get_svc_account_info(self):
+
+        svc_accnt_key = b64_key(self.svc_accnt_cert_bundle.key).lstrip()
+        svc_accnt_cert = b64_cert(self.svc_accnt_cert_bundle.cert).lstrip()
+
+        service_account_certs = """
+        # service accounts
+         - path: /etc/ssl/kubernetes/service-accounts.pem
+           encoding: b64
+           content: {svc_accnt_cert}
+           owner: root:root
+           permissions: '0600'
+         - path: /etc/ssl/kubernetes/service-accounts-key.pem
+           encoding: b64
+           content: {svc_accnt_key}
+           owner: root:root
+           permissions: '0600'""".format(svc_accnt_cert=svc_accnt_cert,
+                                         svc_accnt_key=svc_accnt_key)
+
+        return textwrap.dedent(service_account_certs)
+
     def get_files_config(self):
         """
         write the section write_files into the cloud-config
@@ -107,9 +156,11 @@ class CloudInit:
         #cloud-config
         write_files:
         """) + self._get_certificate_info().lstrip() \
-             + self._etcd_cluster_info().lstrip()
+             + self._etcd_cluster_info().lstrip() \
+             + self._get_svc_account_info().lstrip() \
+             + self._get_encryption_config().lstrip()
 
-        return textwrap.dedent(config)
+        return config
 
     def __str__(self):
 
