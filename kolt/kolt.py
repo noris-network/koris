@@ -337,7 +337,7 @@ def create_machines(nova, neutron, cinder, config):
 
 
 def delete_cluster(config):
-    print(red("You are about to destroy you cluster!!!"))
+    print(red("You are about to destroy your cluster!!!"))
     print(red("Are you really sure ? [y/N]"))
     ans = input(red("ARE YOU REALLY SURE???"))
 

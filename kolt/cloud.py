@@ -6,6 +6,7 @@ provided
 import base64
 import logging
 import os
+import re
 import textwrap
 
 
@@ -14,7 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
-from kolt.util import encryption_config
+from kolt.util import encryption_config_tmpl
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -42,8 +43,9 @@ class CloudInit:
         self.role = role
         self.hostname = hostname
         self.cluster_info = cluster_info
-        self.etcd_cert_bundle = cert_bundle[0]
-        self.svc_accnt_cert_bundle = cert_bundle[1]
+        if cert_bundle:
+            self.etcd_cert_bundle = cert_bundle[0]
+            self.svc_accnt_cert_bundle = cert_bundle[1]
         self.os_type = os_type
         self.os_version = os_version
         self.encryption_key = encryption_key
@@ -110,16 +112,18 @@ class CloudInit:
         return textwrap.dedent(certificate_info)
 
     def _get_encryption_config(self):
+
+        encryption_config = re.sub("%%ENCRYPTION_KEY%%",
+                                   self.encryption_key,
+                                   encryption_config_tmpl).encode()
         encryption_config_part = """
         # encryption_config
-         - path: /var/lib/Kubernetes/encryption-config.yaml
+         - path: /var/lib/kubernetes/encryption-config.yaml
            encoding: b64
            content: {}
            owner: root:root
         """.format(
-            base64.b64encode(
-                encryption_config.format(self.encryption_key).encode()
-            ))
+            base64.b64encode(encryption_config).decode())
 
         return textwrap.dedent(encryption_config_part)
 
@@ -130,12 +134,12 @@ class CloudInit:
 
         service_account_certs = """
         # service accounts
-         - path: /etc/ssl/Kubernetes/service-accounts.pem
+         - path: /etc/ssl/kubernetes/service-accounts.pem
            encoding: b64
            content: {svc_accnt_cert}
            owner: root:root
            permissions: '0600'
-         - path: /etc/ssl/Kubernetes/service-accounts-key.pem
+         - path: /etc/ssl/kubernetes/service-accounts-key.pem
            encoding: b64
            content: {svc_accnt_key}
            owner: root:root

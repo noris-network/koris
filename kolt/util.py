@@ -35,7 +35,7 @@ class ServiceAccountCertBundle(CertBundle):
         super().__init__(key, cert)
 
 
-encryption_config = """
+encryption_config_tmpl = """
 kind: EncryptionConfig
 apiVersion: v1
 resources:
@@ -45,8 +45,9 @@ resources:
       - aescbc:
           keys:
             - name: key1
-              secret: {{ encryptionKey }}
-- identity: {}"""
+              secret: %%ENCRYPTION_KEY%%
+      - identity: {}
+"""
 
 
 def get_etcd_info_from_openstack(config, nova):
