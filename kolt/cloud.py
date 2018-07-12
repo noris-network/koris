@@ -25,7 +25,7 @@ logger.addHandler(ch)
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info,
-                 etcd_cert_bundle,
+                 cert_bundle,
                  os_type='ubuntu',
                  os_version="16.04"):
         """
@@ -40,7 +40,8 @@ class CloudInit:
         self.role = role
         self.hostname = hostname
         self.cluster_info = cluster_info
-        self.etcd_cert_bundle = etcd_cert_bundle
+        self.etcd_cert_bundle = cert_bundle[0]
+        self.svc_accnt_cert_bundle = cert_bundle[1]
         self.os_type = os_type
         self.os_version = os_version
 
@@ -62,8 +63,8 @@ class CloudInit:
     def _get_ca_and_certs(self):
 
         return (self.etcd_cert_bundle.ca_cert,
-                self.etcd_cert_bundle.k8s_key,
-                self.etcd_cert_bundle.k8s_cert)
+                self.etcd_cert_bundle.key,
+                self.etcd_cert_bundle.cert)
 
     def _get_certificate_info(self):
         """
@@ -99,6 +100,27 @@ class CloudInit:
 
         return textwrap.dedent(certificate_info)
 
+    def _get_svc_account_info(self):
+
+        svc_accnt_key = b64_key(self.svc_accnt_cert_bundle.key).lstrip()
+        svc_accnt_cert = b64_cert(self.svc_accnt_cert_bundle.cert).lstrip()
+
+        service_account_certs = """
+        # service accounts
+         - path: /etc/ssl/Kubernetes/service-accounts.pem
+           encoding: b64
+           content: {svc_accnt_cert}
+           owner: root:root
+           permissions: '0600'
+         - path: /etc/ssl/Kubernetes/service-accounts-key.pem
+           encoding: b64
+           content: {svc_accnt_key}
+           owner: root:root
+           permissions: '0600'""".format(svc_accnt_cert=svc_accnt_cert,
+                                         svc_accnt_key=svc_accnt_key)
+
+        return textwrap.dedent(service_account_certs)
+
     def get_files_config(self):
         """
         write the section write_files into the cloud-config
@@ -107,9 +129,10 @@ class CloudInit:
         #cloud-config
         write_files:
         """) + self._get_certificate_info().lstrip() \
-             + self._etcd_cluster_info().lstrip()
+             + self._etcd_cluster_info().lstrip() \
+             + self._get_svc_account_info().lstrip()
 
-        return textwrap.dedent(config)
+        return config
 
     def __str__(self):
 

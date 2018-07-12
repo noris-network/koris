@@ -118,7 +118,10 @@ def create_certificate(private_key, public_key, country,
         # Our certificate will be valid for 1800 days
         datetime.datetime.utcnow() + datetime.timedelta(days=1800))
 
-    alt_names = [x509.DNSName(host) for host in hosts]
+    alt_names = []
+
+    if hosts:
+        alt_names.extend(x509.DNSName(host) for host in hosts)
 
     if ips:
         alt_names.extend(x509.IPAddress(ipaddress.IPv4Address(ip))
@@ -149,9 +152,10 @@ def create_certificate(private_key, public_key, country,
         x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key),
         critical=False)
 
-    cert = cert.add_extension(
-        x509.SubjectAlternativeName(alt_names),
-        critical=False)
+    if alt_names:
+        cert = cert.add_extension(
+            x509.SubjectAlternativeName(alt_names),
+            critical=False)
 
     cert = cert.sign(private_key, hashes.SHA256(), default_backend())
 
