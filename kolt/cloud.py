@@ -3,6 +3,7 @@ This modules contains some helper functions to inject cloud-init
 to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
+import base64
 import logging
 import os
 import textwrap
@@ -13,6 +14,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
+from kolt.util import encryption_config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -25,7 +27,7 @@ logger.addHandler(ch)
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info,
-                 cert_bundle,
+                 cert_bundle, encryption_key,
                  os_type='ubuntu',
                  os_version="16.04"):
         """
@@ -44,6 +46,7 @@ class CloudInit:
         self.svc_accnt_cert_bundle = cert_bundle[1]
         self.os_type = os_type
         self.os_version = os_version
+        self.encryption_key = encryption_key
 
     def _etcd_cluster_info(self):
         """
@@ -106,6 +109,20 @@ class CloudInit:
 
         return textwrap.dedent(certificate_info)
 
+    def _get_encryption_config(self):
+        encryption_config_part = """
+        # encryption_config
+         - path: /var/lib/Kubernetes/encryption-config.yaml
+           encoding: b64
+           content: {}
+           owner: root:root
+        """.format(
+            base64.b64encode(
+                encryption_config.format(self.encryption_key).encode()
+            ))
+
+        return textwrap.dedent(encryption_config_part)
+
     def _get_svc_account_info(self):
 
         svc_accnt_key = b64_key(self.svc_accnt_cert_bundle.key).lstrip()
@@ -136,7 +153,8 @@ class CloudInit:
         write_files:
         """) + self._get_certificate_info().lstrip() \
              + self._etcd_cluster_info().lstrip() \
-             + self._get_svc_account_info().lstrip()
+             + self._get_svc_account_info().lstrip() \
+             + self._get_encryption_config().lstrip()
 
         return config
 

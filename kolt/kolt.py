@@ -1,6 +1,7 @@
 # https://support.ultimum.io/support/solutions/articles/1000125460-python-novaclient-neutronclient-glanceclient-swiftclient-heatclient
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
 import argparse
+import base64
 import asyncio
 import logging
 import os
@@ -195,12 +196,15 @@ def get_clients():
 
 
 def create_userdata(role, img_name, hostname, cluster_info=None,
-                    cert_bundle=None):
+                    cert_bundle=None, encryption_key=None):
     """
     Create multipart userdata for Ubuntu
     """
+
     if 'ubuntu' in img_name.lower():
-        userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle))
+
+        userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
+                                 encryption_key))
     else:
         userdata = """
                    #cloud-config
@@ -271,9 +275,16 @@ def create_machines(nova, neutron, cinder, config):
     svc_accnt_cert_bundle = ServiceAccountCertBundle(
         svc_accnt_key, svc_accnt_cert)
 
+    # generate a random string
+    # this should be the equal of
+    # ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+
+    encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
+
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
-                        (etc_cert_bundle, svc_accnt_cert_bundle))
+                        (etc_cert_bundle, svc_accnt_cert_bundle),
+                        encryption_key)
         for master in masters
     ]
 

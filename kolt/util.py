@@ -35,6 +35,20 @@ class ServiceAccountCertBundle(CertBundle):
         super().__init__(key, cert)
 
 
+encryption_config = """
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+      - secrets
+    providers:
+      - aescbc:
+          keys:
+            - name: key1
+              secret: {{ encryptionKey }}
+- identity: {}"""
+
+
 def get_etcd_info_from_openstack(config, nova):
     # find all servers in my cluster which are etcd or master
     cluster_suffix = "-%s" % config['cluster-name']
