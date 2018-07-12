@@ -28,7 +28,8 @@ logger.addHandler(ch)
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info,
-                 cert_bundle, encryption_key,
+                 cert_bundle=None, encryption_key=None,
+                 cloud_provider=None,
                  os_type='ubuntu',
                  os_version="16.04"):
         """
@@ -39,7 +40,6 @@ class CloudInit:
 
         if role not in ('master', 'node'):
             raise ValueError("Incorrect os_role!")
-
         self.role = role
         self.hostname = hostname
         self.cluster_info = cluster_info
@@ -49,6 +49,7 @@ class CloudInit:
         self.os_type = os_type
         self.os_version = os_version
         self.encryption_key = encryption_key
+        self.cloud_provider = cloud_provider
 
     def _etcd_cluster_info(self):
         """
@@ -127,6 +128,18 @@ class CloudInit:
 
         return textwrap.dedent(encryption_config_part)
 
+    def _get_cloud_provider(self):
+
+        cloud_config = """
+        # cloud config
+         - path: /etc/kubernetes/cloud.conf
+           encoding: b64
+           content: {}
+           owner: root:root
+        """.format(bytes(self.cloud_provider))
+
+        return textwrap.dedent(cloud_config)
+
     def _get_svc_account_info(self):
 
         svc_accnt_key = b64_key(self.svc_accnt_cert_bundle.key).lstrip()
@@ -158,7 +171,8 @@ class CloudInit:
         """) + self._get_certificate_info().lstrip() \
              + self._etcd_cluster_info().lstrip() \
              + self._get_svc_account_info().lstrip() \
-             + self._get_encryption_config().lstrip()
+             + self._get_encryption_config().lstrip() \
+             + self._get_cloud_provider().lstrip()
 
         return config
 

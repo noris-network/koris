@@ -1,4 +1,31 @@
+import base64
+import textwrap
+
 from ipaddress import IPv4Address
+
+
+class OSCloudConfig:
+
+    def __init__(self, user, password, auth_url, tenant_id, domain_id,
+                 **kwargs):
+        self.user = user
+        self.password = password
+        self.auth_url = auth_url
+        self.tenant_id = tenant_id
+        self.domain_id = domain_id
+
+    def __str__(self):
+        return textwrap.dedent("""
+        [Global]
+        username=%s
+        password=%s
+        auth-url=%s
+        tenant-id=%s
+        domain-id=%s""" % (self.user, self.password, self.auth_url,
+                           self.tenant_id, self.domain_id)).lstrip()
+
+    def __bytes__(self):
+        return base64.b64encode(str(self).encode())
 
 
 class EtcdHost:

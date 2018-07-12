@@ -5,7 +5,8 @@ import yaml
 
 from kolt.cloud import CloudInit
 from kolt.kolt import create_certs
-from kolt.util import EtcdHost, EtcdCertBundle, ServiceAccountCertBundle
+from kolt.util import (EtcdHost, EtcdCertBundle,
+                       ServiceAccountCertBundle, OSCloudConfig)
 
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,
@@ -15,6 +16,12 @@ etcd_host_list = test_cluster
 
 hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in etcd_host_list]))
+
+
+cloud_config = OSCloudConfig(user="serviceuser", password="s9kr9t",
+                             auth_url="keystone.myopenstack.de",
+                             tenant_id="c869168a828847f39f7f06edd7305637",
+                             domain_id="2a73b8f597c04551a0fdc8e95544be8a")
 
 (_, ca_cert, k8s_key, k8s_cert,
  svc_accnt_key, svc_accnt_cert) = create_certs({},
@@ -27,12 +34,14 @@ encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
 def test_cloud_init():
     ci = CloudInit("master", "master-1-k8s", test_cluster,
-                   (etcd_cert_bundle, svc_accnt_cert_bundle), encryption_key)
+                   cert_bundle=(etcd_cert_bundle, svc_accnt_cert_bundle),
+                   encryption_key=encryption_key,
+                   cloud_provider=cloud_config)
 
     config = ci.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 7
+    assert len(config['write_files']) == 8
 
     etcd_host = test_cluster[0]
 

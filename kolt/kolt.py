@@ -27,7 +27,9 @@ from .hue import red, info, que, lightcyan as cyan
 from .ssl import (create_certificate, create_key,
                   create_ca,
                   write_key, write_cert)
-from .util import (EtcdHost, EtcdCertBundle, get_etcd_info_from_openstack,
+from .util import (EtcdHost, EtcdCertBundle,
+                   OSCloudConfig,
+                   get_etcd_info_from_openstack,
                    ServiceAccountCertBundle)
 
 
@@ -196,6 +198,7 @@ def get_clients():
 
 
 def create_userdata(role, img_name, hostname, cluster_info=None,
+                    cloud_provider=None,
                     cert_bundle=None, encryption_key=None):
     """
     Create multipart userdata for Ubuntu
@@ -204,6 +207,7 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
     if 'ubuntu' in img_name.lower():
 
         userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
+                                 cloud_provider,
                                  encryption_key))
     else:
         userdata = """
@@ -221,8 +225,7 @@ def create_nics(neutron, num, netid, security_groups):
         yield neutron.create_port(
             {"port": {"admin_state_up": True,
                       "network_id": netid,
-                      "security_groups": security_groups
-                      }})
+                      "security_groups": security_groups}})
 
 
 @lru_cache(maxsize=10)
@@ -281,8 +284,11 @@ def create_machines(nova, neutron, cinder, config):
 
     encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
+    cloud_provider_info = OSCloudConfig(**read_os_auth_variables)
+
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
+                        cloud_provider_info,
                         (etc_cert_bundle, svc_accnt_cert_bundle),
                         encryption_key)
         for master in masters
