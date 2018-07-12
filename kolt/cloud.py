@@ -56,8 +56,14 @@ class CloudInit:
            owner: root:root
            permissions: '0644'
            content: |
+             NODE01_IP={}
+             NODE02_IP={}
+             NODE03_IP={}
              INITIAL_CLUSTER={}
-        """.format(",".join(str(etcd_host) for etcd_host in self.cluster_info))
+        """.format(self.cluster_info[0].ip_address,
+                   self.cluster_info[1].ip_address,
+                   self.cluster_info[2].ip_address,
+                   ",".join(str(etcd_host) for etcd_host in self.cluster_info))
         return textwrap.dedent(cluster_info_part)
 
     def _get_ca_and_certs(self):
