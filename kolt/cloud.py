@@ -30,8 +30,9 @@ class CloudInit:
     def __init__(self, role, hostname, cluster_info,
                  cert_bundle=None, encryption_key=None,
                  cloud_provider=None,
+                 token_csv_data="",
                  os_type='ubuntu',
-                 os_version="16.04"):
+                 os_version="16.04",):
         """
         cluster_info - a dictionary with infromation about the etcd cluster
         members
@@ -51,6 +52,7 @@ class CloudInit:
         self.os_version = os_version
         self.encryption_key = encryption_key
         self.cloud_provider = cloud_provider
+        self.token_csv_data = token_csv_data
 
     def _etcd_cluster_info(self):
         """
@@ -78,6 +80,20 @@ class CloudInit:
         return (self.ca_cert,
                 self.etcd_cert_bundle.key,
                 self.etcd_cert_bundle.cert)
+
+    def _get_token_csv(self):
+        """
+        write access data to /var/lib/kubernetes/token.csv
+        """
+        content = """
+        # token_csv
+         - path: /var/lib/kubernetes/token.csv
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(self.token_csv_data)
+        return textwrap.dedent(content)
 
     def _get_certificate_info(self):
         """
@@ -173,7 +189,8 @@ class CloudInit:
              + self._etcd_cluster_info().lstrip() \
              + self._get_svc_account_info().lstrip() \
              + self._get_encryption_config().lstrip() \
-             + self._get_cloud_provider().lstrip()
+             + self._get_cloud_provider().lstrip() \
+             + self._get_token_csv().lstrip()
 
         return config
 

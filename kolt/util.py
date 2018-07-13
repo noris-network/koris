@@ -1,5 +1,6 @@
 import base64
 import textwrap
+import uuid
 
 from ipaddress import IPv4Address
 
@@ -85,3 +86,22 @@ def get_etcd_info_from_openstack(config, nova):
     ips.append("127.0.0.1")
 
     return names, ips
+
+
+def get_token_csv(adminToken):
+    """
+    write the content of
+    /var/lib/kubernetes/token.csv
+    """
+
+    content = """
+    {adminToken},admin,admin,"cluster-admin,system:masters"
+    {calicoToken},calico,calico,"cluster-admin,system:masters"
+    {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
+    """.format(
+        adminToken=adminToken,
+        calicoToken=uuid.uuid4().hex[:32],
+        kubeletToken=uuid.uuid4().hex[:32]
+    )
+
+    return base64.b64encode(textwrap.dedent(content).encode()).decode()

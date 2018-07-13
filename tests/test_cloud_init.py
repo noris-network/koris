@@ -43,7 +43,7 @@ def test_cloud_init():
     config = ci.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 8
+    assert len(config['write_files']) == 9
 
     etcd_host = test_cluster[0]
 

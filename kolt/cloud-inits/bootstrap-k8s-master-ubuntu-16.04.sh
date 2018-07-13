@@ -97,12 +97,6 @@ adminToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
 calicoToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
 kubeletToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
 
-cat > /var/lib/kubernetes/token.csv << EOF
-${adminToken},admin,admin,"cluster-admin,system:masters"
-${calicoToken},calico,calico,"cluster-admin,system:masters"
-${kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
-EOF
-
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
 Description=Kubernetes API Server

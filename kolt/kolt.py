@@ -30,6 +30,7 @@ from .ssl import (create_key,
 from .util import (EtcdHost,
                    OSCloudConfig,
                    get_etcd_info_from_openstack,
+                   get_token_csv
                    )
 
 
@@ -202,7 +203,8 @@ def get_clients():
 
 def create_userdata(role, img_name, hostname, cluster_info=None,
                     cloud_provider=None,
-                    cert_bundle=None, encryption_key=None):
+                    cert_bundle=None, encryption_key=None,
+                    **kwargs):
     """
     Create multipart userdata for Ubuntu
     """
@@ -211,7 +213,7 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
 
         userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
                                  encryption_key,
-                                 cloud_provider))
+                                 cloud_provider, **kwargs))
     else:
         userdata = """
                    #cloud-config
@@ -285,11 +287,15 @@ def create_machines(nova, neutron, cinder, config):
 
     cloud_provider_info = OSCloudConfig(**read_os_auth_variables(trim=False))
 
+    admin_token = uuid.uuid4().hex[:32]
+    token_csv_data = get_token_csv(admin_token)
+
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
                         cloud_provider=cloud_provider_info,
                         cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
-                        encryption_key=encryption_key)
+                        encryption_key=encryption_key,
+                        token_csv_data=token_csv_data)
         for master in masters
     ]
 
