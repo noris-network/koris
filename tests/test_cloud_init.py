@@ -20,8 +20,11 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
 
 cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
                              auth_url="keystone.myopenstack.de",
-                             tenant_id="c869168a828847f39f7f06edd7305637",
-                             domain_id="2a73b8f597c04551a0fdc8e95544be8a")
+                             project_id="c869168a828847f39f7f06edd7305637",
+                             domain_id="2a73b8f597c04551a0fdc8e95544be8a",
+                             user_domain_name="noris.de",
+                             region_name="de-nbg6-1")
+
 
 (_, ca_cert, k8s_bundle,
  svc_accnt_bundle, admin_bundle) = create_certs({},
