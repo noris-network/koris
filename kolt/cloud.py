@@ -114,7 +114,6 @@ class CloudInit:
         return textwrap.dedent(certificate_info)
 
     def _get_encryption_config(self):
-
         encryption_config = re.sub("%%ENCRYPTION_KEY%%",
                                    self.encryption_key,
                                    encryption_config_tmpl).encode()
@@ -124,20 +123,21 @@ class CloudInit:
            encoding: b64
            content: {}
            owner: root:root
+           permissions: '0600'
         """.format(
             base64.b64encode(encryption_config).decode())
 
         return textwrap.dedent(encryption_config_part)
 
     def _get_cloud_provider(self):
-
         cloud_config = """
         # cloud config
          - path: /etc/kubernetes/cloud.conf
            encoding: b64
            content: {}
+           permissions: '0600'
            owner: root:root
-        """.format(bytes(self.cloud_provider))
+        """.format(bytes(self.cloud_provider).decode())
 
         return textwrap.dedent(cloud_config)
 

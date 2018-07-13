@@ -6,13 +6,14 @@ from ipaddress import IPv4Address
 
 class OSCloudConfig:
 
-    def __init__(self, user, password, auth_url, tenant_id, domain_id,
+    def __init__(self, username, password, auth_url,
                  **kwargs):
-        self.user = user
+        self.username = username
         self.password = password
         self.auth_url = auth_url
-        self.tenant_id = tenant_id
-        self.domain_id = domain_id
+        self.__dict__.update(kwargs)
+        self.tenant_id = self.project_id
+        self.__dict__.pop('project_id')
 
     def __str__(self):
         return textwrap.dedent("""
@@ -21,8 +22,11 @@ class OSCloudConfig:
         password=%s
         auth-url=%s
         tenant-id=%s
-        domain-id=%s""" % (self.user, self.password, self.auth_url,
-                           self.tenant_id, self.domain_id)).lstrip()
+        domain-name=%s
+        region=%s
+        """ % (self.username, self.password, self.auth_url,
+               self.tenant_id, self.user_domain_name,
+               self.region_name)).lstrip()
 
     def __bytes__(self):
         return base64.b64encode(str(self).encode())

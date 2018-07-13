@@ -242,5 +242,5 @@ class CertBundle:
 
     def save(self, name, directory):
         write_key(self.key,
-                  filename=os.path.join(directory, self.name + "-key.pem"))
+                  filename=os.path.join(directory, name + "-key.pem"))
         write_cert(self.cert, os.path.join(directory, name + ".pem"))

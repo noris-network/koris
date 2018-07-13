@@ -161,7 +161,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     hosts[name] = (ip, role)
 
 
-def read_os_auth_variables():
+def read_os_auth_variables(trim=True):
     """
     Automagically read all OS_* variables and
     yield key: value pairs which can be used for
@@ -171,10 +171,13 @@ def read_os_auth_variables():
     for k, v in os.environ.items():
         if k.startswith("OS_"):
             d[k[3:].lower()] = v
-    not_in_default_rc = ('interface', 'region_name',
-                         'identity_api_version', 'endpoint_type',
-                         )
-    [d.pop(i) for i in not_in_default_rc if i in d]
+    if trim:
+        not_in_default_rc = ('interface', 'region_name',
+                             'identity_api_version', 'endpoint_type',
+                             )
+
+        [d.pop(i) for i in not_in_default_rc if i in d]
+
     return d
 
 
@@ -207,8 +210,8 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
     if 'ubuntu' in img_name.lower():
 
         userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
-                                 cloud_provider,
-                                 encryption_key))
+                                 encryption_key,
+                                 cloud_provider))
     else:
         userdata = """
                    #cloud-config
@@ -280,13 +283,13 @@ def create_machines(nova, neutron, cinder, config):
 
     encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
-    cloud_provider_info = OSCloudConfig(**read_os_auth_variables)
+    cloud_provider_info = OSCloudConfig(**read_os_auth_variables(trim=False))
 
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
-                        cloud_provider_info,
-                        (ca_cert, k8s_bundle, svc_accnt_bundle),
-                        encryption_key)
+                        cloud_provider=cloud_provider_info,
+                        cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
+                        encryption_key=encryption_key)
         for master in masters
     ]
 
