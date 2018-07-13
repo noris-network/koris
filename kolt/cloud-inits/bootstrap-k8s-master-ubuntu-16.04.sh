@@ -120,7 +120,8 @@ ExecStart=/usr/bin/kube-apiserver \\
   --authorization-mode=Node,RBAC \\
   --bind-address=0.0.0.0 \\
   --client-ca-file=/var/lib/kubernetes/ca.pem \\
-  --cloud-config=/etc/kubernetes/cloud.conf
+  --cloud-config=/etc/kubernetes/cloud.conf \\
+  --cloud-provider=openstack \\
   --enable-admission-plugins=Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
   --enable-swagger-ui=true \\
   --enable-bootstrap-token-auth \\
@@ -158,7 +159,8 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 [Service]
 ExecStart=/usr/bin/kube-controller-manager \\
   --address=0.0.0.0 \\
-  --cloud-config=/etc/kubernetes/cloud.conf
+  --cloud-config=/etc/kubernetes/cloud.conf \\
+  --cloud-provider=openstack \\
   --cluster-cidr=${PODS_SUBNET} \\
   --cluster-name=kubernetes \\
   --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
