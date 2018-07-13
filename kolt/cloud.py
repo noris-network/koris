@@ -44,8 +44,9 @@ class CloudInit:
         self.hostname = hostname
         self.cluster_info = cluster_info
         if cert_bundle:
-            self.etcd_cert_bundle = cert_bundle[0]
-            self.svc_accnt_cert_bundle = cert_bundle[1]
+            self.ca_cert = cert_bundle[0]
+            self.etcd_cert_bundle = cert_bundle[1]
+            self.svc_accnt_cert_bundle = cert_bundle[2]
         self.os_type = os_type
         self.os_version = os_version
         self.encryption_key = encryption_key
@@ -74,7 +75,7 @@ class CloudInit:
 
     def _get_ca_and_certs(self):
 
-        return (self.etcd_cert_bundle.ca_cert,
+        return (self.ca_cert,
                 self.etcd_cert_bundle.key,
                 self.etcd_cert_bundle.cert)
 

@@ -24,13 +24,13 @@ from keystoneauth1 import session
 
 from .cloud import CloudInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import (create_certificate, create_key,
+from .ssl import (create_key,
                   create_ca,
-                  write_key, write_cert)
-from .util import (EtcdHost, EtcdCertBundle,
+                  write_key, write_cert, CertBundle)
+from .util import (EtcdHost,
                    OSCloudConfig,
                    get_etcd_info_from_openstack,
-                   ServiceAccountCertBundle)
+                   )
 
 
 logger = logging.getLogger(__name__)
@@ -271,12 +271,8 @@ def create_machines(nova, neutron, cinder, config):
     hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                      i in etcd_host_list]))
 
-    (_, ca_cert, k8s_key, k8s_cert,
-        svc_accnt_key, svc_accnt_cert) = create_certs(config, hostnames, ips)
-
-    etc_cert_bundle = EtcdCertBundle(ca_cert, k8s_key, k8s_cert)
-    svc_accnt_cert_bundle = ServiceAccountCertBundle(
-        svc_accnt_key, svc_accnt_cert)
+    (_, ca_cert, k8s_bundle,
+     svc_accnt_bundle, admin_bundle) = create_certs(config, hostnames, ips)
 
     # generate a random string
     # this should be the equal of
@@ -289,7 +285,7 @@ def create_machines(nova, neutron, cinder, config):
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
                         cloud_provider_info,
-                        (etc_cert_bundle, svc_accnt_cert_bundle),
+                        (ca_cert, k8s_bundle, svc_accnt_bundle),
                         encryption_key)
         for master in masters
     ]
@@ -378,24 +374,36 @@ def create_certs(config, names, ips, write=True):
     ca_cert = create_ca(ca_key, ca_key.public_key(), country,
                         state, location, "Kubernetes", "CDA\PI", "kubernetes")
 
-    # these are the key and certificate for etcd
-    k8s_key = create_key()
-    k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
-                                  country, state, location,
-                                  "Kubernetes", "CDA\PI", "kubernetes",
-                                  names, ips)
-    # these are the key and certificate for the service accout
-    svc_accnt_key = create_key()
-    svc_accnt_cert = create_certificate(ca_key,
-                                        svc_accnt_key.public_key(),
-                                        country,
-                                        state,
-                                        location,
-                                        "Kubernetes",
-                                        "CDA\PI",
-                                        name="service-accounts",
-                                        hosts="",
-                                        ips="")
+    k8s_bundle = CertBundle.create_signed(ca_key,
+                                          country,
+                                          state,
+                                          location,
+                                          "Kubernetes",
+                                          "CDA\PI",
+                                          "kubernetes",
+                                          names,
+                                          ips)
+
+    svc_accnt_bundle = CertBundle.create_signed(ca_key,
+                                                country,
+                                                state,
+                                                location,
+                                                "Kubernetes",
+                                                "CDA\PI",
+                                                name="service-accounts",
+                                                hosts="",
+                                                ips="")
+
+    admin_bundle = CertBundle.create_signed(ca_key,
+                                            country,
+                                            state,
+                                            location,
+                                            "system:masters",
+                                            "CDA\PI",
+                                            name="admin",
+                                            hosts="",
+                                            ips=""
+                                            )
 
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
@@ -404,14 +412,13 @@ def create_certs(config, names, ips, write=True):
             os.mkdir(cert_dir)
 
         write_key(ca_key, filename=cert_dir + "/ca-key.pem")
-        write_key(k8s_key, filename=cert_dir + "/kubernetes-key.pem")
         write_cert(ca_cert, cert_dir + "/ca.pem")
-        write_cert(k8s_cert, cert_dir + "/kubernetes.pem")
-        write_key(svc_accnt_key,
-                  filename=cert_dir + "/service-account-key.pem")
-        write_cert(svc_accnt_cert, cert_dir + "/service-account.pem")
 
-    return ca_key, ca_cert, k8s_key, k8s_cert, svc_accnt_key, svc_accnt_cert
+        k8s_bundle.save("kubernetes", cert_dir)
+        svc_accnt_bundle.save("service-account", cert_dir)
+        admin_bundle.save("admin", cert_dir)
+
+    return ca_key, ca_cert, k8s_bundle, svc_accnt_bundle, admin_bundle
 
 
 def main():

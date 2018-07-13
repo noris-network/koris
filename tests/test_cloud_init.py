@@ -5,8 +5,8 @@ import yaml
 
 from kolt.cloud import CloudInit
 from kolt.kolt import create_certs
-from kolt.util import (EtcdHost, EtcdCertBundle,
-                       ServiceAccountCertBundle, OSCloudConfig)
+from kolt.util import (EtcdHost,
+                       OSCloudConfig)
 
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,
@@ -23,18 +23,17 @@ cloud_config = OSCloudConfig(user="serviceuser", password="s9kr9t",
                              tenant_id="c869168a828847f39f7f06edd7305637",
                              domain_id="2a73b8f597c04551a0fdc8e95544be8a")
 
-(_, ca_cert, k8s_key, k8s_cert,
- svc_accnt_key, svc_accnt_cert) = create_certs({},
-                                               hostnames, ips, write=False)
-etcd_cert_bundle = EtcdCertBundle(ca_cert, k8s_key, k8s_cert)
-svc_accnt_cert_bundle = ServiceAccountCertBundle(svc_accnt_key, svc_accnt_cert)
+(_, ca_cert, k8s_bundle,
+ svc_accnt_bundle, admin_bundle) = create_certs({},
+                                                hostnames,
+                                                ips, write=False)
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
 
 def test_cloud_init():
     ci = CloudInit("master", "master-1-k8s", test_cluster,
-                   cert_bundle=(etcd_cert_bundle, svc_accnt_cert_bundle),
+                   cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
                    encryption_key=encryption_key,
                    cloud_provider=cloud_config)
 
