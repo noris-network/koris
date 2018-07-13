@@ -11,7 +11,7 @@ CLUSTER_IP_RANGE=10.32.0.0/16
 PODS_SUBNET=10.233.64.0/18
 # etcd
 ETCD_URL=https://github.com/coreos/etcd/releases/download
-ETCD_VERSION=v3.2.23
+ETCD_VERSION=v3.3.8
 
 # apiserver, controller-manager, scheduler
 K8S_VERSION=v1.10.4
@@ -26,7 +26,14 @@ HOST_NAME=$(hostname)
 
 # download and setup daemons ###################################################
 
+
+for item in apiserver controller-manager scheduler; do
+    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item} && \
+    chmod -v +x ${BIN_PATH}/kube-${item} &
+done
+
 # etcd
+
 cd /tmp
 curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
 tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
@@ -35,6 +42,8 @@ cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
 for item in "etcd etcdctl"; do
   install -m 775 ${item} ${BIN_PATH}/
 done
+
+sudo apt-get update && apt-get ugrade -y
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
@@ -68,13 +77,6 @@ LimitNOFILE=30000
 [Install]
 WantedBy=multi-user.target
 EOF
-
-# other kubernetes components
-
-for item in apiserver controller-manager scheduler; do
-    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item}
-    chmod -v +x ${BIN_PATH}/kube-${item}
-done
 
 curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl -o ${BIN_PATH}/kubectl
 chmod +x ${BIN_PATH}/kubectl
@@ -213,3 +215,28 @@ for item in etcd kube-apiserver-ha kube-controller-manager kube-scheduler; do
   systemctl enable ${item}
   systemctl start ${item}
 done
+
+# install nginx as a proxy
+# this is necessary for the load balancer health check
+apt-get install -y nginx
+
+cat > kubernetes.default.svc.cluster.local <<EOF
+server {
+  listen      80;
+  server_name kubernetes.default.svc.cluster.local;
+
+  location /healthz {
+     proxy_pass                    https://127.0.0.1:6443/healthz;
+     proxy_ssl_trusted_certificate /var/lib/kubernetes/ca.pem;
+  }
+}
+EOF
+
+sudo mv kubernetes.default.svc.cluster.local \
+    /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+
+  sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
+
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+
