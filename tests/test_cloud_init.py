@@ -18,7 +18,7 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in etcd_host_list]))
 
 
-cloud_config = OSCloudConfig(user="serviceuser", password="s9kr9t",
+cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
                              auth_url="keystone.myopenstack.de",
                              tenant_id="c869168a828847f39f7f06edd7305637",
                              domain_id="2a73b8f597c04551a0fdc8e95544be8a")
