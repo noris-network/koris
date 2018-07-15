@@ -1,8 +1,8 @@
 # https://support.ultimum.io/support/solutions/articles/1000125460-python-novaclient-neutronclient-glanceclient-swiftclient-heatclient
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
 import argparse
-import base64
 import asyncio
+import base64
 import logging
 import os
 import uuid
@@ -10,6 +10,7 @@ import textwrap
 import sys
 import shutil
 
+from ipaddress import IPv4Address
 from functools import lru_cache
 import yaml
 
@@ -22,7 +23,7 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .cloud import CloudInit
+from .cloud import CloudInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
 from .ssl import (create_key,
                   create_ca,
@@ -209,11 +210,16 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
     Create multipart userdata for Ubuntu
     """
 
-    if 'ubuntu' in img_name.lower():
+    if 'ubuntu' in img_name.lower() and role == 'master':
 
         userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
                                  encryption_key,
                                  cloud_provider, **kwargs))
+    elif 'ubuntu' in img_name.lower() and role == 'node':
+        token = kwargs.get('token')
+        ca_cert = kwargs.get('ca_cert')
+        userdata = str(NodeInit(role, hostname, token, ca_cert,
+                                cert_bundle))
     else:
         userdata = """
                    #cloud-config
@@ -275,8 +281,10 @@ def create_machines(nova, neutron, cinder, config):
 
     hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                      i in etcd_host_list]))
+
     hostnames.extend(nodes)
-    ips.extend([nic['port']['fixed_ips'][0]['ip_address'] for nic in nics_nodes]) # noqa
+    ips.extend(IPv4Address(nic['port']['fixed_ips'][0]['ip_address'])
+               for nic in nics_nodes)
 
     (_, ca_cert, k8s_bundle,
      svc_accnt_bundle, admin_bundle) = create_certs(config, hostnames, ips)
@@ -290,19 +298,26 @@ def create_machines(nova, neutron, cinder, config):
     cloud_provider_info = OSCloudConfig(**read_os_auth_variables(trim=False))
 
     admin_token = uuid.uuid4().hex[:32]
-    token_csv_data = get_token_csv(admin_token)
+    kubelet_token = uuid.uuid4().hex[:32]
+    token_csv_data = get_token_csv(admin_token, kubelet_token)
 
+    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # we should refactor this out ...
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
                         cloud_provider=cloud_provider_info,
                         cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
                         encryption_key=encryption_key,
                         token_csv_data=token_csv_data)
-        for master in masters
-    ]
+        for master in masters]
 
+    node_args = {'token': kubelet_token, 'ca_cert': ca_cert,
+                 'cert_bundle': k8s_bundle}
+
+    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # we should refactor this out ...
     node_user_data = [
-        create_userdata('node', config['image'], node)
+        create_userdata('node', config['image'], node, **node_args)
         for node in nodes
     ]
 
