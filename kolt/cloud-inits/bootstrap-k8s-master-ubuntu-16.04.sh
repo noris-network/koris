@@ -11,7 +11,7 @@ CLUSTER_IP_RANGE=10.32.0.0/16
 PODS_SUBNET=10.233.64.0/18
 # etcd
 ETCD_URL=https://github.com/coreos/etcd/releases/download
-ETCD_VERSION=v3.2.23
+ETCD_VERSION=v3.3.8
 
 # apiserver, controller-manager, scheduler
 K8S_VERSION=v1.10.4
@@ -26,7 +26,14 @@ HOST_NAME=$(hostname)
 
 # download and setup daemons ###################################################
 
+
+for item in apiserver controller-manager scheduler; do
+    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item} && \
+    chmod -v +x ${BIN_PATH}/kube-${item} &
+done
+
 # etcd
+
 cd /tmp
 curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
 tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
@@ -35,6 +42,8 @@ cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
 for item in "etcd etcdctl"; do
   install -m 775 ${item} ${BIN_PATH}/
 done
+
+sudo apt-get update && apt-get ugrade -y
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
@@ -69,13 +78,6 @@ LimitNOFILE=30000
 WantedBy=multi-user.target
 EOF
 
-# other kubernetes components
-
-for item in apiserver controller-manager scheduler; do
-    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item}
-    chmod -v +x ${BIN_PATH}/kube-${item}
-done
-
 curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl -o ${BIN_PATH}/kubectl
 chmod +x ${BIN_PATH}/kubectl
 
@@ -94,12 +96,6 @@ ln -vs /etc/ssl/kubernetes/service-accounts.pem /var/lib/kubernetes/service-acco
 adminToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
 calicoToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
 kubeletToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
-
-cat > /var/lib/kubernetes/token.csv << EOF
-${adminToken},admin,admin,"cluster-admin,system:masters"
-${calicoToken},calico,calico,"cluster-admin,system:masters"
-${kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
-EOF
 
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
@@ -120,6 +116,8 @@ ExecStart=/usr/bin/kube-apiserver \\
   --authorization-mode=Node,RBAC \\
   --bind-address=0.0.0.0 \\
   --client-ca-file=/var/lib/kubernetes/ca.pem \\
+  --cloud-config=/etc/kubernetes/cloud.conf \\
+  --cloud-provider=openstack \\
   --enable-admission-plugins=Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
   --enable-swagger-ui=true \\
   --enable-bootstrap-token-auth \\
@@ -157,6 +155,8 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 [Service]
 ExecStart=/usr/bin/kube-controller-manager \\
   --address=0.0.0.0 \\
+  --cloud-config=/etc/kubernetes/cloud.conf \\
+  --cloud-provider=openstack \\
   --cluster-cidr=${PODS_SUBNET} \\
   --cluster-name=kubernetes \\
   --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
@@ -209,3 +209,28 @@ for item in etcd kube-apiserver-ha kube-controller-manager kube-scheduler; do
   systemctl enable ${item}
   systemctl start ${item}
 done
+
+# install nginx as a proxy
+# this is necessary for the load balancer health check
+apt-get install -y nginx
+
+cat > kubernetes.default.svc.cluster.local <<EOF
+server {
+  listen      80;
+  server_name kubernetes.default.svc.cluster.local;
+
+  location /healthz {
+     proxy_pass                    https://127.0.0.1:6443/healthz;
+     proxy_ssl_trusted_certificate /var/lib/kubernetes/ca.pem;
+  }
+}
+EOF
+
+sudo mv kubernetes.default.svc.cluster.local \
+    /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+
+  sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
+
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+

@@ -24,11 +24,14 @@ from keystoneauth1 import session
 
 from .cloud import CloudInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import (create_certificate, create_key,
+from .ssl import (create_key,
                   create_ca,
-                  write_key, write_cert)
-from .util import (EtcdHost, EtcdCertBundle, get_etcd_info_from_openstack,
-                   ServiceAccountCertBundle)
+                  write_key, write_cert, CertBundle)
+from .util import (EtcdHost,
+                   OSCloudConfig,
+                   get_etcd_info_from_openstack,
+                   get_token_csv
+                   )
 
 
 logger = logging.getLogger(__name__)
@@ -159,7 +162,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     hosts[name] = (ip, role)
 
 
-def read_os_auth_variables():
+def read_os_auth_variables(trim=True):
     """
     Automagically read all OS_* variables and
     yield key: value pairs which can be used for
@@ -169,10 +172,13 @@ def read_os_auth_variables():
     for k, v in os.environ.items():
         if k.startswith("OS_"):
             d[k[3:].lower()] = v
-    not_in_default_rc = ('interface', 'region_name',
-                         'identity_api_version', 'endpoint_type',
-                         )
-    [d.pop(i) for i in not_in_default_rc if i in d]
+    if trim:
+        not_in_default_rc = ('interface', 'region_name',
+                             'identity_api_version', 'endpoint_type',
+                             )
+
+        [d.pop(i) for i in not_in_default_rc if i in d]
+
     return d
 
 
@@ -196,7 +202,9 @@ def get_clients():
 
 
 def create_userdata(role, img_name, hostname, cluster_info=None,
-                    cert_bundle=None, encryption_key=None):
+                    cloud_provider=None,
+                    cert_bundle=None, encryption_key=None,
+                    **kwargs):
     """
     Create multipart userdata for Ubuntu
     """
@@ -204,7 +212,8 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
     if 'ubuntu' in img_name.lower():
 
         userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
-                                 encryption_key))
+                                 encryption_key,
+                                 cloud_provider, **kwargs))
     else:
         userdata = """
                    #cloud-config
@@ -221,8 +230,7 @@ def create_nics(neutron, num, netid, security_groups):
         yield neutron.create_port(
             {"port": {"admin_state_up": True,
                       "network_id": netid,
-                      "security_groups": security_groups
-                      }})
+                      "security_groups": security_groups}})
 
 
 @lru_cache(maxsize=10)
@@ -268,12 +276,8 @@ def create_machines(nova, neutron, cinder, config):
     hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                      i in etcd_host_list]))
 
-    (_, ca_cert, k8s_key, k8s_cert,
-        svc_accnt_key, svc_accnt_cert) = create_certs(config, hostnames, ips)
-
-    etc_cert_bundle = EtcdCertBundle(ca_cert, k8s_key, k8s_cert)
-    svc_accnt_cert_bundle = ServiceAccountCertBundle(
-        svc_accnt_key, svc_accnt_cert)
+    (_, ca_cert, k8s_bundle,
+     svc_accnt_bundle, admin_bundle) = create_certs(config, hostnames, ips)
 
     # generate a random string
     # this should be the equal of
@@ -281,10 +285,17 @@ def create_machines(nova, neutron, cinder, config):
 
     encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
+    cloud_provider_info = OSCloudConfig(**read_os_auth_variables(trim=False))
+
+    admin_token = uuid.uuid4().hex[:32]
+    token_csv_data = get_token_csv(admin_token)
+
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
-                        (etc_cert_bundle, svc_accnt_cert_bundle),
-                        encryption_key)
+                        cloud_provider=cloud_provider_info,
+                        cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
+                        encryption_key=encryption_key,
+                        token_csv_data=token_csv_data)
         for master in masters
     ]
 
@@ -372,24 +383,36 @@ def create_certs(config, names, ips, write=True):
     ca_cert = create_ca(ca_key, ca_key.public_key(), country,
                         state, location, "Kubernetes", "CDA\PI", "kubernetes")
 
-    # these are the key and certificate for etcd
-    k8s_key = create_key()
-    k8s_cert = create_certificate(ca_key, k8s_key.public_key(),
-                                  country, state, location,
-                                  "Kubernetes", "CDA\PI", "kubernetes",
-                                  names, ips)
-    # these are the key and certificate for the service accout
-    svc_accnt_key = create_key()
-    svc_accnt_cert = create_certificate(ca_key,
-                                        svc_accnt_key.public_key(),
-                                        country,
-                                        state,
-                                        location,
-                                        "Kubernetes",
-                                        "CDA\PI",
-                                        name="service-accounts",
-                                        hosts="",
-                                        ips="")
+    k8s_bundle = CertBundle.create_signed(ca_key,
+                                          country,
+                                          state,
+                                          location,
+                                          "Kubernetes",
+                                          "CDA\PI",
+                                          "kubernetes",
+                                          names,
+                                          ips)
+
+    svc_accnt_bundle = CertBundle.create_signed(ca_key,
+                                                country,
+                                                state,
+                                                location,
+                                                "Kubernetes",
+                                                "CDA\PI",
+                                                name="service-accounts",
+                                                hosts="",
+                                                ips="")
+
+    admin_bundle = CertBundle.create_signed(ca_key,
+                                            country,
+                                            state,
+                                            location,
+                                            "system:masters",
+                                            "CDA\PI",
+                                            name="admin",
+                                            hosts="",
+                                            ips=""
+                                            )
 
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
@@ -398,14 +421,13 @@ def create_certs(config, names, ips, write=True):
             os.mkdir(cert_dir)
 
         write_key(ca_key, filename=cert_dir + "/ca-key.pem")
-        write_key(k8s_key, filename=cert_dir + "/kubernetes-key.pem")
         write_cert(ca_cert, cert_dir + "/ca.pem")
-        write_cert(k8s_cert, cert_dir + "/kubernetes.pem")
-        write_key(svc_accnt_key,
-                  filename=cert_dir + "/service-account-key.pem")
-        write_cert(svc_accnt_cert, cert_dir + "/service-account.pem")
 
-    return ca_key, ca_cert, k8s_key, k8s_cert, svc_accnt_key, svc_accnt_cert
+        k8s_bundle.save("kubernetes", cert_dir)
+        svc_accnt_bundle.save("service-account", cert_dir)
+        admin_bundle.save("admin", cert_dir)
+
+    return ca_key, ca_cert, k8s_bundle, svc_accnt_bundle, admin_bundle
 
 
 def main():

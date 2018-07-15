@@ -1,4 +1,36 @@
+import base64
+import textwrap
+import uuid
+
 from ipaddress import IPv4Address
+
+
+class OSCloudConfig:
+
+    def __init__(self, username, password, auth_url,
+                 **kwargs):
+        self.username = username
+        self.password = password
+        self.auth_url = auth_url
+        self.__dict__.update(kwargs)
+        self.tenant_id = self.project_id
+        self.__dict__.pop('project_id')
+
+    def __str__(self):
+        return textwrap.dedent("""
+        [Global]
+        username=%s
+        password=%s
+        auth-url=%s
+        tenant-id=%s
+        domain-name=%s
+        region=%s
+        """ % (self.username, self.password, self.auth_url,
+               self.tenant_id, self.user_domain_name,
+               self.region_name)).lstrip()
+
+    def __bytes__(self):
+        return base64.b64encode(str(self).encode())
 
 
 class EtcdHost:
@@ -13,26 +45,6 @@ class EtcdHost:
 
     def __str__(self):
         return self._connection_uri()
-
-
-class CertBundle:
-
-    def __init__(self, key, cert):
-        self.key = key
-        self.cert = cert
-
-
-class EtcdCertBundle(CertBundle):
-
-    def __init__(self, ca_cert, k8s_key, k8s_cert):
-        super().__init__(k8s_key, k8s_cert)
-        self.ca_cert = ca_cert
-
-
-class ServiceAccountCertBundle(CertBundle):
-
-    def __init__(self, key, cert):
-        super().__init__(key, cert)
 
 
 encryption_config_tmpl = """
@@ -74,3 +86,22 @@ def get_etcd_info_from_openstack(config, nova):
     ips.append("127.0.0.1")
 
     return names, ips
+
+
+def get_token_csv(adminToken):
+    """
+    write the content of
+    /var/lib/kubernetes/token.csv
+    """
+
+    content = """
+    {adminToken},admin,admin,"cluster-admin,system:masters"
+    {calicoToken},calico,calico,"cluster-admin,system:masters"
+    {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
+    """.format(
+        adminToken=adminToken,
+        calicoToken=uuid.uuid4().hex[:32],
+        kubeletToken=uuid.uuid4().hex[:32]
+    )
+
+    return base64.b64encode(textwrap.dedent(content).encode()).decode()

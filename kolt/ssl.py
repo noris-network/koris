@@ -1,6 +1,7 @@
 import base64
 import datetime
 import ipaddress
+import os
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -8,7 +9,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
-from cryptography import utils
 
 
 def create_key(size=2048, public_exponent=65537):
@@ -214,3 +214,33 @@ def write_cert(cert, filename):  # pragma: no coverage
 
     with open(filename, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+
+class CertBundle:
+
+    @classmethod
+    def create_signed(cls, ca_key, country, state, locality,
+                      orga, unit, name, hosts, ips):
+
+        key = create_key()
+        cert = create_certificate(ca_key,
+                                  key.public_key(),
+                                  country,
+                                  state,
+                                  locality,
+                                  orga,
+                                  unit,
+                                  name,
+                                  hosts,
+                                  ips)
+
+        return cls(key, cert)
+
+    def __init__(self, key, cert):
+        self.key = key
+        self.cert = cert
+
+    def save(self, name, directory):
+        write_key(self.key,
+                  filename=os.path.join(directory, name + "-key.pem"))
+        write_cert(self.cert, os.path.join(directory, name + ".pem"))

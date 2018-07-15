@@ -28,9 +28,11 @@ logger.addHandler(ch)
 class CloudInit:
 
     def __init__(self, role, hostname, cluster_info,
-                 cert_bundle, encryption_key,
+                 cert_bundle=None, encryption_key=None,
+                 cloud_provider=None,
+                 token_csv_data="",
                  os_type='ubuntu',
-                 os_version="16.04"):
+                 os_version="16.04",):
         """
         cluster_info - a dictionary with infromation about the etcd cluster
         members
@@ -39,16 +41,18 @@ class CloudInit:
 
         if role not in ('master', 'node'):
             raise ValueError("Incorrect os_role!")
-
         self.role = role
         self.hostname = hostname
         self.cluster_info = cluster_info
         if cert_bundle:
-            self.etcd_cert_bundle = cert_bundle[0]
-            self.svc_accnt_cert_bundle = cert_bundle[1]
+            self.ca_cert = cert_bundle[0]
+            self.etcd_cert_bundle = cert_bundle[1]
+            self.svc_accnt_cert_bundle = cert_bundle[2]
         self.os_type = os_type
         self.os_version = os_version
         self.encryption_key = encryption_key
+        self.cloud_provider = cloud_provider
+        self.token_csv_data = token_csv_data
 
     def _etcd_cluster_info(self):
         """
@@ -73,9 +77,23 @@ class CloudInit:
 
     def _get_ca_and_certs(self):
 
-        return (self.etcd_cert_bundle.ca_cert,
+        return (self.ca_cert,
                 self.etcd_cert_bundle.key,
                 self.etcd_cert_bundle.cert)
+
+    def _get_token_csv(self):
+        """
+        write access data to /var/lib/kubernetes/token.csv
+        """
+        content = """
+        # token_csv
+         - path: /var/lib/kubernetes/token.csv
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(self.token_csv_data)
+        return textwrap.dedent(content)
 
     def _get_certificate_info(self):
         """
@@ -112,7 +130,6 @@ class CloudInit:
         return textwrap.dedent(certificate_info)
 
     def _get_encryption_config(self):
-
         encryption_config = re.sub("%%ENCRYPTION_KEY%%",
                                    self.encryption_key,
                                    encryption_config_tmpl).encode()
@@ -122,10 +139,23 @@ class CloudInit:
            encoding: b64
            content: {}
            owner: root:root
+           permissions: '0600'
         """.format(
             base64.b64encode(encryption_config).decode())
 
         return textwrap.dedent(encryption_config_part)
+
+    def _get_cloud_provider(self):
+        cloud_config = """
+        # cloud config
+         - path: /etc/kubernetes/cloud.conf
+           encoding: b64
+           content: {}
+           permissions: '0600'
+           owner: root:root
+        """.format(bytes(self.cloud_provider).decode())
+
+        return textwrap.dedent(cloud_config)
 
     def _get_svc_account_info(self):
 
@@ -158,7 +188,9 @@ class CloudInit:
         """) + self._get_certificate_info().lstrip() \
              + self._etcd_cluster_info().lstrip() \
              + self._get_svc_account_info().lstrip() \
-             + self._get_encryption_config().lstrip()
+             + self._get_encryption_config().lstrip() \
+             + self._get_cloud_provider().lstrip() \
+             + self._get_token_csv().lstrip()
 
         return config
 
