@@ -16,3 +16,23 @@ apt-get install -y apt-transport-https ca-certificates curl software-properties-
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
 apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 17.03 | head -1 | awk '{print $3}')
+
+K8S_VERSION=v1.10.4
+OS=linux
+ARCH=amd64
+
+
+sudo apt-get -y install socat conntrack ipset
+
+K8S_URL=https://storage.googleapis.com/kubernetes-release/release
+BIN_PATH=/usr/bin
+
+for item in kubelet kube-proxy; do
+    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/${item} -o ${BIN_PATH}/${item}
+    chmod -v +x ${BIN_PATH}/${item}
+done
+
+
+# write kubelet.service
+
+# write /etc/systemd/system/kube-proxy.service
