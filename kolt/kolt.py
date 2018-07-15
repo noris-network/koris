@@ -29,7 +29,7 @@ from .ssl import (create_key,
                   write_key, write_cert, CertBundle)
 from .util import (EtcdHost,
                    OSCloudConfig,
-                   get_etcd_info_from_openstack,
+                   get_server_info_from_openstack,
                    get_token_csv
                    )
 
@@ -275,6 +275,8 @@ def create_machines(nova, neutron, cinder, config):
 
     hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                      i in etcd_host_list]))
+    hostnames.extend(nodes)
+    ips.extend([nic['port']['fixed_ips'][0]['ip_address'] for nic in nics_nodes]) # noqa
 
     (_, ca_cert, k8s_bundle,
      svc_accnt_bundle, admin_bundle) = create_certs(config, hostnames, ips)
@@ -456,7 +458,7 @@ def main():
     nova, neutron, cinder = get_clients()
 
     if args.certs:
-        names, ips = get_etcd_info_from_openstack(config, nova)
+        names, ips = get_server_info_from_openstack(config, nova)
         create_certs(config, names, ips)
         sys.exit(0)
 

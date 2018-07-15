@@ -62,16 +62,13 @@ resources:
 """
 
 
-def get_etcd_info_from_openstack(config, nova):
+
+def get_server_info_from_openstack(config, nova):
     # find all servers in my cluster which are etcd or master
     cluster_suffix = "-%s" % config['cluster-name']
 
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
-    # TODO: remove this crappy filter in the future
-    # because we might want to put etcd on own servers
-    servers = [server for server in servers if
-               server.name.startswith("master")]
 
     assert len(servers)
 
