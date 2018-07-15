@@ -240,6 +240,7 @@ class NodeInit(CloudInit):
         self.token = token
         self.cert_budle = cert_bundle
         self.os_type = os_type
+        self.os_version = os_version
 
         self.combined_message = MIMEMultipart()
 
@@ -287,7 +288,8 @@ class NodeInit(CloudInit):
         return textwrap.dedent(certificate_info)
 
     def _get_kubelet_config(self):
-        kubelet_config = kubelet_kubeconfig.format(self.token).encode()
+        kubelet_config = base64.b64encode(
+            kubelet_kubeconfig.format(self.token).encode())
         kubelet_config_part = """
         # encryption_config
          - path: /var/lib/kubelet/kubeconfig.yaml
@@ -296,7 +298,7 @@ class NodeInit(CloudInit):
            owner: root:root
            permissions: '0600'
         """.format(
-            base64.b64encode(kubelet_config))
+            kubelet_config.decode())
         return textwrap.dedent(kubelet_config_part)
 
     def get_files_config(self):
@@ -310,3 +312,36 @@ class NodeInit(CloudInit):
              + self._get_certificate_info()
 
         return config
+
+    def __str__(self):
+
+        sub_message = MIMEText(self.get_files_config(),
+                               _subtype='text/cloud-config')
+        sub_message.add_header('Content-Disposition', 'attachment')
+        self.combined_message.attach(sub_message)
+
+        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
+                                                       self.os_type,
+                                                       self.os_version)
+
+        # process bootstrap script and generic cloud-init file
+        for item in ['generic', k8s_bootstrap]:
+            fh = open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt',
+                                                     'cloud-inits',
+                                                     item)))
+            # we currently blindly assume the first line is a mimetype
+            # or a shebang
+            main_type, _subtype = fh.readline().strip().split("/", 1)
+
+            if '#!' in main_type:
+                _subtype = 'x-shellscript'
+            #    fh.seek(0)
+
+            sub_message = MIMEText(fh.read(), _subtype=_subtype)
+            sub_message.add_header('Content-Disposition',
+                                   'attachment', filename="%s" % item)
+            self.combined_message.attach(sub_message)
+            fh.close()
+
+        return self.combined_message.as_string()
