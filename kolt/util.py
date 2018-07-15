@@ -62,6 +62,28 @@ resources:
 """
 
 
+# TODO: run nginx proxy on each node
+# thus remove hard coded server: https://master-1-nude:6443
+kubelet_kubeconfig = """
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority: /var/lib/kubernetes/ca.pem
+    server: https://master-1-nude:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: kubelet
+  name: kubelet
+current-context: kubelet
+users:
+- name: kubelet
+  user:
+token: {}
+"""
+
 
 def get_server_info_from_openstack(config, nova):
     # find all servers in my cluster which are etcd or master

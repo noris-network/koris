@@ -15,7 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
-from kolt.util import encryption_config_tmpl
+from kolt.util import encryption_config_tmpl, kubelet_kubeconfig
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -227,3 +227,86 @@ class CloudInit:
             fh.close()
 
         return self.combined_message.as_string()
+
+
+class NodeInit(CloudInit):
+
+    def __init__(self, role, hostname, token, ca_cert,
+                 cert_bundle,
+                 os_type='ubuntu', os_version="16.04"):
+
+        self.role = role
+        self.hostname = hostname
+        self.token = token
+        self.cert_budle = cert_bundle
+        self.os_type = os_type
+
+        self.combined_message = MIMEMultipart()
+
+        self.ca_cert = ca_cert
+        self.etcd_cert_bundle = cert_bundle
+
+    def _get_ca_and_certs(self):
+
+        return (self.ca_cert,
+                self.etcd_cert_bundle.key,
+                self.etcd_cert_bundle.cert)
+
+    def _get_certificate_info(self):
+        """
+        write certificates to destination directory
+        """
+        ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
+
+        b64_k8s_key = b64_key(k8s_key)
+        b64_ca_cert = b64_cert(ca_cert)
+        b64_k8s_cert = b64_cert(k8s_cert)
+
+        certificate_info = """
+        # certificates
+         - path: /etc/ssl/kubernetes/ca.pem
+           encoding: b64
+           content: {CA_CERT}
+           owner: root:root
+           permissions: '0600'
+         - path: /etc/ssl/kubernetes/kubernetes.pem
+           encoding: b64
+           content: {KUBERNETES_CERT}
+           owner: root:root
+           permissions: '0600'
+         - path: /etc/ssl/kubernetes/kubernetes-key.pem
+           encoding: b64
+           content: {K8S_KEY}
+           owner: root:root
+           permissions: '0600'
+        """.format(
+            CA_CERT=b64_ca_cert.lstrip(),
+            K8S_KEY=b64_k8s_key.lstrip(),
+            KUBERNETES_CERT=b64_k8s_cert.lstrip())
+
+        return textwrap.dedent(certificate_info)
+
+    def _get_kubelet_config(self):
+        kubelet_config = kubelet_kubeconfig.format(self.token).encode()
+        kubelet_config_part = """
+        # encryption_config
+         - path: /var/lib/kubelet/kubeconfig.yaml
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(
+            base64.b64encode(kubelet_config))
+        return textwrap.dedent(kubelet_config_part)
+
+    def get_files_config(self):
+        """
+        write the section write_files into the cloud-config
+        """
+        config = textwrap.dedent("""
+        #cloud-config
+        write_files:
+        """) + self._get_kubelet_config() \
+             + self._get_certificate_info()
+
+        return config

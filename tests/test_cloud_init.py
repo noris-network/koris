@@ -3,7 +3,7 @@ import re
 import uuid
 import yaml
 
-from kolt.cloud import CloudInit
+from kolt.cloud import CloudInit, NodeInit
 from kolt.kolt import create_certs
 from kolt.util import (EtcdHost,
                        OSCloudConfig)
@@ -32,6 +32,7 @@ cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
                                                 ips, write=False)
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
+kubelet_token = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
 
 def test_cloud_init():
@@ -53,3 +54,15 @@ def test_cloud_init():
     assert re.findall("%s=https://%s:%s" % (
         etcd_host.name, etcd_host.ip_address, etcd_host.port),
         etcd_env['content'])
+
+
+def test_node_init():
+    ci = NodeInit("node", "node-1-k8s",
+                  kubelet_token,
+                  ca_cert,
+                  k8s_bundle,
+                  )
+    config = ci.get_files_config()
+    config = yaml.load(config)
+
+    assert len(config['write_files']) == 4
