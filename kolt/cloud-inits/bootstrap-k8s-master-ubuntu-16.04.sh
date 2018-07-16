@@ -89,13 +89,6 @@ ln -vs /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key
 ln -vs /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
 ln -vs /etc/ssl/kubernetes/ca.pem /var/lib/kubernetes/ca.pem
 ln -vs /etc/ssl/kubernetes/service-accounts.pem /var/lib/kubernetes/service-accounts.pem
-###
-# create authentication tokens for calico, admin and kubelet service
-###
-
-adminToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
-calicoToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
-kubeletToken=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w30 | head -n 1)
 
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
