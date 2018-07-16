@@ -6,16 +6,6 @@ text/x-shellscript
 # and the shell script real work. If you need conditional logic, write it in bash or make another shell script.
 # --------------------------------------------------------------------------------------------------------------
 
-# Specify the Kubernetes version to use.
-
-# can only use docker 17.03.X
-# https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md
-
-apt-get update
-apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
-apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 17.03 | head -1 | awk '{print $3}')
 
 K8S_VERSION=v1.10.4
 OS=linux
@@ -23,7 +13,25 @@ ARCH=amd64
 CNI_VERSION=0.6.0
 
 
-sudo apt-get -y install socat conntrack ipset
+
+#### DON'T CHANGE ANYTHING BELOW ===============================================================================
+
+apt-get update
+apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" -u
+# Specify the Kubernetes version to use.
+#apt-get update # && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 17.03 | head -1 | awk '{print $3}')
+# can only use docker 17.03.X
+# https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md
+
+cat <<EOF > /etc/apt/preferences.d/docker
+Package: docker-ce
+Pin: version 17.03.*
+Pin-Priority: 1000
+EOF
+
+sudo apt-get -y install socat conntrack ipset docker-ce
 
 K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 BIN_PATH=/usr/bin
@@ -39,12 +47,59 @@ mkdir -pv /opt/cni/bin
 tar xvzf cni-plugins-amd64-v0.6.0.tgz -C /opt/cni/bin/
 
 
-calico_version=v3.1.1
-        cni-version: v3.1.1
-calicoctl-version=v3.1.1
-controller-version: 3.1-release
+#calico_version=v3.1.1
+#cni-version: v3.1.1
+#calicoctl-version=v3.1.1
+#controller-version: 3.1-release
 
+ln -vs /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
+ln -vs /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
+ln -vs /etc/ssl/kubernetes/ca.pem /var/lib/kubernetes/ca.pem
+ln -vs /etc/ssl/kubernetes/service-accounts.pem /var/lib/kubernetes/service-accounts.pem
 
-# write kubelet.service
+cat << EOF > /etc/systemd/system/kubelet.service
+[Service]
+ExecStart=/usr/bin/kubelet \\
+  --allow-privileged=true \\
+  --cluster-dns=10.32.0.10  \\
+  --hostname-override=$(hostname -s) \\
+  --container-runtime=docker \\
+  --docker=unix:///var/run/docker.sock \\
+  --network-plugin=cni \\
+  --kubeconfig=/var/lib/kubelet/kubeconfig \\
+  --runtime-cgroups=/systemd/system.slice \\
+  --kubelet-cgroups=/systemd/system.slice \\
+  --serialize-image-pulls=false \\
+  --register-node=true \\
+  --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
+  --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
+  --eviction-pressure-transition-period 30s \\\\\
+  --cert-dir=/var/lib/kubelet \\
+  --v=2
 
-# write /etc/systemd/system/kube-proxy.service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat << EOF > /etc/systemd/system/kube-proxy.service
+[Unit]
+Description=Kubernetes Kube Proxy
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/bin/kube-proxy \\
+  --kubeconfig=/var/lib/kubelet/kubeconfig \\
+  --proxy-mode=iptables \\
+  --iptables-min-sync-period=2s \\
+  --iptables-sync-period=5s \\
+  --v=2
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
