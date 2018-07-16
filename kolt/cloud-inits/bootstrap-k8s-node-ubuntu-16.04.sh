@@ -20,6 +20,7 @@ apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | g
 K8S_VERSION=v1.10.4
 OS=linux
 ARCH=amd64
+CNI_VERSION=0.6.0
 
 
 sudo apt-get -y install socat conntrack ipset
@@ -31,6 +32,17 @@ for item in kubelet kube-proxy; do
     curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/${item} -o ${BIN_PATH}/${item}
     chmod -v +x ${BIN_PATH}/${item}
 done
+
+cd tmp
+curl -L  https://github.com/containernetworking/plugins/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v${CNI_VERSION}.tgz -O
+mkdir -pv /opt/cni/bin
+tar xvzf cni-plugins-amd64-v0.6.0.tgz -C /opt/cni/bin/
+
+
+calico_version=v3.1.1
+        cni-version: v3.1.1
+calicoctl-version=v3.1.1
+controller-version: 3.1-release
 
 
 # write kubelet.service
