@@ -376,7 +376,10 @@ def delete_cluster(config):
 
         async def del_server(server):
             await asyncio.sleep(1)
+            nics = [nic for nic in server.interface_list()]
             server.delete()
+            [neutron.delete_port(nic.id) for nic in nics]
+            print("deleted %s ..." % server.name)
 
         loop = asyncio.get_event_loop()
         tasks = [loop.create_task(del_server(server)) for server in servers]
