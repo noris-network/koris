@@ -25,7 +25,7 @@ from keystoneauth1 import session
 
 from .cloud import CloudInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import (create_key,
+from .ssl import (create_key, read_cert, read_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
 from .util import (EtcdHost,
@@ -388,7 +388,7 @@ def delete_cluster(config):
         sys.exit(1)
 
 
-def create_certs(config, names, ips, write=True):
+def create_certs(config, names, ips, write=True, ca_bundle=None):
     """
     create new certificates, useful for replacing certificates
     and later for adding nodes ...
@@ -396,9 +396,15 @@ def create_certs(config, names, ips, write=True):
     country = "DE"
     state = "Bayern"
     location = "NUE"
-    ca_key = create_key()
-    ca_cert = create_ca(ca_key, ca_key.public_key(), country,
-                        state, location, "Kubernetes", "CDA\PI", "kubernetes")
+
+    if not ca_bundle:
+        ca_key = create_key()
+        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                            state, location, "Kubernetes", "CDA\PI",
+                            "kubernetes")
+    else:
+        ca_key = ca_bundle.key
+        ca_cert = ca_bundle.cert
 
     k8s_bundle = CertBundle.create_signed(ca_key,
                                           country,
@@ -447,7 +453,7 @@ def create_certs(config, names, ips, write=True):
     return ca_key, ca_cert, k8s_bundle, svc_accnt_bundle, admin_bundle
 
 
-def main():
+def main():  # pragma: no coverage
     global nova, neutron, cinder
     if not shutil.which("cfssl"):
         print(red("You must install cfssl to use kolt!"))
@@ -461,6 +467,9 @@ def main():
     parser.add_argument("--certs", help="Create cluster CA and certs only",
                         action="store_true")
 
+    parser.add_argument("--ca", help="CA to reuse")
+    parser.add_argument("--key", help="CA key to reuse")
+
     args = parser.parse_args()
 
     if not args.config:
@@ -473,8 +482,13 @@ def main():
     nova, neutron, cinder = get_clients()
 
     if args.certs:
+        if args.key and args.ca:
+            ca_bundle = CertBundle.read_bundle(args.key, args.ca)
+        else:
+            ca_bundle = None
+
         names, ips = get_server_info_from_openstack(config, nova)
-        create_certs(config, names, ips)
+        create_certs(config, names, ips, ca_bundle=ca_bundle)
         sys.exit(0)
 
     if args.destroy:

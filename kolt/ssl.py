@@ -236,6 +236,11 @@ class CertBundle:
 
         return cls(key, cert)
 
+    @classmethod
+    def read_bundle(cls, key, cert):
+        key, cert = read_key(key), read_cert(cert)
+        return cls(key, cert)
+
     def __init__(self, key, cert):
         self.key = key
         self.cert = cert
@@ -244,3 +249,19 @@ class CertBundle:
         write_key(self.key,
                   filename=os.path.join(directory, name + "-key.pem"))
         write_cert(self.cert, os.path.join(directory, name + ".pem"))
+
+
+def read_cert(cert):  # pragma: no coverage
+    with open(cert, "rb") as f:
+        cert = x509.load_pem_x509_certificate(
+            f.read(), default_backend())
+    return cert
+
+
+def read_key(key):  # pragma: no coverage
+    with open(key, "rb") as key_file:
+        private_key = serialization.load_pem_private_key(
+            key_file.read(),
+            password=None,
+            backend=default_backend())
+    return private_key
