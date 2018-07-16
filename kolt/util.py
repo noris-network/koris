@@ -81,8 +81,33 @@ current-context: kubelet
 users:
 - name: kubelet
   user:
-token: {}
+    token: {}
 """
+
+
+def get_node_info_from_openstack(config, nova, role):
+    # find all servers in my cluster which are etcd or master
+    cluster_suffix = "-%s" % config['cluster-name']
+
+    servers = [server for server in nova.servers.list() if
+               server.name.endswith(cluster_suffix)]
+
+    servers = [server for server in servers if
+               server.name.startswith(role)]
+
+    assert len(servers)
+
+    names = []
+    ips = []
+
+    for server in servers:
+        names.append(server.name)
+        ips.append(server.interface_list()[0].fixed_ips[0]['ip_address'])
+
+    names.append("localhost")
+    ips.append("127.0.0.1")
+
+    return names, ips
 
 
 def get_server_info_from_openstack(config, nova):
@@ -107,7 +132,7 @@ def get_server_info_from_openstack(config, nova):
     return names, ips
 
 
-def get_token_csv(adminToken):
+def get_token_csv(adminToken, kubeletToken):
     """
     write the content of
     /var/lib/kubernetes/token.csv
@@ -117,10 +142,13 @@ def get_token_csv(adminToken):
     {adminToken},admin,admin,"cluster-admin,system:masters"
     {calicoToken},calico,calico,"cluster-admin,system:masters"
     {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
+    {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
+    {bootstrapToken},kubelet,kubelet,10001,"system:node-bootstrapper"
     """.format(
         adminToken=adminToken,
         calicoToken=uuid.uuid4().hex[:32],
-        kubeletToken=uuid.uuid4().hex[:32]
+        kubeletToken=kubeletToken,
+        bootstrapToken=kubeletToken
     )
 
     return base64.b64encode(textwrap.dedent(content).encode()).decode()
