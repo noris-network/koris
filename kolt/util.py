@@ -85,6 +85,28 @@ users:
 """
 
 
+calicoconfig = {
+    "name": "calico-k8s-network",
+    "type": "calico",
+    "datastore_type": "etcdv3",
+    "etcd_endpoints": "",
+    "etcd_key_file": "/var/lib/kubernetes/kubernetes-key.pem",
+    "etcd_cert_file": "/var/lib/kubernetes/kubernetes.pem",
+    "etcd_ca_cert_file": "/var/lib/kubernetes/ca.pem",
+    "ipam": {
+        "type": "calico-ipam",
+        "assign_ipv4": "true",
+        "assign_ipv6": "false"
+    },
+    "policy": {
+        "type": "k8s"
+    },
+    "kubernetes": {
+        "kubeconfig": "/etc/calico/kube/kubeconfig"
+    }
+}
+
+
 def get_node_info_from_openstack(config, nova, role):
     # find all servers in my cluster which are etcd or master
     cluster_suffix = "-%s" % config['cluster-name']

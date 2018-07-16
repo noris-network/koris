@@ -4,6 +4,7 @@ to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
 import base64
+import json
 import logging
 import os
 import re
@@ -15,7 +16,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
-from kolt.util import encryption_config_tmpl, kubelet_kubeconfig
+from kolt.util import (encryption_config_tmpl, kubelet_kubeconfig,
+                       calicoconfig)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -231,8 +233,10 @@ class CloudInit:
 
 class NodeInit(CloudInit):
 
+    # TODO: add /etc/calico/kube/kubeconfig
+
     def __init__(self, role, hostname, token, ca_cert,
-                 cert_bundle,
+                 cert_bundle, etcd_cluster_info,
                  os_type='ubuntu', os_version="16.04"):
 
         self.role = role
@@ -241,6 +245,7 @@ class NodeInit(CloudInit):
         self.cert_budle = cert_bundle
         self.os_type = os_type
         self.os_version = os_version
+        self.etcd_cluster_info = etcd_cluster_info
 
         self.combined_message = MIMEMultipart()
 
@@ -285,7 +290,7 @@ class NodeInit(CloudInit):
             K8S_KEY=b64_k8s_key.lstrip(),
             KUBERNETES_CERT=b64_k8s_cert.lstrip())
 
-        return textwrap.dedent(certificate_info)
+        return textwrap.dedent(certificate_info).lstrip()
 
     def _get_kubelet_config(self):
         kubelet_config = base64.b64encode(
@@ -299,7 +304,23 @@ class NodeInit(CloudInit):
            permissions: '0600'
         """.format(
             kubelet_config.decode())
-        return textwrap.dedent(kubelet_config_part)
+        return textwrap.dedent(kubelet_config_part).lstrip()
+
+    def _get_calico_config(self):
+        calicoconfig['etcd_endpoints'] = ",".join(
+            str(etcd_host) for etcd_host in self.etcd_cluster_info)
+
+        cc = json.dumps(calicoconfig, indent=2).encode()
+        cc_part = """
+        # calico_config
+         - path: /etc/cni/net.d/10-calico.conf
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(base64.b64encode(cc).decode())
+
+        return textwrap.dedent(cc_part)
 
     def get_files_config(self):
         """
@@ -309,7 +330,8 @@ class NodeInit(CloudInit):
         #cloud-config
         write_files:
         """) + self._get_kubelet_config() \
-             + self._get_certificate_info()
+             + self._get_certificate_info() \
+             + self._get_calico_config()
 
         return config
 

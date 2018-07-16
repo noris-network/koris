@@ -60,9 +60,9 @@ def test_node_init():
     ci = NodeInit("node", "node-1-k8s",
                   kubelet_token,
                   ca_cert,
-                  k8s_bundle,
+                  k8s_bundle, test_cluster,
                   )
     config = ci.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 4
+    assert len(config['write_files']) == 5
