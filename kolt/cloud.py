@@ -17,7 +17,7 @@ from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
 from kolt.util import (encryption_config_tmpl, kubelet_kubeconfig,
-                       calicoconfig)
+                       calicoconfig, get_kubeconfig_yaml)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -233,10 +233,8 @@ class CloudInit:
 
 class NodeInit(CloudInit):
 
-    # TODO: add /etc/calico/kube/kubeconfig
-
     def __init__(self, role, hostname, token, ca_cert,
-                 cert_bundle, etcd_cluster_info,
+                 cert_bundle, etcd_cluster_info, calico_token,
                  os_type='ubuntu', os_version="16.04"):
 
         self.role = role
@@ -246,7 +244,7 @@ class NodeInit(CloudInit):
         self.os_type = os_type
         self.os_version = os_version
         self.etcd_cluster_info = etcd_cluster_info
-
+        self.calico_token = calico_token
         self.combined_message = MIMEMultipart()
 
         self.ca_cert = ca_cert
@@ -292,9 +290,26 @@ class NodeInit(CloudInit):
 
         return textwrap.dedent(certificate_info).lstrip()
 
+    def _get_kubeconfig(self):
+        kubeconfig_part = """
+        # calico kubeconfig
+         - path: /etc/calico/kube/kubeconfig
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(get_kubeconfig_yaml(
+            "https://%s:6443" % self.etcd_cluster_info[0].name,
+            "calico",
+            self.calico_token))
+
+        return textwrap.dedent(kubeconfig_part).lstrip()
+
     def _get_kubelet_config(self):
         kubelet_config = base64.b64encode(
-            kubelet_kubeconfig.format(self.token).encode())
+            kubelet_kubeconfig.format(
+                master="https://%s:6443" % self.etcd_cluster_info[0].name,
+                token=self.token).encode())
         kubelet_config_part = """
         # encryption_config
          - path: /var/lib/kubelet/kubeconfig.yaml
@@ -331,7 +346,8 @@ class NodeInit(CloudInit):
         write_files:
         """) + self._get_kubelet_config() \
              + self._get_certificate_info() \
-             + self._get_calico_config()
+             + self._get_calico_config() \
+             + self._get_kubeconfig()
 
         return config
 

@@ -2,6 +2,7 @@ import base64
 import textwrap
 import uuid
 
+import yaml
 from ipaddress import IPv4Address
 
 
@@ -62,6 +63,47 @@ resources:
 """
 
 
+kubeconfig = {'apiVersion': 'v1',
+              'clusters': [
+                  {'cluster': {'insecure-skip-tls-verify': True,
+                               'server': '%%%%MASTERURI%%%',
+                               'certificate-authority':
+                               '/var/lib/kubernetes/ca.pem'},
+                   'name': 'kubernetes'}],
+              'contexts': [
+                  {'context':
+                      {'cluster': 'kubernetes',
+                       'user': '%%%USERNAME%%%'},
+                   'name': '%%%USERNAME%%%-context'}],
+              'current-context': '%%%USERNAME%%%-context',
+              'kind': 'Config',
+              'users': [
+                  {'name': '%%%USERNAME%%%',
+                   'user': {'token': '%%%USERTOKEN%%%'}
+                   }]
+              }
+
+
+def get_kubeconfig_yaml(master_uri, username, token,
+                        skip_tls=False,
+                        encode=True):
+
+    config = kubeconfig.copy()
+    if skip_tls:
+        config['clusters'][0]['cluster'].pop('insecure-skip-tls-verify')
+    config['clusters'][0]['cluster']['server'] = master_uri
+    config['contexts'][0]['context']['name'] = "%s-context" % username
+    config['current-context'] = "%s-context" % username
+    config['users'][0]['name'] = username
+    config['users'][0]['user']['token'] = token
+
+    yml_config = yaml.dump(config)
+
+    if encode:
+        yml_config = base64.b64encode(yml_config.encode()).decode()
+    return yml_config
+
+
 # TODO: run nginx proxy on each node
 # thus remove hard coded server: https://master-1-nude:6443
 kubelet_kubeconfig = """
@@ -70,7 +112,7 @@ kind: Config
 clusters:
 - cluster:
     certificate-authority: /var/lib/kubernetes/ca.pem
-    server: https://master-1-nude:6443
+    server: https://{master}:6443
   name: kubernetes
 contexts:
 - context:
@@ -81,7 +123,7 @@ current-context: kubelet
 users:
 - name: kubelet
   user:
-    token: {}
+    token: {token}
 """
 
 

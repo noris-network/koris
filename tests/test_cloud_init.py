@@ -33,6 +33,7 @@ cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 kubelet_token = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
+calico_token = uuid.uuid4().hex[:32]
 
 
 def test_cloud_init():
@@ -61,8 +62,9 @@ def test_node_init():
                   kubelet_token,
                   ca_cert,
                   k8s_bundle, test_cluster,
+                  calico_token
                   )
     config = ci.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 5
+    assert len(config['write_files']) == 6
