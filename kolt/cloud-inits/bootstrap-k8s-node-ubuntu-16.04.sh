@@ -112,7 +112,7 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 
 [Service]
 ExecStart=/usr/bin/kube-proxy \\
-  --kubeconfig=/var/lib/kubelet/kubeconfig \\
+  --kubeconfig=/var/lib/kubelet/kubeconfig.yaml \\
   --proxy-mode=iptables \\
   --iptables-min-sync-period=2s \\
   --iptables-sync-period=5s \\
@@ -127,3 +127,5 @@ EOF
 
 sudo systemctl enable kubelet
 sudo systemctl start kubelet
+sudo systemctl start kube-proxy
+sudo systemctl start kube-proxy
