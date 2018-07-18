@@ -474,6 +474,15 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
 
+def write_kubeconfig(*args, *kwargs):
+
+    """
+
+    """
+    pass
+
+
+
 def main():  # pragma: no coverage
     global nova, neutron, cinder
     if not shutil.which("cfssl"):
