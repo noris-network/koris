@@ -16,7 +16,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
-from kolt.util import (encryption_config_tmpl, kubelet_kubeconfig,
+from kolt.util import (encryption_config_tmpl,
                        calicoconfig, get_kubeconfig_yaml)
 
 logger = logging.getLogger(__name__)
@@ -306,10 +306,14 @@ class NodeInit(CloudInit):
         return textwrap.dedent(kubeconfig_part).lstrip()
 
     def _get_kubelet_config(self):
-        kubelet_config = base64.b64encode(
-            kubelet_kubeconfig.format(
-                master="https://%s:6443" % self.etcd_cluster_info[0].name,
-                token=self.token).encode())
+
+        kubeconfig = get_kubeconfig_yaml(
+            "https://%s:6443" % self.etcd_cluster_info[0].name,
+            "kubelet",
+            self.token,
+            skip_tls=True
+        )
+
         kubelet_config_part = """
         # encryption_config
          - path: /var/lib/kubelet/kubeconfig.yaml
@@ -318,7 +322,7 @@ class NodeInit(CloudInit):
            owner: root:root
            permissions: '0600'
         """.format(
-            kubelet_config.decode())
+            kubeconfig.encode())
         return textwrap.dedent(kubelet_config_part).lstrip()
 
     def _get_calico_config(self):

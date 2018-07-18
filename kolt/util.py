@@ -104,29 +104,6 @@ def get_kubeconfig_yaml(master_uri, username, token,
     return yml_config
 
 
-# TODO: run nginx proxy on each node
-# thus remove hard coded server: https://master-1-nude:6443
-kubelet_kubeconfig = """
-apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    certificate-authority: /var/lib/kubernetes/ca.pem
-    server: https://{master}:6443
-  name: kubernetes
-contexts:
-- context:
-    cluster: kubernetes
-    user: kubelet
-  name: kubelet
-current-context: kubelet
-users:
-- name: kubelet
-  user:
-    token: {token}
-"""
-
-
 calicoconfig = {
     "name": "calico-k8s-network",
     "type": "calico",
