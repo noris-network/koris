@@ -131,7 +131,8 @@ ExecStart=/usr/bin/kube-apiserver \\
   --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
   --token-auth-file=/var/lib/kubernetes/token.csv \\
-  --v=2
+  --v=2 \\
+  --insecure-bind-address=127.0.0.1
 
 Restart=on-failure
 RestartSec=5
@@ -155,7 +156,7 @@ ExecStart=/usr/bin/kube-controller-manager \\
   --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
   --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \\
   --leader-elect=true \\
-  --master=http://${CURRENT_IP}:8080 \\
+  --master=http://127.0.0.1:8080 \\
   --pod-eviction-timeout 30s \\
   --root-ca-file=/var/lib/kubernetes/ca.pem \\
   --service-account-private-key-file=/var/lib/kubernetes/ca-key.pem \\
@@ -179,7 +180,7 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 [Service]
 ExecStart=/usr/bin/kube-scheduler \\
   --leader-elect=true \\
-  --master=http://${CURRENT_IP}:8080 \\
+  --master=http://127.0.0.1:8080 \\
   --v=2
 Restart=on-failure
 RestartSec=5
@@ -224,6 +225,6 @@ sudo mv kubernetes.default.svc.cluster.local \
 
   sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
 
-sudo systemctl restart nginx
 sudo systemctl enable nginx
+sudo systemctl restart nginx
 
