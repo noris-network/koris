@@ -5,7 +5,7 @@ import yaml
 
 from kolt.cloud import CloudInit, NodeInit
 from kolt.kolt import create_certs
-from kolt.util import (EtcdHost,
+from kolt.util import (EtcdHost, get_kubeconfig_yaml,
                        OSCloudConfig)
 
 
@@ -68,3 +68,14 @@ def test_node_init():
     config = yaml.load(config)
 
     assert len(config['write_files']) == 6
+
+
+def test_get_kube_config():
+
+    kcy = get_kubeconfig_yaml("https://foo:2349", "kubelet", "12312aed321",
+                              skip_tls=True,
+                              encode=False)
+
+    kcy_dict = yaml.load(kcy)
+    assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']
+    import pdb; pdb.set_trace()

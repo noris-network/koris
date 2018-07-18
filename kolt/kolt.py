@@ -218,8 +218,9 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
     elif 'ubuntu' in img_name.lower() and role == 'node':
         token = kwargs.get('token')
         ca_cert = kwargs.get('ca_cert')
+        calico_token = kwargs.get('calico_token')
         userdata = str(NodeInit(role, hostname, token, ca_cert,
-                                cert_bundle))
+                                cert_bundle, cluster_info, calico_token))
     else:
         userdata = """
                    #cloud-config
@@ -287,7 +288,8 @@ def create_machines(nova, neutron, cinder, config):
                for nic in nics_nodes)
 
     (_, ca_cert, k8s_bundle,
-     svc_accnt_bundle, admin_bundle) = create_certs(config, hostnames, ips)
+     svc_accnt_bundle, admin_bundle,
+     kubelet_bundle) = create_certs(config, hostnames, ips)
 
     # generate a random string
     # this should be the equal of
@@ -299,6 +301,7 @@ def create_machines(nova, neutron, cinder, config):
 
     admin_token = uuid.uuid4().hex[:32]
     kubelet_token = uuid.uuid4().hex[:32]
+    calico_token = uuid.uuid4().hex[:32]
     token_csv_data = get_token_csv(admin_token, kubelet_token)
 
     # TODO: we don't use host name anywhere in CloudInit and NodeInit
@@ -312,7 +315,9 @@ def create_machines(nova, neutron, cinder, config):
         for master in masters]
 
     node_args = {'token': kubelet_token, 'ca_cert': ca_cert,
-                 'cert_bundle': k8s_bundle}
+                 'cert_bundle': kubelet_bundle,
+                 'cluster_info': etcd_host_list,
+                 'calico_token': calico_token}
 
     # TODO: we don't use host name anywhere in CloudInit and NodeInit
     # we should refactor this out ...
@@ -440,6 +445,17 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                             ips=""
                                             )
 
+    kubelet_bundle = CertBundle.create_signed(ca_key,
+                                              country,
+                                              state,
+                                              location,
+                                              "system:masters",
+                                              "CDA\PI",
+                                              name="kubelet",
+                                              hosts=names,
+                                              ips=ips
+                                              )
+
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
@@ -452,8 +468,10 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
         k8s_bundle.save("kubernetes", cert_dir)
         svc_accnt_bundle.save("service-account", cert_dir)
         admin_bundle.save("admin", cert_dir)
+        kubelet_bundle.save("kubelet", cert_dir)
 
-    return ca_key, ca_cert, k8s_bundle, svc_accnt_bundle, admin_bundle
+    return (ca_key, ca_cert, k8s_bundle,
+            svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
 
 def main():  # pragma: no coverage

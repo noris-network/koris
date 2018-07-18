@@ -37,8 +37,7 @@ EOF
 sudo apt-get -y install socat conntrack ipset docker-ce
 
 K8S_URL=https://storage.googleapis.com/kubernetes-release/release
-CACLICO_URL=https://github.com/projectcalico/cni-plugin/releases/download/
-
+CALICO_URL=https://github.com/projectcalico/cni-plugin/releases/download
 BIN_PATH=/usr/bin
 
 for item in kubelet kube-proxy; do
@@ -48,24 +47,24 @@ done
 
 # configure calico
 
-cd tmp
+cd /tmp
 curl -L  https://github.com/containernetworking/plugins/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v${CNI_VERSION}.tgz -O
 mkdir -pv /opt/cni/bin
 tar xvzf cni-plugins-amd64-v0.6.0.tgz -C /opt/cni/bin/
 
 mkdir -pv /etc/cni/net.d
 
-curl -L https://github.com/projectcalico/calicoctl/releases/download/${calico_version}/calicoctl -O ${BIN_PATH} && chmod -v +x /usr/bin/calicoctl &
+curl -L https://github.com/projectcalico/calicoctl/releases/download/v${calico_version}/calicoctl -o ${BIN_PATH}/calicoctl && chmod -v +x /usr/bin/calicoctl &
 
 
 for item in calico calico-ipam; do
-    curl -L ${CALICO_URL}/v${calicoctl_version}/${item} \
-        -O /usr/bin/ && chmod -v +x ${BIN_PATH}/${item} &
+    curl -L ${CALICO_URL}/v${calico_version}/${item} \
+        -o /usr/bin/${item} && chmod -v +x ${BIN_PATH}/${item} &
 done
 
 
 install -v -m 0750 -o root -g root -d /etc/calico/kube
-install -v -n 0755 -g root -o root -d /opt/cni/bin/
+install -v -m 0755 -g root -o root -d /opt/cni/bin/
 
 mkdir -pv /var/lib/kubernetes/
 ln -vs /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
@@ -88,7 +87,7 @@ ExecStart=/usr/bin/kubelet \\
   --container-runtime=docker \\
   --docker=unix:///var/run/docker.sock \\
   --network-plugin=cni \\
-  --kubeconfig=/var/lib/kubelet/kubeconfig \\
+  --kubeconfig=/var/lib/kubelet/kubeconfig.yaml \\
   --runtime-cgroups=/systemd/system.slice \\
   --kubelet-cgroups=/systemd/system.slice \\
   --serialize-image-pulls=false \\
@@ -125,3 +124,6 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+
+sudo systemctl enable kubelet
+sudo systemctl start kubelet

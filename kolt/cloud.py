@@ -321,8 +321,8 @@ class NodeInit(CloudInit):
            content: {}
            owner: root:root
            permissions: '0600'
-        """.format(
-            kubeconfig.encode())
+        """.format(kubeconfig)
+
         return textwrap.dedent(kubelet_config_part).lstrip()
 
     def _get_calico_config(self):

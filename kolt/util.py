@@ -1,4 +1,5 @@
 import base64
+import copy
 import textwrap
 import uuid
 
@@ -62,7 +63,6 @@ resources:
       - identity: {}
 """
 
-
 kubeconfig = {'apiVersion': 'v1',
               'clusters': [
                   {'cluster': {'insecure-skip-tls-verify': True,
@@ -87,12 +87,12 @@ kubeconfig = {'apiVersion': 'v1',
 def get_kubeconfig_yaml(master_uri, username, token,
                         skip_tls=False,
                         encode=True):
-
-    config = kubeconfig.copy()
+    config = copy.deepcopy(kubeconfig)
     if skip_tls:
         config['clusters'][0]['cluster'].pop('insecure-skip-tls-verify')
     config['clusters'][0]['cluster']['server'] = master_uri
-    config['contexts'][0]['context']['name'] = "%s-context" % username
+    config['contexts'][0]['name'] = "%s-context" % username
+    config['contexts'][0]['context']['user'] = "%s" % username
     config['current-context'] = "%s-context" % username
     config['users'][0]['name'] = username
     config['users'][0]['user']['token'] = token
@@ -178,13 +178,13 @@ def get_token_csv(adminToken, kubeletToken):
     write the content of
     /var/lib/kubernetes/token.csv
     """
-
+    # TODO: check how to get this working ...
+    # {bootstrapToken},kubelet,kubelet,10001,"system:node-bootstrapper"
     content = """
     {adminToken},admin,admin,"cluster-admin,system:masters"
     {calicoToken},calico,calico,"cluster-admin,system:masters"
     {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
     {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
-    {bootstrapToken},kubelet,kubelet,10001,"system:node-bootstrapper"
     """.format(
         adminToken=adminToken,
         calicoToken=uuid.uuid4().hex[:32],
