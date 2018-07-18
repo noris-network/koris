@@ -27,7 +27,7 @@ cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
 
 
 (_, ca_cert, k8s_bundle,
- svc_accnt_bundle, admin_bundle) = create_certs({},
+ svc_accnt_bundle, admin_bundle, kubelet_bundle) = create_certs({},
                                                 hostnames,
                                                 ips, write=False)
 
