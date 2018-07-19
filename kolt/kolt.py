@@ -459,6 +459,21 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                               ips=ips
                                               )
 
+    nodes = []
+    node_bundles = []
+    node_ip = None
+    # todo: add node_ip
+    for node in nodes:
+        node_bundles.append(CertBundle.create_signed(ca_key,
+                                                     country,
+                                                     state,
+                                                     location,
+                                                     "system:nodes",
+                                                     "CDA\PI",
+                                                     name="system:node:%s" % node,  # noqa
+                                                     hosts=[node],
+                                                     ips=[node_ip]))
+
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
@@ -476,11 +491,14 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     return (ca_bundle, k8s_bundle,
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
+
 def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
-    aster = host_names("master", config["n-masters"],config['cluster-name'])[0]
-    username="admin"
+    master = host_names("master", config["n-masters"],
+                        config['cluster-name'])[0]
+    username = "admin"
     master_uri = "http://%s:3210" % master
-    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, write, encode=False)
+    kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token, write,
+                                     encode=False)
     if write:
         filename = "admin.conf"
         with open(filename, "w") as f:
