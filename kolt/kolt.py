@@ -474,12 +474,17 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     return (ca_key, ca_cert, k8s_bundle,
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
-def write_kubeconfig(etcd_cluster_info, admin_token, write=False):
-    config =  get_kubeconfig_yaml(etcd_cluster_info, admin_token, write)
+def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
+    import pdb
+    pdb.set_trace()
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    username="admin"
+    masteruri = "http://%s:3210" % master
+    kubeconfig =  get_kubeconfig_yaml(masteruri, username, admin_token, write, encode=False)
     if write:
         filename = "admin.conf"
-        with open(filename, "wb") as f:
-            f.write(config)
+        with open(filename, "w") as f:
+            f.write(kubeconfig)
 
 
 def main():  # pragma: no coverage
