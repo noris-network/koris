@@ -21,7 +21,7 @@ Pre-requisits
 2. A pre-created network, and security group.
 3. Basic understanding of OpenStack.
 4. Ansible installed on your system.
-
+5. A local and working version of `cfssl`
 
 Get started
 ~~~~~~~~~~~

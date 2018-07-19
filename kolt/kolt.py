@@ -2,14 +2,17 @@
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
 import argparse
 import asyncio
+import base64
+import logging
 import os
 import uuid
 import textwrap
 import sys
+import shutil
 
+from ipaddress import IPv4Address
+from functools import lru_cache
 import yaml
-
-from configparser import ConfigParser
 
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound,
@@ -20,8 +23,21 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
+from .cloud import CloudInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
-from ._init import CloudInit
+from .ssl import (create_key, read_cert, read_key,
+                  create_ca,
+                  write_key, write_cert, CertBundle)
+from .util import (EtcdHost,
+                   OSCloudConfig,
+                   get_kubeconfig_yaml,
+                   get_server_info_from_openstack,
+                   get_token_csv
+                   )
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def chunks(l, n):
@@ -43,7 +59,7 @@ def distribute_hosts(hosts_zones):
     for item in hosts_zones:
         hosts, zone = item[0], item[1]
         for host in hosts:
-            yield (host, zone)
+            yield [host, zone, None]
 
 
 def get_host_zones(hosts, zones):
@@ -73,9 +89,9 @@ def get_host_zones(hosts, zones):
 nova, cinder, neutron = None, None, None
 
 
-async def create_instance_with_volume(name, zone, flavor, image, nics,
+async def create_instance_with_volume(name, zone, flavor, image,
                                       keypair, secgroups, role, userdata,
-                                      hosts):
+                                      hosts, nics=None):
 
     global nova, neutron, cinder
 
@@ -139,7 +155,7 @@ async def create_instance_with_volume(name, zone, flavor, image, nics,
         instance = nova.servers.get(instance.id)
         inst_status = instance.status
 
-    print("Instance: " + instance.name + " is in " + inst_status + "state")
+    print("Instance: " + instance.name + " is in " + inst_status + " state")
 
     ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
     print("Instance booted! Name: " + instance.name + " Status: " +
@@ -148,7 +164,7 @@ async def create_instance_with_volume(name, zone, flavor, image, nics,
     hosts[name] = (ip, role)
 
 
-def read_os_auth_variables():
+def read_os_auth_variables(trim=True):
     """
     Automagically read all OS_* variables and
     yield key: value pairs which can be used for
@@ -158,9 +174,12 @@ def read_os_auth_variables():
     for k, v in os.environ.items():
         if k.startswith("OS_"):
             d[k[3:].lower()] = v
+    if trim:
+        not_in_default_rc = ('interface', 'region_name',
+                             'identity_api_version', 'endpoint_type',
+                             )
 
-    not_in_default_rc = ('interface', 'region_name', 'identity_api_version')
-    [d.pop(i) for i in not_in_default_rc if i in d]
+        [d.pop(i) for i in not_in_default_rc if i in d]
 
     return d
 
@@ -174,7 +193,8 @@ def get_clients():
         cinder = cclient.Client('3.0', session=sess)
     except TypeError:
         print(red("Did you source your OS rc file in v3?"))
-        print(red("If your file has the key OS_ENDPOINT_TYPE it's the wrong one!"))
+        print(red("If your file has the key OS_ENDPOINT_TYPE it's the"
+                  " wrong one!"))
         sys.exit(1)
     except KeyError:
         print(red("Did you source your OS rc file?"))
@@ -183,12 +203,25 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(role, img_name):
+def create_userdata(role, img_name, hostname, cluster_info=None,
+                    cloud_provider=None,
+                    cert_bundle=None, encryption_key=None,
+                    **kwargs):
     """
     Create multipart userdata for Ubuntu
     """
-    if 'ubuntu' in img_name.lower():
-        userdata = str(CloudInit(role))
+
+    if 'ubuntu' in img_name.lower() and role == 'master':
+
+        userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
+                                 encryption_key,
+                                 cloud_provider, **kwargs))
+    elif 'ubuntu' in img_name.lower() and role == 'node':
+        token = kwargs.get('token')
+        ca_cert = kwargs.get('ca_cert')
+        calico_token = kwargs.get('calico_token')
+        userdata = str(NodeInit(role, hostname, token, ca_cert,
+                                cert_bundle, cluster_info, calico_token))
     else:
         userdata = """
                    #cloud-config
@@ -198,6 +231,20 @@ def create_userdata(role, img_name):
                    """
         userdata = textwrap.dedent(userdata).strip()
     return userdata
+
+
+def create_nics(neutron, num, netid, security_groups):
+    for i in range(num):
+        yield neutron.create_port(
+            {"port": {"admin_state_up": True,
+                      "network_id": netid,
+                      "security_groups": security_groups}})
+
+
+@lru_cache(maxsize=10)
+def host_names(role, num, cluster_name):
+    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+            range(1, num + 1)]
 
 
 def create_machines(nova, neutron, cinder, config):
@@ -211,85 +258,247 @@ def create_machines(nova, neutron, cinder, config):
                                      config['security_group'])
     secgroups = [secgroup['id']]
 
-    node_user_data = create_userdata('node', config['image'])
-    master_user_data = create_userdata('master', config['image'])
-
     net = neutron.find_resource("network", config["private_net"])
-    nics = [{'net-id': net['id']}]
+
+    netid = net['id']
+
+    nics_masters = list(create_nics(neutron,
+                                    int(config['n-masters']),
+                                    netid,
+                                    secgroups))
+
+    nics_nodes = list(create_nics(neutron,
+                                  int(config['n-nodes']),
+                                  netid,
+                                  secgroups))
+
+    cluster = config['cluster-name']
+
+    masters = host_names("master", config["n-masters"], cluster)
+    nodes = host_names("node", config["n-nodes"], cluster)
+
+    etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
+                      zip(masters, [nic['port']['fixed_ips'][0]['ip_address']
+                          for nic in nics_masters])]
+
+    hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
+                                     i in etcd_host_list]))
+
+    hostnames.extend(nodes)
+    ips.extend(IPv4Address(nic['port']['fixed_ips'][0]['ip_address'])
+               for nic in nics_nodes)
+
+    (_, ca_cert, k8s_bundle,
+     svc_accnt_bundle, admin_bundle,
+     kubelet_bundle) = create_certs(config, hostnames, ips)
+
+    # generate a random string
+    # this should be the equal of
+    # ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+
+    encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
+
+    cloud_provider_info = OSCloudConfig(**read_os_auth_variables(trim=False))
+
+    admin_token = uuid.uuid4().hex[:32]
+    kubelet_token = uuid.uuid4().hex[:32]
+    calico_token = uuid.uuid4().hex[:32]
+    token_csv_data = get_token_csv(admin_token, kubelet_token)
+
+    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # we should refactor this out ...
+    master_user_data = [
+        create_userdata('master', config['image'], master, etcd_host_list,
+                        cloud_provider=cloud_provider_info,
+                        cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
+                        encryption_key=encryption_key,
+                        token_csv_data=token_csv_data)
+        for master in masters]
+
+    node_args = {'token': kubelet_token, 'ca_cert': ca_cert,
+                 'cert_bundle': kubelet_bundle,
+                 'cluster_info': etcd_host_list,
+                 'calico_token': calico_token}
+
+    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # we should refactor this out ...
+    node_user_data = [
+        create_userdata('node', config['image'], node, **node_args)
+        for node in nodes
+    ]
+
     print(info(cyan("got my info, now launching machines ...")))
 
     hosts = {}
-    build_args_master = [master_flavor, image, nics, keypair, secgroups,
-                         "master", master_user_data, hosts]
-    build_args_node = [node_flavor, image, nics, keypair, secgroups, "node",
-                       node_user_data, hosts]
-    cluster = config['cluster-name']
-    masters = ["master-%s-%s" % (i, cluster) for i in
-               range(1, config['n-masters'] + 1)]
-    nodes = ["node-%s-%s" % (i, cluster) for i in
-             range(1, config['n-nodes'] + 1)]
+
+    build_args_master = [
+        [master_flavor, image, keypair, secgroups, "master",
+         master_user_data[i], hosts]
+        for i in range(0, config['n-masters'])
+    ]
+
+    build_args_node = [
+        [node_flavor, image, keypair, secgroups, "node",
+         node_user_data[i], hosts]
+        for i in range(0, config['n-nodes'])
+    ]
 
     masters_zones = list(get_host_zones(masters, config['availibity-zones']))
     nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
     loop = asyncio.get_event_loop()
 
+    for idx, nic in enumerate(nics_masters):
+        masters_zones[idx][-1] = [{'net-id': net['id'],
+                                   'port-id': nic['port']['id']}]
+
+    for idx, nic in enumerate(nics_nodes):
+        nodes_zones[idx][-1] = [{'net-id': net['id'],
+                                 'port-id': nic['port']['id']}]
+
     tasks = [loop.create_task(create_instance_with_volume(
-             name, zone, *build_args_master)) for (name, zone) in
-             masters_zones]
+                              masters_zones[i][0],
+                              masters_zones[i][1], nics=masters_zones[i][2],
+             *(build_args_master[i])))
+             for i in range(0, config['n-masters'])]
 
     tasks.extend([loop.create_task(create_instance_with_volume(
-                  name, zone, *build_args_node)) for (name, zone) in
-                  nodes_zones])
+                  nodes_zones[i][0], nodes_zones[i][1], nics=nodes_zones[i][2],
+                  *(build_args_node[i])))
+                  for i in range(0, config['n-nodes'])])
 
     loop.run_until_complete(asyncio.wait(tasks))
-
     loop.close()
 
-    return create_inventory(hosts, config)
+
+def delete_cluster(config):
+    print(red("You are about to destroy your cluster!!!"))
+    print(red("Are you really sure ? [y/N]"))
+    ans = input(red("ARE YOU REALLY SURE???"))
+
+    if ans.lower() == 'y':
+        cluster_suffix = "-%s" % config['cluster-name']
+        servers = [server for server in nova.servers.list() if
+                   server.name.endswith(cluster_suffix)]
+
+        async def del_server(server):
+            await asyncio.sleep(1)
+            nics = [nic for nic in server.interface_list()]
+            server.delete()
+            [neutron.delete_port(nic.id) for nic in nics]
+            print("deleted %s ..." % server.name)
+
+        loop = asyncio.get_event_loop()
+        tasks = [loop.create_task(del_server(server)) for server in servers]
+
+        if tasks:
+            loop.run_until_complete(asyncio.wait(tasks))
+        loop.close()
+    else:
+        sys.exit(1)
 
 
-def create_inventory(hosts, config):
+def create_certs(config, names, ips, write=True, ca_bundle=None):
     """
-    :hosts:
-    :config: config dictionary
+    create new certificates, useful for replacing certificates
+    and later for adding nodes ...
     """
+    country = "DE"
+    state = "Bayern"
+    location = "NUE"
 
-    cfg = ConfigParser(allow_no_value=True, delimiters=('\t', ' '))
+    if not ca_bundle:
+        ca_key = create_key()
+        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                            state, location, "Kubernetes", "CDA\PI",
+                            "kubernetes")
+    else:
+        ca_key = ca_bundle.key
+        ca_cert = ca_bundle.cert
 
-    [cfg.add_section(item) for item in ["all", "kube-master", "kube-node",
-                                        "etcd", "k8s-cluster:children"]]
-    masters = []
-    nodes = []
+    k8s_bundle = CertBundle.create_signed(ca_key,
+                                          country,
+                                          state,
+                                          location,
+                                          "Kubernetes",
+                                          "CDA\PI",
+                                          "kubernetes",
+                                          names,
+                                          ips)
 
-    for host, (ip, role) in hosts.items():
-        cfg.set("all", host, "ansible_ssh_host=%s  ip=%s" % (ip, ip))
-        if role == "master":
-            cfg.set("kube-master", host)
-            masters.append(host)
-        if role == "node":
-            cfg.set("kube-node", host)
-            nodes.append(host)
+    svc_accnt_bundle = CertBundle.create_signed(ca_key,
+                                                country,
+                                                state,
+                                                location,
+                                                "Kubernetes",
+                                                "CDA\PI",
+                                                name="service-accounts",
+                                                hosts="",
+                                                ips="")
 
-    # add etcd
-    for master in masters:
-        cfg.set("etcd", master)
+    admin_bundle = CertBundle.create_signed(ca_key,
+                                            country,
+                                            state,
+                                            location,
+                                            "system:masters",
+                                            "CDA\PI",
+                                            name="admin",
+                                            hosts="",
+                                            ips=""
+                                            )
 
-    etcds_missing =  config["n-etcd"] - len(masters)
-    for node in nodes[:etcds_missing]:
-        cfg.set("etcd", node)
+    kubelet_bundle = CertBundle.create_signed(ca_key,
+                                              country,
+                                              state,
+                                              location,
+                                              "system:masters",
+                                              "CDA\PI",
+                                              name="kubelet",
+                                              hosts=names,
+                                              ips=ips
+                                              )
 
-    # add all cluster groups
-    cfg.set("k8s-cluster:children", "kube-node")
-    cfg.set("k8s-cluster:children", "kube-master")
+    if write:  # pragma: no coverage
+        cert_dir = "-".join(("certs", config["cluster-name"]))
 
-    return cfg
+        if not os.path.exists(cert_dir):
+            os.mkdir(cert_dir)
+
+        write_key(ca_key, filename=cert_dir + "/ca-key.pem")
+        write_cert(ca_cert, cert_dir + "/ca.pem")
+
+        k8s_bundle.save("kubernetes", cert_dir)
+        svc_accnt_bundle.save("service-account", cert_dir)
+        admin_bundle.save("admin", cert_dir)
+        kubelet_bundle.save("kubelet", cert_dir)
+
+    return (ca_key, ca_cert, k8s_bundle,
+            svc_accnt_bundle, admin_bundle, kubelet_bundle)
+
+def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
+    import pdb
+    pdb.set_trace()
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    username="admin"
+    master_uri = "http://%s:3210" % master
+    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, write, encode=False)
+    if write:
+        filename = "admin.conf"
+        with open(filename, "w") as f:
+            f.write(kubeconfig)
 
 
-def main():
+def main():  # pragma: no coverage
     global nova, neutron, cinder
+
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
-    parser.add_argument("-i", "--inventory", help="Path to Ansible inventory")
+    parser.add_argument("--destroy", help="Delete cluster",
+                        action="store_true")
+    parser.add_argument("--certs", help="Create cluster CA and certs only",
+                        action="store_true")
+
+    parser.add_argument("--ca", help="CA to reuse")
+    parser.add_argument("--key", help="CA key to reuse")
 
     args = parser.parse_args()
 
@@ -299,18 +508,26 @@ def main():
 
     with open(args.config, 'r') as stream:
         config = yaml.load(stream)
-    
-    if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
+
+    nova, neutron, cinder = get_clients()
+
+    if args.certs:
+        if args.key and args.ca:
+            ca_bundle = CertBundle.read_bundle(args.key, args.ca)
+        else:
+            ca_bundle = None
+
+        names, ips = get_server_info_from_openstack(config, nova)
+        create_certs(config, names, ips, ca_bundle=ca_bundle)
+        sys.exit(0)
+
+    if args.destroy:
+        delete_cluster(config)
+        sys.exit(0)
+
+    if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
 
-    nova, neutron, cinder = get_clients()
-    cfg = create_machines(nova, neutron, cinder, config)
-
-    if args.inventory:
-        with open(args.inventory, 'w') as f:
-            cfg.write(f)
-    else:
-        print(info("Here is your inventory ..."))
-        print(red("You can save this inventory to a file with the option -i"))
-        cfg.write(sys.stdout)
+    create_machines(nova, neutron, cinder, config)
+    print(info("Cluster successfully set up."))

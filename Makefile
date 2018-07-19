@@ -24,6 +24,7 @@ for line in sys.stdin:
 endef
 export PRINT_HELP_PYSCRIPT
 
+PY ?= python
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
 help:
@@ -60,10 +61,10 @@ test-all: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source colt -m pytest
-	coverage report -m
-	coverage html
-	$(BROWSER) htmlcov/index.html
+	$(PY) -m pytest -vv --cov .
+	#coverage report -m
+	#coverage html
+	#$(BROWSER) htmlcov/index.html
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/colt.rst

@@ -4,9 +4,11 @@
 """Tests for `colt` package."""
 
 import pytest
+import uuid
+import yaml
 
-
-from colt import colt
+from kolt.kolt import host_names
+from kolt.util import get_kubeconfig_yaml
 
 
 @pytest.fixture
@@ -23,3 +25,24 @@ def test_content(response):
     """Sample pytest test function with the pytest fixture as an argument."""
     # from bs4 import BeautifulSoup
     # assert 'GitHub' in BeautifulSoup(response.content).title.string
+
+
+def test_host_names():
+    assert ["etcd-1-k8s", "etcd-2-k8s"] == host_names("etcd", 2, "k8s")
+
+
+def test_kubeconfig():
+    config = {
+        "n-masters": 2,
+        "cluster-name": "k8s",
+    }
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    master_uri = "https://%s:6443" % master
+
+    username = 'admin'
+    admin_token = uuid.uuid4().hex[:32]
+    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, encode=False)
+    kcy = yaml.load(kubeconfig)
+    assert kcy["clusters"][0]["cluster"]["server"] == master_uri
+    assert kcy["users"][0]["name"] == "admin"
+    assert kcy["users"][0]["user"]["token"] == admin_token

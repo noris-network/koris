@@ -1,0 +1,3 @@
+[run]
+source = kolt
+omit = tests/*, examples/*, setup.py, *__init__.py
