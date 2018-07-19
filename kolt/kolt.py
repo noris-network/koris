@@ -476,21 +476,12 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
 
-def write_kubeconfig(*args, **kwargs):
-
-    """
-
-    """
-    pass
-
+def write_kubeconfig(etcd_cluster_info, admin_token, write=False):
+    return
 
 
 def main():  # pragma: no coverage
     global nova, neutron, cinder
-    if not shutil.which("cfssl"):
-        print(red("You must install cfssl to use kolt!"))
-        print(red("Get it from: https://cfssl.org/"))
-        sys.exit(2)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="YAML configuration")
