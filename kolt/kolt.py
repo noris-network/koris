@@ -287,7 +287,7 @@ def create_machines(nova, neutron, cinder, config):
     ips.extend(IPv4Address(nic['port']['fixed_ips'][0]['ip_address'])
                for nic in nics_nodes)
 
-    (_, ca_cert, k8s_bundle,
+    (ca_bundle, k8s_bundle,
      svc_accnt_bundle, admin_bundle,
      kubelet_bundle) = create_certs(config, hostnames, ips)
 
@@ -309,12 +309,12 @@ def create_machines(nova, neutron, cinder, config):
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
                         cloud_provider=cloud_provider_info,
-                        cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
+                        cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
                         encryption_key=encryption_key,
                         token_csv_data=token_csv_data)
         for master in masters]
 
-    node_args = {'token': kubelet_token, 'ca_cert': ca_cert,
+    node_args = {'token': kubelet_token, 'ca_cert': ca_bundle.cert,
                  'cert_bundle': kubelet_bundle,
                  'cluster_info': etcd_host_list,
                  'calico_token': calico_token}
@@ -410,6 +410,8 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
         ca_cert = create_ca(ca_key, ca_key.public_key(), country,
                             state, location, "Kubernetes", "CDA\PI",
                             "kubernetes")
+        ca_bundle = CertBundle(ca_key, ca_cert)
+
     else:
         ca_key = ca_bundle.key
         ca_cert = ca_bundle.cert
@@ -470,11 +472,11 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
         admin_bundle.save("admin", cert_dir)
         kubelet_bundle.save("kubelet", cert_dir)
 
-    return (ca_key, ca_cert, k8s_bundle,
+    return (ca_bundle, k8s_bundle,
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
 
-def write_kubeconfig(*args, *kwargs):
+def write_kubeconfig(*args, **kwargs):
 
     """
 
