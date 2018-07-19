@@ -85,10 +85,10 @@ mkdir -pv /var/lib/kubernetes/
 ##
 # link certificates from /etc/ssl/kubernetes - these are injected with cloud-init
 ##
-ln -vs /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
-ln -vs /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
-ln -vs /etc/ssl/kubernetes/ca.pem /var/lib/kubernetes/ca.pem
-ln -vs /etc/ssl/kubernetes/service-accounts.pem /var/lib/kubernetes/service-accounts.pem
+
+for item in kubernetes-key.pem kubernetes.pem ca.pem ca-key.pem service-accounts.pem; do
+    ln -vs /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
+done
 
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
@@ -227,4 +227,3 @@ sudo mv kubernetes.default.svc.cluster.local \
 
 sudo systemctl enable nginx
 sudo systemctl restart nginx
-
