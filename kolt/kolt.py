@@ -30,6 +30,7 @@ from .ssl import (create_key, read_cert, read_key,
                   write_key, write_cert, CertBundle)
 from .util import (EtcdHost,
                    OSCloudConfig,
+                   get_kubeconfig_yaml,
                    get_server_info_from_openstack,
                    get_token_csv
                    )
@@ -477,7 +478,11 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
 
 
 def write_kubeconfig(etcd_cluster_info, admin_token, write=False):
-    return
+    config =  get_kubeconfig_yaml(etcd_cluster_info, admin_token, write)
+    if write:
+        filename = "admin.conf"
+        with open(filename, "wb") as f:
+            f.write(config)
 
 
 def main():  # pragma: no coverage
