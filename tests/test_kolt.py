@@ -5,6 +5,7 @@
 
 import pytest
 import uuid
+import yaml
 
 from kolt.kolt import host_names
 from kolt.kolt import write_kubeconfig
@@ -42,6 +43,13 @@ def test_kubeconfig():
         "n-masters": 2,
         "cluster-name": "k8s",
     }
-    username = 'master'
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    master_uri = "https://%s:6443" % master
+
+    username = 'admin'
     admin_token = uuid.uuid4().hex[:32]
-    kcy = write_kubeconfig(config, username, admin_token, write=True)
+    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, encode=False)
+    kcy = yaml.load(kubeconfig)
+    assert kcy["clusters"][0]["cluster"]["server"] == master_uri
+    assert kcy["users"][0]["name"] == "admin"
+    assert kcy["users"][0]["user"]["token"] == admin_token
