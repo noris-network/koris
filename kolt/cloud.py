@@ -47,7 +47,7 @@ class CloudInit:
         self.hostname = hostname
         self.cluster_info = cluster_info
         if cert_bundle:
-            self.ca_cert = cert_bundle[0]
+            self.ca_cert_bundle = cert_bundle[0]
             self.etcd_cert_bundle = cert_bundle[1]
             self.svc_accnt_cert_bundle = cert_bundle[2]
         self.os_type = os_type
@@ -79,7 +79,8 @@ class CloudInit:
 
     def _get_ca_and_certs(self):
 
-        return (self.ca_cert,
+        return (self.ca_cert_bundle.key,
+                self.ca_cert_bundle.cert,
                 self.etcd_cert_bundle.key,
                 self.etcd_cert_bundle.cert)
 
@@ -101,10 +102,12 @@ class CloudInit:
         """
         write certificates to destination directory
         """
-        ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
+        ca_key, ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
+
+        b64_ca_cert = b64_cert(ca_cert)
+        b64_ca_key = b64_key(ca_key)
 
         b64_k8s_key = b64_key(k8s_key)
-        b64_ca_cert = b64_cert(ca_cert)
         b64_k8s_cert = b64_cert(k8s_cert)
 
         certificate_info = """
@@ -112,6 +115,11 @@ class CloudInit:
          - path: /etc/ssl/kubernetes/ca.pem
            encoding: b64
            content: {CA_CERT}
+           owner: root:root
+           permissions: '0600'
+         - path: /etc/ssl/kubernetes/ca-key.pem
+           encoding: b64
+           content: {CA_KEY}
            owner: root:root
            permissions: '0600'
          - path: /etc/ssl/kubernetes/kubernetes.pem
@@ -126,6 +134,7 @@ class CloudInit:
            permissions: '0600'
         """.format(
             CA_CERT=b64_ca_cert.lstrip(),
+            CA_KEY=b64_ca_key.lstrip(),
             K8S_KEY=b64_k8s_key.lstrip(),
             KUBERNETES_CERT=b64_k8s_cert.lstrip())
 
