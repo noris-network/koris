@@ -26,10 +26,9 @@ cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
                              region_name="de-nbg6-1")
 
 
-(_, ca_cert, k8s_bundle,
- svc_accnt_bundle, admin_bundle) = create_certs({},
-                                                hostnames,
-                                                ips, write=False)
+(ca_bundle, k8s_bundle,
+ svc_accnt_bundle, admin_bundle,
+    kubelet_bundle) = create_certs({}, hostnames, ips, write=False)
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 kubelet_token = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
@@ -38,14 +37,14 @@ calico_token = uuid.uuid4().hex[:32]
 
 def test_cloud_init():
     ci = CloudInit("master", "master-1-k8s", test_cluster,
-                   cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
+                   cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
                    encryption_key=encryption_key,
                    cloud_provider=cloud_config)
 
     config = ci.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 9
+    assert len(config['write_files']) == 10
 
     etcd_host = test_cluster[0]
 
@@ -60,7 +59,7 @@ def test_cloud_init():
 def test_node_init():
     ci = NodeInit("node", "node-1-k8s",
                   kubelet_token,
-                  ca_cert,
+                  ca_bundle.cert,
                   k8s_bundle, test_cluster,
                   calico_token
                   )
@@ -78,5 +77,3 @@ def test_get_kube_config():
 
     kcy_dict = yaml.load(kcy)
     assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']
-    import pdb
-    pdb.set_trace()
