@@ -479,8 +479,8 @@ def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
     pdb.set_trace()
     master = host_names("master", config["n-masters"],config['cluster-name'])[0]
     username="admin"
-    masteruri = "http://%s:3210" % master
-    kubeconfig =  get_kubeconfig_yaml(masteruri, username, admin_token, write, encode=False)
+    master_uri = "http://%s:3210" % master
+    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, write, encode=False)
     if write:
         filename = "admin.conf"
         with open(filename, "w") as f:

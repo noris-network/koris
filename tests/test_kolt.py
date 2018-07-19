@@ -37,12 +37,12 @@ def test_kubeconfig():
         "cluster-name": "k8s",
     }
     master = host_names("master", config["n-masters"],config['cluster-name'])[0]
-    masteruri = "http://%s:3210" % master
+    master_uri = "https://%s:6443" % master
 
     username = 'admin'
     admin_token = uuid.uuid4().hex[:32]
-    kubeconfig =  get_kubeconfig_yaml(masteruri, username, admin_token, encode=False)
+    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, encode=False)
     kcy = yaml.load(kubeconfig)
-    assert kcy["clusters"][0]["cluster"]["server"] == masteruri
+    assert kcy["clusters"][0]["cluster"]["server"] == master_uri
     assert kcy["users"][0]["name"] == "admin"
     assert kcy["users"][0]["user"]["token"] == admin_token
