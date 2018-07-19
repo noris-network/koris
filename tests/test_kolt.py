@@ -5,16 +5,10 @@
 
 import pytest
 import uuid
+import yaml
 
 from kolt.kolt import host_names
-from kolt.kolt import write_kubeconfig
-
-from kolt.util import EtcdHost
-
-test_cluster = [EtcdHost("master-%d-k8s" % i,
-                         "10.32.192.10%d" % i) for i in range(1, 4)]
-
-etcd_host_list = test_cluster
+from kolt.util import get_kubeconfig_yaml
 
 
 @pytest.fixture
@@ -42,6 +36,13 @@ def test_kubeconfig():
         "n-masters": 2,
         "cluster-name": "k8s",
     }
-    username = 'master'
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    masteruri = "http://%s:3210" % master
+
+    username = 'admin'
     admin_token = uuid.uuid4().hex[:32]
-    kcy = write_kubeconfig(config, username, admin_token, write=True)
+    kubeconfig =  get_kubeconfig_yaml(masteruri, username, admin_token, encode=False)
+    kcy = yaml.load(kubeconfig)
+    assert kcy["clusters"][0]["cluster"]["server"] == masteruri
+    assert kcy["users"][0]["name"] == "admin"
+    assert kcy["users"][0]["user"]["token"] == admin_token

@@ -78,5 +78,3 @@ def test_get_kube_config():
 
     kcy_dict = yaml.load(kcy)
     assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']
-    import pdb
-    pdb.set_trace()
