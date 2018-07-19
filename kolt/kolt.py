@@ -473,17 +473,9 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     return (ca_key, ca_cert, k8s_bundle,
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
+
 def write_kubeconfig(etcd_cluster_info, admin_token, write=False):
     return
-
-
-def write_kubeconfig(*args, *kwargs):
-
-    """
-
-    """
-    pass
-
 
 
 def main():  # pragma: no coverage
