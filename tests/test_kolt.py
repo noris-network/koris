@@ -31,6 +31,8 @@ def test_host_names():
 
 
 def test_kubeconfig():
+    import pdb
+    pdb.set_trace()
     etcd_cluster_info = None
     admin_token = None
     config_yaml = write_kubeconfig(etcd_cluster_info, admin_token, write=False)
