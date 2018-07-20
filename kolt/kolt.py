@@ -8,7 +8,6 @@ import os
 import uuid
 import textwrap
 import sys
-import shutil
 
 from ipaddress import IPv4Address
 from functools import lru_cache
