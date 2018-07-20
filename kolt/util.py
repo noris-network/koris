@@ -173,7 +173,7 @@ def get_server_info_from_openstack(config, nova):
     return names, ips
 
 
-def get_token_csv(adminToken, kubeletToken):
+def get_token_csv(adminToken, calicoToken, kubeletToken):
     """
     write the content of
     /var/lib/kubernetes/token.csv
@@ -187,7 +187,7 @@ def get_token_csv(adminToken, kubeletToken):
     {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
     """.format(
         adminToken=adminToken,
-        calicoToken=uuid.uuid4().hex[:32],
+        calicoToken=calicoToken,
         kubeletToken=kubeletToken,
         bootstrapToken=kubeletToken
     )

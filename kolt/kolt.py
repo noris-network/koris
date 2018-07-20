@@ -8,7 +8,6 @@ import os
 import uuid
 import textwrap
 import sys
-import shutil
 
 from ipaddress import IPv4Address
 from functools import lru_cache
@@ -23,9 +22,9 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .cloud import CloudInit, NodeInit
+from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import (create_key, read_cert, read_key,
+from .ssl import (create_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
 from .util import (EtcdHost,
@@ -203,7 +202,7 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(role, img_name, hostname, cluster_info=None,
+def create_userdata(role, img_name, cluster_info=None,
                     cloud_provider=None,
                     cert_bundle=None, encryption_key=None,
                     **kwargs):
@@ -213,14 +212,14 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
 
     if 'ubuntu' in img_name.lower() and role == 'master':
 
-        userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
-                                 encryption_key,
-                                 cloud_provider, **kwargs))
+        userdata = str(MasterInit(role, cluster_info, cert_bundle,
+                                  encryption_key,
+                                  cloud_provider, **kwargs))
     elif 'ubuntu' in img_name.lower() and role == 'node':
         token = kwargs.get('token')
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
-        userdata = str(NodeInit(role, hostname, token, ca_cert,
+        userdata = str(NodeInit(role, token, ca_cert,
                                 cert_bundle, cluster_info, calico_token))
     else:
         userdata = """
@@ -305,7 +304,7 @@ def create_machines(nova, neutron, cinder, config):
     calico_token = uuid.uuid4().hex[:32]
     token_csv_data = get_token_csv(admin_token, kubelet_token)
 
-    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # TODO: we don't use host name anywhere in MasterInit and NodeInit
     # we should refactor this out ...
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
@@ -320,7 +319,7 @@ def create_machines(nova, neutron, cinder, config):
                  'cluster_info': etcd_host_list,
                  'calico_token': calico_token}
 
-    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # TODO: we don't use host name anywhere in MasterInit and NodeInit
     # we should refactor this out ...
     node_user_data = [
         create_userdata('node', config['image'], node, **node_args)
@@ -459,6 +458,21 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                               ips=ips
                                               )
 
+    nodes = []
+    node_bundles = []
+    node_ip = None
+    # todo: add node_ip
+    for node in nodes:
+        node_bundles.append(CertBundle.create_signed(ca_key,
+                                                     country,
+                                                     state,
+                                                     location,
+                                                     "system:nodes",
+                                                     "CDA\PI",
+                                                     name="system:node:%s" % node,  # noqa
+                                                     hosts=[node],
+                                                     ips=[node_ip]))
+
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
@@ -477,10 +491,25 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
 def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
-    aster = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    import pdb
+    pdb.set_trace()
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
     username="admin"
     master_uri = "http://%s:3210" % master
     kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, write, encode=False)
+    if write:
+        filename = "admin.conf"
+        with open(filename, "w") as f:
+            f.write(kubeconfig)
+
+
+def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
+    master = host_names("master", config["n-masters"],
+                        config['cluster-name'])[0]
+    username = "admin"
+    master_uri = "http://%s:3210" % master
+    kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token, write,
+                                     encode=False)
     if write:
         filename = "admin.conf"
         with open(filename, "w") as f:
