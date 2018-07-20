@@ -119,14 +119,16 @@ def test_cloud_init():
 def test_node_init():
     ci = NodeInit("node",
                   kubelet_token,
-                  ca_bundle.cert,
-                  k8s_bundle, test_cluster,
+                  ca_bundle,
+                  k8s_bundle,
+                  svc_accnt_bundle,
+                  test_cluster,
                   calico_token
                   )
     config = ci.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 6
+    assert len(config['write_files']) == 8
 
 
 def test_get_kube_config():

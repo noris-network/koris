@@ -254,61 +254,60 @@ class MasterInit(BaseInit):
 
 class NodeInit(BaseInit):
 
-    def __init__(self, role, token, ca_cert,
-                 cert_bundle, etcd_cluster_info, calico_token,
+    def __init__(self, role, token,
+                 ca_cert_bundle,
+                 etcd_cert_bundle,
+                 svc_account_bundle,
+                 etcd_cluster_info, calico_token,
                  os_type='ubuntu', os_version="16.04"):
 
         self.role = role
         self.token = token
-        self.cert_budle = cert_bundle
+        self.ca_cert_bundle = ca_cert_bundle
         self.os_type = os_type
         self.os_version = os_version
         self.etcd_cluster_info = etcd_cluster_info
         self.calico_token = calico_token
         self.combined_message = MIMEMultipart()
 
-        self.ca_cert = ca_cert
-        self.etcd_cert_bundle = cert_bundle
-
-    def _get_ca_and_certs(self):
-
-        return (self.ca_cert,
-                self.etcd_cert_bundle.key,
-                self.etcd_cert_bundle.cert)
+        self.etcd_cert_bundle = etcd_cert_bundle
+        self.svc_accnt_bundle = svc_account_bundle
 
     def _get_certificate_info(self):
         """
         write certificates to destination directory
         """
-        ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
+        ca = self.format_file("ca",
+                              "/etc/ssl/kubernetes/ca.pem",
+                              self.ca_cert_bundle.cert,
+                              encoder=lambda x: b64_cert(x).encode())
 
-        b64_k8s_key = b64_key(k8s_key)
-        b64_ca_cert = b64_cert(ca_cert)
-        b64_k8s_cert = b64_cert(k8s_cert)
+        k8s_key = self.format_file("k8s-key",
+                                   "/etc/ssl/kubernetes/kubernetes-key.pem",
+                                   self.etcd_cert_bundle.key,
+                                   encoder=lambda x: b64_key(x).encode())
+        k8s_cert = self.format_file("k8s-cert",
+                                    "/etc/ssl/kubernetes/kubernetes.pem",
+                                    self.etcd_cert_bundle.cert,
+                                    encoder=lambda x: b64_cert(x).encode())
 
-        certificate_info = """
-        # certificates
-         - path: /etc/ssl/kubernetes/ca.pem
-           encoding: b64
-           content: {CA_CERT}
-           owner: root:root
-           permissions: '0600'
-         - path: /etc/ssl/kubernetes/kubernetes.pem
-           encoding: b64
-           content: {KUBERNETES_CERT}
-           owner: root:root
-           permissions: '0600'
-         - path: /etc/ssl/kubernetes/kubernetes-key.pem
-           encoding: b64
-           content: {K8S_KEY}
-           owner: root:root
-           permissions: '0600'
-        """.format(
-            CA_CERT=b64_ca_cert.lstrip(),
-            K8S_KEY=b64_k8s_key.lstrip(),
-            KUBERNETES_CERT=b64_k8s_cert.lstrip())
+        return ca + k8s_key + k8s_cert
 
-        return textwrap.dedent(certificate_info).lstrip()
+    def _get_svc_account_info(self):
+
+        svc_accnt_key = self.format_file(
+            "svc-account-key",
+            "/etc/ssl/kubernetes/service-accounts-key.pem",
+            self.svc_accnt_bundle.key,
+            encoder=lambda x: b64_key(x).encode())
+
+        svc_accnt_cert = self.format_file(
+            "svc-account-cert",
+            "/etc/ssl/kubernetes/service-accounts.pem",
+            self.svc_accnt_bundle.cert,
+            encoder=lambda x: b64_cert(x).encode())
+
+        return svc_accnt_key + svc_accnt_cert
 
     def _get_kubeconfig(self):
         kubeconfig_part = """
@@ -350,16 +349,11 @@ class NodeInit(BaseInit):
             str(etcd_host) for etcd_host in self.etcd_cluster_info)
 
         cc = json.dumps(calicoconfig, indent=2).encode()
-        cc_part = """
-        # calico_config
-         - path: /etc/cni/net.d/10-calico.conf
-           encoding: b64
-           content: {}
-           owner: root:root
-           permissions: '0600'
-        """.format(base64.b64encode(cc).decode())
-
-        return textwrap.dedent(cc_part)
+        return self.format_file(
+            'calico_config',
+            '/etc/cni/net.d/10-calico.conf',
+            cc,
+            encoder=lambda x: base64.b64encode(x))
 
     def get_files_config(self):
         """
@@ -370,40 +364,8 @@ class NodeInit(BaseInit):
         write_files:
         """) + self._get_kubelet_config() \
              + self._get_certificate_info() \
+             + self._get_svc_account_info() \
              + self._get_calico_config() \
              + self._get_kubeconfig()
 
         return config
-
-    def __str__(self):
-
-        sub_message = MIMEText(self.get_files_config(),
-                               _subtype='text/cloud-config')
-        sub_message.add_header('Content-Disposition', 'attachment')
-        self.combined_message.attach(sub_message)
-
-        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
-                                                       self.os_type,
-                                                       self.os_version)
-
-        # process bootstrap script and generic cloud-init file
-        for item in ['generic', k8s_bootstrap]:
-            fh = open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt',
-                                                     'cloud-inits',
-                                                     item)))
-            # we currently blindly assume the first line is a mimetype
-            # or a shebang
-            main_type, _subtype = fh.readline().strip().split("/", 1)
-
-            if '#!' in main_type:
-                _subtype = 'x-shellscript'
-            #    fh.seek(0)
-
-            sub_message = MIMEText(fh.read(), _subtype=_subtype)
-            sub_message.add_header('Content-Disposition',
-                                   'attachment', filename="%s" % item)
-            self.combined_message.attach(sub_message)
-            fh.close()
-
-        return self.combined_message.as_string()
