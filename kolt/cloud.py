@@ -27,9 +27,37 @@ ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
 
-class CloudInit:
+class BaseInit:
 
-    def __init__(self, role, hostname, cluster_info,
+    def format_file(self, part_name, path_name, content,
+                    encoder=lambda x: base64.b64encode(x),
+                    owner='root',
+                    group='root',
+                    permissions='0600'):
+        """
+
+        """
+        part = """
+        # {part_name}
+         - path: {path_name}
+           encoding: b64
+           content: {content}
+           owner: {owner}:{group}
+           permissions: '{permissions}'
+        """
+        part = textwrap.dedent(part)
+
+        return part.format(part_name=part_name,
+                           path_name=path_name,
+                           content=encoder(content).decode(),
+                           owner=owner,
+                           group=group,
+                           permissions=permissions).lstrip()
+
+
+class CloudInit(BaseInit):
+
+    def __init__(self, role, cluster_info,
                  cert_bundle=None, encryption_key=None,
                  cloud_provider=None,
                  token_csv_data="",
@@ -44,7 +72,6 @@ class CloudInit:
         if role not in ('master', 'node'):
             raise ValueError("Incorrect os_role!")
         self.role = role
-        self.hostname = hostname
         self.cluster_info = cluster_info
         if cert_bundle:
             self.ca_cert_bundle = cert_bundle[0]
@@ -88,85 +115,49 @@ class CloudInit:
         """
         write access data to /var/lib/kubernetes/token.csv
         """
-        content = """
-        # token_csv
-         - path: /var/lib/kubernetes/token.csv
-           encoding: b64
-           content: {}
-           owner: root:root
-           permissions: '0600'
-        """.format(self.token_csv_data)
-        return textwrap.dedent(content)
+
+        return self.format_file('token_csv', '/var/lib/kubernetes/token.csv',
+                                self.token_csv_data,
+                                encoder=lambda x: x.encode())
 
     def _get_certificate_info(self):
-        """
-        write certificates to destination directory
-        """
         ca_key, ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
 
-        b64_ca_cert = b64_cert(ca_cert)
-        b64_ca_key = b64_key(ca_key)
+        ca = self.format_file("ca",
+                              "/etc/ssl/kubernetes/ca.pem",
+                              ca_cert, encoder=lambda x: b64_cert(x).encode())
 
-        b64_k8s_key = b64_key(k8s_key)
-        b64_k8s_cert = b64_cert(k8s_cert)
+        ca_key = self.format_file("ca-key",
+                                  "/etc/ssl/kubernetes/ca-key.pem",
+                                  ca_key,
+                                  encoder=lambda x: b64_key(x).encode())
 
-        certificate_info = """
-        # certificates
-         - path: /etc/ssl/kubernetes/ca.pem
-           encoding: b64
-           content: {CA_CERT}
-           owner: root:root
-           permissions: '0600'
-         - path: /etc/ssl/kubernetes/ca-key.pem
-           encoding: b64
-           content: {CA_KEY}
-           owner: root:root
-           permissions: '0600'
-         - path: /etc/ssl/kubernetes/kubernetes.pem
-           encoding: b64
-           content: {KUBERNETES_CERT}
-           owner: root:root
-           permissions: '0600'
-         - path: /etc/ssl/kubernetes/kubernetes-key.pem
-           encoding: b64
-           content: {K8S_KEY}
-           owner: root:root
-           permissions: '0600'
-        """.format(
-            CA_CERT=b64_ca_cert.lstrip(),
-            CA_KEY=b64_ca_key.lstrip(),
-            K8S_KEY=b64_k8s_key.lstrip(),
-            KUBERNETES_CERT=b64_k8s_cert.lstrip())
-
-        return textwrap.dedent(certificate_info)
+        k8s_key = self.format_file("k8s-key",
+                                   "/etc/ssl/kubernetes/kubernetes-key.pem",
+                                   k8s_key,
+                                   encoder=lambda x: b64_key(x).encode())
+        k8s_cert = self.format_file("k8s-cert",
+                                    "/etc/ssl/kubernetes/kubernetes.pem",
+                                    k8s_cert,
+                                    encoder=lambda x: b64_cert(x).encode())
+        return ca + ca_key + k8s_key + k8s_cert
 
     def _get_encryption_config(self):
         encryption_config = re.sub("%%ENCRYPTION_KEY%%",
                                    self.encryption_key,
                                    encryption_config_tmpl).encode()
-        encryption_config_part = """
-        # encryption_config
-         - path: /var/lib/kubernetes/encryption-config.yaml
-           encoding: b64
-           content: {}
-           owner: root:root
-           permissions: '0600'
-        """.format(
-            base64.b64encode(encryption_config).decode())
 
-        return textwrap.dedent(encryption_config_part)
+        return self.format_file(
+            "encryption_config",
+            "/var/lib/kubernetes/encryption-config.yaml",
+            encryption_config)
 
     def _get_cloud_provider(self):
-        cloud_config = """
-        # cloud config
-         - path: /etc/kubernetes/cloud.conf
-           encoding: b64
-           content: {}
-           permissions: '0600'
-           owner: root:root
-        """.format(bytes(self.cloud_provider).decode())
 
-        return textwrap.dedent(cloud_config)
+        return self.format_file('cloud_config',
+                                '/etc/kubernetes/',
+                                self.cloud_provider,
+                                encoder=lambda x: bytes(x))
 
     def _get_svc_account_info(self):
 
@@ -242,12 +233,11 @@ class CloudInit:
 
 class NodeInit(CloudInit):
 
-    def __init__(self, role, hostname, token, ca_cert,
+    def __init__(self, role, token, ca_cert,
                  cert_bundle, etcd_cluster_info, calico_token,
                  os_type='ubuntu', os_version="16.04"):
 
         self.role = role
-        self.hostname = hostname
         self.token = token
         self.cert_budle = cert_bundle
         self.os_type = os_type

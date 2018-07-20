@@ -202,7 +202,7 @@ def get_clients():
     return nova, neutron, cinder
 
 
-def create_userdata(role, img_name, hostname, cluster_info=None,
+def create_userdata(role, img_name, cluster_info=None,
                     cloud_provider=None,
                     cert_bundle=None, encryption_key=None,
                     **kwargs):
@@ -212,14 +212,14 @@ def create_userdata(role, img_name, hostname, cluster_info=None,
 
     if 'ubuntu' in img_name.lower() and role == 'master':
 
-        userdata = str(CloudInit(role, hostname, cluster_info, cert_bundle,
+        userdata = str(CloudInit(role, cluster_info, cert_bundle,
                                  encryption_key,
                                  cloud_provider, **kwargs))
     elif 'ubuntu' in img_name.lower() and role == 'node':
         token = kwargs.get('token')
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
-        userdata = str(NodeInit(role, hostname, token, ca_cert,
+        userdata = str(NodeInit(role, token, ca_cert,
                                 cert_bundle, cluster_info, calico_token))
     else:
         userdata = """
