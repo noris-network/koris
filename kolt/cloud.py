@@ -104,13 +104,6 @@ class CloudInit(BaseInit):
                    ",".join(str(etcd_host) for etcd_host in self.cluster_info))
         return textwrap.dedent(cluster_info_part)
 
-    def _get_ca_and_certs(self):
-
-        return (self.ca_cert_bundle.key,
-                self.ca_cert_bundle.cert,
-                self.etcd_cert_bundle.key,
-                self.etcd_cert_bundle.cert)
-
     def _get_token_csv(self):
         """
         write access data to /var/lib/kubernetes/token.csv
@@ -121,24 +114,24 @@ class CloudInit(BaseInit):
                                 encoder=lambda x: x.encode())
 
     def _get_certificate_info(self):
-        ca_key, ca_cert, k8s_key, k8s_cert = self._get_ca_and_certs()
 
         ca = self.format_file("ca",
                               "/etc/ssl/kubernetes/ca.pem",
-                              ca_cert, encoder=lambda x: b64_cert(x).encode())
+                              self.ca_cert_bundle.cert,
+                              encoder=lambda x: b64_cert(x).encode())
 
         ca_key = self.format_file("ca-key",
                                   "/etc/ssl/kubernetes/ca-key.pem",
-                                  ca_key,
+                                  self.ca_cert_bundle.key,
                                   encoder=lambda x: b64_key(x).encode())
 
         k8s_key = self.format_file("k8s-key",
                                    "/etc/ssl/kubernetes/kubernetes-key.pem",
-                                   k8s_key,
+                                   self.etcd_cert_bundle.key,
                                    encoder=lambda x: b64_key(x).encode())
         k8s_cert = self.format_file("k8s-cert",
                                     "/etc/ssl/kubernetes/kubernetes.pem",
-                                    k8s_cert,
+                                    self.etcd_cert_bundle.cert,
                                     encoder=lambda x: b64_cert(x).encode())
         return ca + ca_key + k8s_key + k8s_cert
 
@@ -161,24 +154,19 @@ class CloudInit(BaseInit):
 
     def _get_svc_account_info(self):
 
-        svc_accnt_key = b64_key(self.svc_accnt_cert_bundle.key).lstrip()
-        svc_accnt_cert = b64_cert(self.svc_accnt_cert_bundle.cert).lstrip()
+        svc_accnt_key = self.format_file(
+            "svc-account-key",
+            "/etc/ssl/kubernetes/service-accounts-key.pem",
+            self.svc_accnt_cert_bundle.key,
+            encoder=lambda x: b64_key(x).encode())
 
-        service_account_certs = """
-        # service accounts
-         - path: /etc/ssl/kubernetes/service-accounts.pem
-           encoding: b64
-           content: {svc_accnt_cert}
-           owner: root:root
-           permissions: '0600'
-         - path: /etc/ssl/kubernetes/service-accounts-key.pem
-           encoding: b64
-           content: {svc_accnt_key}
-           owner: root:root
-           permissions: '0600'""".format(svc_accnt_cert=svc_accnt_cert,
-                                         svc_accnt_key=svc_accnt_key)
+        svc_accnt_cert = self.format_file(
+            "svc-account-cert",
+            "/etc/ssl/kubernetes/service-accounts.pem",
+            self.svc_accnt_cert_bundle.cert,
+            encoder=lambda x: b64_cert(x).encode())
 
-        return textwrap.dedent(service_account_certs)
+        return svc_accnt_key + svc_accnt_cert
 
     def get_files_config(self):
         """
