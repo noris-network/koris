@@ -22,9 +22,9 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .cloud import CloudInit, NodeInit
+from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import (create_key, read_cert, read_key,
+from .ssl import (create_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
 from .util import (EtcdHost,
@@ -212,9 +212,9 @@ def create_userdata(role, img_name, cluster_info=None,
 
     if 'ubuntu' in img_name.lower() and role == 'master':
 
-        userdata = str(CloudInit(role, cluster_info, cert_bundle,
-                                 encryption_key,
-                                 cloud_provider, **kwargs))
+        userdata = str(MasterInit(role, cluster_info, cert_bundle,
+                                  encryption_key,
+                                  cloud_provider, **kwargs))
     elif 'ubuntu' in img_name.lower() and role == 'node':
         token = kwargs.get('token')
         ca_cert = kwargs.get('ca_cert')
@@ -304,7 +304,7 @@ def create_machines(nova, neutron, cinder, config):
     calico_token = uuid.uuid4().hex[:32]
     token_csv_data = get_token_csv(admin_token, kubelet_token)
 
-    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # TODO: we don't use host name anywhere in MasterInit and NodeInit
     # we should refactor this out ...
     master_user_data = [
         create_userdata('master', config['image'], master, etcd_host_list,
@@ -319,7 +319,7 @@ def create_machines(nova, neutron, cinder, config):
                  'cluster_info': etcd_host_list,
                  'calico_token': calico_token}
 
-    # TODO: we don't use host name anywhere in CloudInit and NodeInit
+    # TODO: we don't use host name anywhere in MasterInit and NodeInit
     # we should refactor this out ...
     node_user_data = [
         create_userdata('node', config['image'], node, **node_args)

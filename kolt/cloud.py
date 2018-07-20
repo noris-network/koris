@@ -54,8 +54,41 @@ class BaseInit:
                            group=group,
                            permissions=permissions).lstrip()
 
+    def __str__(self):
 
-class CloudInit(BaseInit):
+        sub_message = MIMEText(self.get_files_config(),
+                               _subtype='text/cloud-config')
+        sub_message.add_header('Content-Disposition', 'attachment')
+        self.combined_message.attach(sub_message)
+
+        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
+                                                       self.os_type,
+                                                       self.os_version)
+
+        # process bootstrap script and generic cloud-init file
+        for item in ['generic', k8s_bootstrap]:
+            fh = open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt',
+                                                     'cloud-inits',
+                                                     item)))
+            # we currently blindly assume the first line is a mimetype
+            # or a shebang
+            main_type, _subtype = fh.readline().strip().split("/", 1)
+
+            if '#!' in main_type:
+                _subtype = 'x-shellscript'
+            #    fh.seek(0)
+
+            sub_message = MIMEText(fh.read(), _subtype=_subtype)
+            sub_message.add_header('Content-Disposition',
+                                   'attachment', filename="%s" % item)
+            self.combined_message.attach(sub_message)
+            fh.close()
+
+        return self.combined_message.as_string()
+
+
+class MasterInit(BaseInit):
 
     def __init__(self, role, cluster_info,
                  cert_bundle=None, encryption_key=None,
@@ -219,7 +252,7 @@ class CloudInit(BaseInit):
         return self.combined_message.as_string()
 
 
-class NodeInit(CloudInit):
+class NodeInit(BaseInit):
 
     def __init__(self, role, token, ca_cert,
                  cert_bundle, etcd_cluster_info, calico_token,

@@ -3,7 +3,7 @@ import re
 import uuid
 import yaml
 
-from kolt.cloud import CloudInit, NodeInit
+from kolt.cloud import MasterInit, NodeInit
 from kolt.kolt import create_certs
 from kolt.util import (EtcdHost, get_kubeconfig_yaml,
                        OSCloudConfig, get_token_csv)
@@ -40,11 +40,11 @@ token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 def test_token_cvs():
 
-    ci = CloudInit("master", test_cluster,
-                   cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                   encryption_key=encryption_key,
-                   cloud_provider=cloud_config,
-                   token_csv_data=token_csv_data)
+    ci = MasterInit("master", test_cluster,
+                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                    encryption_key=encryption_key,
+                    cloud_provider=cloud_config,
+                    token_csv_data=token_csv_data)
 
     token_csv = ci._get_token_csv()
     assert yaml.load(token_csv)[0]['permissions'] == '0600'
@@ -52,11 +52,11 @@ def test_token_cvs():
 
 def test_cloud_config():
 
-    ci = CloudInit("master", test_cluster,
-                   cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                   encryption_key=encryption_key,
-                   cloud_provider=cloud_config,
-                   token_csv_data=token_csv_data)
+    ci = MasterInit("master", test_cluster,
+                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                    encryption_key=encryption_key,
+                    cloud_provider=cloud_config,
+                    token_csv_data=token_csv_data)
 
     _cloud_config = ci._get_cloud_provider()
     assert yaml.load(_cloud_config)[0]['permissions'] == '0600'
@@ -64,11 +64,11 @@ def test_cloud_config():
 
 def test_encryption_config():
 
-    ci = CloudInit("master", test_cluster,
-                   cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                   encryption_key=encryption_key,
-                   cloud_provider=cloud_config,
-                   token_csv_data=token_csv_data)
+    ci = MasterInit("master", test_cluster,
+                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                    encryption_key=encryption_key,
+                    cloud_provider=cloud_config,
+                    token_csv_data=token_csv_data)
 
     _config = ci._get_encryption_config()
 
@@ -84,11 +84,11 @@ def test_encryption_config():
 
 def test_certificate_info():
 
-    ci = CloudInit("master", test_cluster,
-                   cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                   encryption_key=encryption_key,
-                   cloud_provider=cloud_config,
-                   token_csv_data=token_csv_data)
+    ci = MasterInit("master", test_cluster,
+                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                    encryption_key=encryption_key,
+                    cloud_provider=cloud_config,
+                    token_csv_data=token_csv_data)
 
     certs_config = ci._get_certificate_info()
 
@@ -96,10 +96,10 @@ def test_certificate_info():
 
 
 def test_cloud_init():
-    ci = CloudInit("master", test_cluster,
-                   cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                   encryption_key=encryption_key,
-                   cloud_provider=cloud_config)
+    ci = MasterInit("master", test_cluster,
+                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                    encryption_key=encryption_key,
+                    cloud_provider=cloud_config)
 
     config = ci.get_files_config()
     config = yaml.load(config)
