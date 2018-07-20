@@ -240,6 +240,152 @@ def create_nics(neutron, num, netid, security_groups):
                       "security_groups": security_groups}})
 
 
+def create_nodes(nova, neutron, cinder, config, hosts):
+    print(info(cyan("gathering information from openstack ...")))
+    keypair = nova.keypairs.get(config['keypair'])
+    image = nova.glance.find_image(config['image'])
+    node_flavor = nova.flavors.find(name=config['node_flavor'])
+    secgroup = neutron.find_resource('security_group',
+                                     config['security_group'])
+    secgroups = [secgroup['id']]
+
+    net = neutron.find_resource("network", config["private_net"])
+
+    netid = net['id']
+
+    nics_nodes = list(create_nics(neutron,
+                                  int(config['n-nodes']),
+                                  netid,
+                                  secgroups))
+
+    cluster = config['cluster-name']
+
+    nodes = host_names("node", config["n-nodes"], cluster)
+
+    yield nodes
+
+    ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics_nodes)
+
+    yield ips
+
+    certs = yield
+    calico_token = yield
+    node_args = {'token': certs.kubelet_token,
+                 'ca_cert': certs.ca_bundle.cert,
+                 'cert_bundle': certs.kubelet_bundle,
+                 'cluster_info': certs.etcd_host_list,
+                 'calico_token': calico_token}
+
+    node_user_data = [
+        create_userdata('node', config['image'], node, **node_args)
+        for node in nodes
+    ]
+
+    build_args_node = [
+        [node_flavor, image, keypair, secgroups, "node",
+         node_user_data[i], hosts]
+        for i in range(0, config['n-nodes'])
+    ]
+
+    nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
+
+    for idx, nic in enumerate(nics_nodes):
+        nodes_zones[idx][-1] = [{'net-id': net['id'],
+                                 'port-id': nic['port']['id']}]
+    loop = asyncio.get_event_loop()
+
+    tasks = [loop.create_task(create_instance_with_volume(
+             nodes_zones[i][0], nodes_zones[i][1], nics=nodes_zones[i][2],
+             *(build_args_node[i])))
+             for i in range(0, config['n-nodes'])]
+    yield tasks
+
+
+def create_control_plane(nova, neutron, cinder, config, hosts):
+    print(info(cyan("gathering information from openstack ...")))
+    keypair = nova.keypairs.get(config['keypair'])
+    image = nova.glance.find_image(config['image'])
+    master_flavor = nova.flavors.find(name=config['master_flavor'])
+    secgroup = neutron.find_resource('security_group',
+                                     config['security_group'])
+    secgroups = [secgroup['id']]
+
+    net = neutron.find_resource("network", config["private_net"])
+
+    netid = net['id']
+
+    nics_masters = list(create_nics(neutron,
+                                    int(config['n-masters']),
+                                    netid,
+                                    secgroups))
+
+    cluster = config['cluster-name']
+
+    masters = host_names("master", config["n-masters"], cluster)
+
+    etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
+                      zip(masters, [nic['port']['fixed_ips'][0]['ip_address']
+                          for nic in nics_masters])]
+
+    hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
+                                     i in etcd_host_list]))
+
+    nodes = yield
+    hostnames.extend(nodes)
+    node_ips = yield
+    ips.extend(IPv4Address(ip) for ip in node_ips)
+
+    (ca_bundle, k8s_bundle,
+     svc_accnt_bundle, admin_bundle,
+     kubelet_bundle) = create_certs(config, hostnames, ips)
+
+    # generate a random string
+    # this should be the equal of
+    # ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+
+    encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
+
+    cloud_provider_info = OSCloudConfig(**read_os_auth_variables(trim=False))
+
+    admin_token = uuid.uuid4().hex[:32]
+    kubelet_token = uuid.uuid4().hex[:32]
+    calico_token = uuid.uuid4().hex[:32]
+    token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
+    yield calico_token
+    # TODO: we don't use host name anywhere in MasterInit and NodeInit
+    # we should refactor this out ...
+    master_user_data = [
+        create_userdata('master', config['image'], master, etcd_host_list,
+                        cloud_provider=cloud_provider_info,
+                        cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                        encryption_key=encryption_key,
+                        token_csv_data=token_csv_data)
+        for master in masters]
+
+    print(info(cyan("got my info, now launching machines ...")))
+
+    build_args_master = [
+        [master_flavor, image, keypair, secgroups, "master",
+         master_user_data[i], hosts]
+        for i in range(0, config['n-masters'])
+    ]
+
+    masters_zones = list(get_host_zones(masters, config['availibity-zones']))
+    loop = asyncio.get_event_loop()
+
+    for idx, nic in enumerate(nics_masters):
+        masters_zones[idx][-1] = [{'net-id': net['id'],
+                                   'port-id': nic['port']['id']}]
+
+    tasks = [loop.create_task(create_instance_with_volume(
+                              masters_zones[i][0],
+                              masters_zones[i][1], nics=masters_zones[i][2],
+             *(build_args_master[i])))
+             for i in range(0, config['n-masters'])]
+
+    yield tasks
+
+
 def create_machines(nova, neutron, cinder, config):
 
     print(info(cyan("gathering information from openstack ...")))
