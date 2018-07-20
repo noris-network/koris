@@ -10,7 +10,6 @@ import textwrap
 import sys
 
 from ipaddress import IPv4Address
-from functools import lru_cache
 import yaml
 
 from novaclient import client as nvclient
@@ -22,6 +21,7 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
+from .cli import (delete_cluster, write_kubeconfig)
 from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
 from .ssl import (create_key,
@@ -29,9 +29,9 @@ from .ssl import (create_key,
                   write_key, write_cert, CertBundle)
 from .util import (EtcdHost,
                    OSCloudConfig,
-                   get_kubeconfig_yaml,
                    get_server_info_from_openstack,
-                   get_token_csv
+                   get_token_csv,
+                   host_names,
                    )
 
 
@@ -240,12 +240,6 @@ def create_nics(neutron, num, netid, security_groups):
                       "security_groups": security_groups}})
 
 
-@lru_cache(maxsize=10)
-def host_names(role, num, cluster_name):
-    return ["%s-%s-%s" % (role, i, cluster_name) for i in
-            range(1, num + 1)]
-
-
 def create_machines(nova, neutron, cinder, config):
 
     print(info(cyan("gathering information from openstack ...")))
@@ -369,33 +363,6 @@ def create_machines(nova, neutron, cinder, config):
     loop.close()
 
 
-def delete_cluster(config):
-    print(red("You are about to destroy your cluster!!!"))
-    print(red("Are you really sure ? [y/N]"))
-    ans = input(red("ARE YOU REALLY SURE???"))
-
-    if ans.lower() == 'y':
-        cluster_suffix = "-%s" % config['cluster-name']
-        servers = [server for server in nova.servers.list() if
-                   server.name.endswith(cluster_suffix)]
-
-        async def del_server(server):
-            await asyncio.sleep(1)
-            nics = [nic for nic in server.interface_list()]
-            server.delete()
-            [neutron.delete_port(nic.id) for nic in nics]
-            print("deleted %s ..." % server.name)
-
-        loop = asyncio.get_event_loop()
-        tasks = [loop.create_task(del_server(server)) for server in servers]
-
-        if tasks:
-            loop.run_until_complete(asyncio.wait(tasks))
-        loop.close()
-    else:
-        sys.exit(1)
-
-
 def create_certs(config, names, ips, write=True, ca_bundle=None):
     """
     create new certificates, useful for replacing certificates
@@ -490,31 +457,6 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     return (ca_bundle, k8s_bundle,
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
-def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
-    import pdb
-    pdb.set_trace()
-    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
-    username="admin"
-    master_uri = "http://%s:3210" % master
-    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, write, encode=False)
-    if write:
-        filename = "admin.conf"
-        with open(filename, "w") as f:
-            f.write(kubeconfig)
-
-
-def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
-    master = host_names("master", config["n-masters"],
-                        config['cluster-name'])[0]
-    username = "admin"
-    master_uri = "http://%s:3210" % master
-    kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token, write,
-                                     encode=False)
-    if write:
-        filename = "admin.conf"
-        with open(filename, "w") as f:
-            f.write(kubeconfig)
-
 
 def main():  # pragma: no coverage
     global nova, neutron, cinder
@@ -551,7 +493,7 @@ def main():  # pragma: no coverage
         sys.exit(0)
 
     if args.destroy:
-        delete_cluster(config)
+        delete_cluster(config, nova, neutron)
         sys.exit(0)
 
     if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):

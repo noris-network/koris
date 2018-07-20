@@ -1,10 +1,11 @@
 import base64
 import copy
 import textwrap
-import uuid
+
+from functools import lru_cache
+from ipaddress import IPv4Address
 
 import yaml
-from ipaddress import IPv4Address
 
 
 class OSCloudConfig:
@@ -193,3 +194,9 @@ def get_token_csv(adminToken, calicoToken, kubeletToken):
     )
 
     return base64.b64encode(textwrap.dedent(content).encode()).decode()
+
+
+@lru_cache(maxsize=10)
+def host_names(role, num, cluster_name):
+    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+            range(1, num + 1)]
