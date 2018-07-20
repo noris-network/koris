@@ -490,6 +490,18 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     return (ca_bundle, k8s_bundle,
             svc_accnt_bundle, admin_bundle, kubelet_bundle)
 
+def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
+    import pdb
+    pdb.set_trace()
+    master = host_names("master", config["n-masters"],config['cluster-name'])[0]
+    username="admin"
+    master_uri = "http://%s:3210" % master
+    kubeconfig =  get_kubeconfig_yaml(master_uri, username, admin_token, write, encode=False)
+    if write:
+        filename = "admin.conf"
+        with open(filename, "w") as f:
+            f.write(kubeconfig)
+
 
 def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
     master = host_names("master", config["n-masters"],
