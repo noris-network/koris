@@ -1,5 +1,5 @@
 from unittest import mock
-from kolt.util import NodeZoneNic, OSClusterInfo
+from kolt.util import OSClusterInfo
 
 nova = mock.Mock()
 neutron = mock.Mock()
@@ -44,6 +44,12 @@ def test_osclusterinfo():
     assert nodes_zones[2].zone == "nbg6-1b"
 
     # TODO: add test for assign_nics_to_nodes
-    nics = {
+    nics = [{'port': {'id': 'abcdefg1234', 'ip': '192.168.1.101'}},
+            {'port': {'id': 'abcdefg1235', 'ip': '192.168.1.102'}},
+            {'port': {'id': 'abcdefg1236', 'ip': '192.168.1.103'}}]
 
-    }
+    info.assign_nics_to_nodes(nodes_zones, nics)
+
+    assert nodes_zones[0].nic[0]['port-id'] == "abcdefg1234"
+    assert nodes_zones[1].nic[0]['port-id'] == "abcdefg1235"
+    assert nodes_zones[2].nic[0]['port-id'] == "abcdefg1236"
