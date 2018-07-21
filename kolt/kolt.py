@@ -257,7 +257,7 @@ def create_cluster(nova, neutron, cinder, config, hosts):
     return node_names
 
 
-def create_nodes(nova, neutron, cinder, config, hosts):
+def create_nodes(nova, neutron, config, hosts):
     print(info(cyan("gathering information from openstack ...")))
 
     _info = OSClusterInfo(nova, neutron, config)
@@ -274,9 +274,10 @@ def create_nodes(nova, neutron, cinder, config, hosts):
 
     # TODO: get certs here
     certs = yield
+    print(certs)
     # TODO: get token here
     calico_token = yield
-
+    print(calico_token)
     node_args = {'token': certs.kubelet_token,
                  'ca_cert': certs.ca_bundle.cert,
                  'cert_bundle': certs.kubelet_bundle,
@@ -290,14 +291,16 @@ def create_nodes(nova, neutron, cinder, config, hosts):
     nodes_zones = _info.distribute_nodes()
 
     hosts = NodeZoneNic.hosts_distributor(nodes_zones)
+
     _info.assign_nics_to_nodes(hosts, nics)
 
     loop = asyncio.get_event_loop()
 
     tasks = [loop.create_task(create_instance_with_volume(
-             nodes_zones[i][0], nodes_zones[i][1], nics=nodes_zones[i][2],
-             *(task_args_node[i])))
-             for i in range(0, config['n-nodes'])]
+             nodes_zones[i].name, nodes_zones[i].zone,
+             nics=nodes_zones.nics,
+             *task_args_node))
+             for i in range(0, _info.n_nodes)]
     yield tasks
 
 
