@@ -21,14 +21,14 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .cli import (delete_cluster, write_kubeconfig)
+from .cli import (delete_cluster, write_kubeconfig)  # noqa
 from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
 from .ssl import (create_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
-from .util import (EtcdHost,
-                   OSCloudConfig,
+from .util import (EtcdHost, NodeZoneNic,
+                   OSCloudConfig, OSClusterInfo,
                    get_server_info_from_openstack,
                    get_token_csv,
                    host_names,
@@ -240,63 +240,63 @@ def create_nics(neutron, num, netid, security_groups):
                       "security_groups": security_groups}})
 
 
+def create_cluster(nova, neutron, cinder, config, hosts):
+    """
+    This function boots up the cluster in OpenStack
+
+    It firsts creates generator instnaces from create_nodes and
+    create_control_plane and promotes them as needed until it
+    gets all the needed Tasks for scheduling.
+    It then runs all the Tasks and collects the results.
+    """
+
+    nodes_creator = create_nodes(nova, neutron, cinder, config, hosts)
+
+    node_names = next(nodes_creator)
+
+    return node_names
+
+
 def create_nodes(nova, neutron, cinder, config, hosts):
     print(info(cyan("gathering information from openstack ...")))
-    keypair = nova.keypairs.get(config['keypair'])
-    image = nova.glance.find_image(config['image'])
-    node_flavor = nova.flavors.find(name=config['node_flavor'])
-    secgroup = neutron.find_resource('security_group',
-                                     config['security_group'])
-    secgroups = [secgroup['id']]
 
-    net = neutron.find_resource("network", config["private_net"])
+    _info = OSClusterInfo(nova, neutron, config)
 
-    netid = net['id']
+    nics = list(create_nics(neutron,
+                            _info.n_nodes,
+                            _info.net['id'],
+                            _info.secgroups))
+    yield _info.host_names
 
-    nics_nodes = list(create_nics(neutron,
-                                  int(config['n-nodes']),
-                                  netid,
-                                  secgroups))
-
-    cluster = config['cluster-name']
-
-    nodes = host_names("node", config["n-nodes"], cluster)
-
-    yield nodes
-
-    ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics_nodes)
+    ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics)
 
     yield ips
 
+    # TODO: get certs here
     certs = yield
+    # TODO: get token here
     calico_token = yield
+
     node_args = {'token': certs.kubelet_token,
                  'ca_cert': certs.ca_bundle.cert,
                  'cert_bundle': certs.kubelet_bundle,
                  'cluster_info': certs.etcd_host_list,
                  'calico_token': calico_token}
 
-    node_user_data = [
-        create_userdata('node', config['image'], node, **node_args)
-        for node in nodes
-    ]
+    user_data = create_userdata('node', _info.image, **node_args)
 
-    build_args_node = [
-        [node_flavor, image, keypair, secgroups, "node",
-         node_user_data[i], hosts]
-        for i in range(0, config['n-nodes'])
-    ]
+    task_args_node = _info.node_builder_args(user_data)
 
-    nodes_zones = list(get_host_zones(nodes, config['availibity-zones']))
+    nodes_zones = _info.distribute_nodes()
 
-    for idx, nic in enumerate(nics_nodes):
-        nodes_zones[idx][-1] = [{'net-id': net['id'],
-                                 'port-id': nic['port']['id']}]
+    hosts = NodeZoneNic.hosts_distributor(nodes_zones)
+    _info.assign_nics_to_nodes(hosts, nics)
+
     loop = asyncio.get_event_loop()
 
     tasks = [loop.create_task(create_instance_with_volume(
              nodes_zones[i][0], nodes_zones[i][1], nics=nodes_zones[i][2],
-             *(build_args_node[i])))
+             *(task_args_node[i])))
              for i in range(0, config['n-nodes'])]
     yield tasks
 
