@@ -266,7 +266,7 @@ def create_nodes(nova, neutron, config, hosts):
                             _info.n_nodes,
                             _info.net['id'],
                             _info.secgroups))
-    yield _info.host_names
+    yield _info.nodes_names
 
     ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics)
 
