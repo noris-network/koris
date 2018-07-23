@@ -95,7 +95,7 @@ class MasterInit(BaseInit):
                  cloud_provider=None,
                  token_csv_data="",
                  os_type='ubuntu',
-                 os_version="16.04",):
+                 os_version="16.04"):
         """
         cluster_info - a dictionary with infromation about the etcd cluster
         members
