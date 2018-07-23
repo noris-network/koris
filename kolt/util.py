@@ -86,10 +86,10 @@ class OSClusterInfo:
     def management_names(self):
         return host_names("master", self.n_masters, self.name)
 
-    def node_args_builder(self, user_data):
+    def node_args_builder(self, user_data, hosts):
 
         return [self.node_flavor, self.image, self.keypair, self.secgroups,
-                "node", user_data]
+                user_data, hosts]
 
     def distribute_management(self):
         return list(get_host_zones(self.management_names, self.azones))
@@ -103,6 +103,7 @@ class OSClusterInfo:
                                          'port-id': nic['port']['id']}]
 
     def assign_nics_to_nodes(self, nodes_zones, nics):
+        import pdb; pdb.set_trace()
         for idx, nic in enumerate(nics):
             nodes_zones[idx].nic = [{'net-id': self.net['id'],
                                      'port-id': nic['port']['id']}]

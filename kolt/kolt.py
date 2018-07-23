@@ -21,7 +21,8 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from .cli import (delete_cluster, write_kubeconfig)  # noqa
+from .cli import (delete_cluster, create_certs,
+                  write_kubeconfig)  # noqa
 from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
 from .ssl import (create_key,
@@ -34,9 +35,12 @@ from .util import (EtcdHost, NodeZoneNic,
                    host_names,
                    )
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# add ch to logger
+logger.addHandler(ch)
 
 
 def chunks(l, n):
@@ -89,7 +93,7 @@ nova, cinder, neutron = None, None, None
 
 
 async def create_instance_with_volume(name, zone, flavor, image,
-                                      keypair, secgroups, role, userdata,
+                                      keypair, secgroups, userdata,
                                       hosts, nics=None):
 
     global nova, neutron, cinder
@@ -99,7 +103,8 @@ async def create_instance_with_volume(name, zone, flavor, image,
         server = nova.servers.find(name=name)
         ip = server.interface_list()[0].fixed_ips[0]['ip_address']
         print(info("This machine already exists ... skipping"))
-        hosts[name] = (ip, role)
+
+        hosts[name] = (ip)
         return
     except NovaNotFound:
         print(info("Okay, launching %s" % name))
@@ -160,7 +165,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     print("Instance booted! Name: " + instance.name + " Status: " +
           instance.status + ", IP: " + ip)
 
-    hosts[name] = (ip, role)
+    hosts[name] = (ip)
 
 
 def read_os_auth_variables(trim=True):
@@ -216,11 +221,14 @@ def create_userdata(role, img_name, cluster_info=None,
                                   encryption_key,
                                   cloud_provider, **kwargs))
     elif 'ubuntu' in img_name.lower() and role == 'node':
-        token = kwargs.get('token')
+        kubelet_token = kwargs.get('kubelet_token')
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
-        userdata = str(NodeInit(role, token, ca_cert,
-                                cert_bundle, cluster_info, calico_token))
+        service_account_bundle = kwargs.get('service_account_bundle')
+
+        userdata = str(NodeInit(role, kubelet_token, ca_cert,
+                                cert_bundle, service_account_bundle,
+                                cluster_info, calico_token))
     else:
         userdata = """
                    #cloud-config
@@ -243,7 +251,8 @@ def create_nics(neutron, num, netid, security_groups):
 class NodeBuilder:
 
     def __init__(self, nova, neutron, config):
-
+        logger.info(info(cyan(
+            "gathering node information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
 
     def get_nodes_info(self, nova, neutron, config):
@@ -260,28 +269,34 @@ class NodeBuilder:
         ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics)
         return self._info.nodes_names, ips, nics
 
-    def create_hosts_tasks(self, nics, hosts, certs, calico_token):
-        node_args = {'token': certs.kubelet_token,
-                     'ca_cert': certs.ca_bundle.cert,
-                     'cert_bundle': certs.etcd_cert_bundle,
-                     'cluster_info': certs.etcd_host_list,
-                     'calico_token': calico_token}
+    def create_hosts_tasks(self, nics, hosts, certs,
+                           kubelet_token,
+                           calico_token,
+                           etcd_host_list
+                           ):
+        node_args = {'kubelet_token': kubelet_token,
+                     'ca_cert': certs['ca'],
+                     'cert_bundle': certs['k8s'],
+                     'cluster_info': etcd_host_list,
+                     'calico_token': calico_token,
+                     'service_account_bundle': certs['service-account']}
 
-        user_data = create_userdata('node', self._info.image, **node_args)
+        user_data = create_userdata('node', self._info.image.name, **node_args)
 
-        task_args_node = self._info.node_builder_args(user_data)
+        task_args_node = self._info.node_args_builder(user_data, hosts)
 
         nodes_zones = self._info.distribute_nodes()
 
-        hosts = NodeZoneNic.hosts_distributor(nodes_zones)
+        #hosts = list(NodeZoneNic.hosts_distributor(nodes_zones))
 
+        hosts = self._info.distribute_nodes()
         self._info.assign_nics_to_nodes(hosts, nics)
 
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
                  nodes_zones[i].name, nodes_zones[i].zone,
-                 nics=nodes_zones.nics,
+                 nics=nodes_zones[i].nic,
                  *task_args_node))
                  for i in range(0, self._info.n_nodes)]
 
@@ -292,20 +307,24 @@ class ControlPlaneBuilder:
 
     def __init__(self, nova, neutron, config):
 
+        logger.info(info(cyan(
+            "gathering control plane information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
 
     def get_hosts_info(self):
         nics = list(create_nics(neutron,
-                                self._info.nics_masters,
+                                self._info.n_masters,
                                 self._info.net['id'],
                                 self._info.secgroups))
 
         ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics)
 
-        return self._info.master_names, ips, nics
+        return self._info.management_names, ips, nics
 
-    def create_hosts_tasks(self, nics, hosts, certs, calico_token):
-
+    def create_hosts_tasks(self, nics, hosts, certs,
+                           kubelet_token,
+                           calico_token,
+                           etcd_host_list):
         # generate a random string
         # this should be the equal of
         # ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
@@ -317,32 +336,32 @@ class ControlPlaneBuilder:
             **read_os_auth_variables(trim=False))
 
         admin_token = uuid.uuid4().hex[:32]
-        kubelet_token = uuid.uuid4().hex[:32]
         token_csv_data = get_token_csv(admin_token,
                                        calico_token,
                                        kubelet_token)
 
         master_args = dict(
             cloud_provider=cloud_provider_info,
-            cert_bundle=(certs.ca_bundle, certs.k8s_bundle,
-                         certs.svc_accnt_bundle),
+            cert_bundle=(certs['ca'], certs['k8s'],
+                         certs['service-account']),
             encryption_key=encryption_key,
-            token_csv_data=token_csv_data)
+            token_csv_data=token_csv_data,
+            cluster_info=etcd_host_list,
+        )
 
-        user_data = create_userdata('master', self._info.image, **master_args)
+        user_data = create_userdata('master', self._info.image.name,
+                                    **master_args)
 
-        tasks_args_masters = self._info.node_builder_args(user_data)
+        tasks_args_masters = self._info.node_args_builder(user_data, hosts)
 
-        nodes_zones = self._info.distribute_nodes()
-        masters_zones = self._info.hosts_distributor(nodes_zones)
+        masters_zones = self._info.distribute_management()
 
         self._info.assign_nics_to_management(masters_zones, nics)
 
         loop = asyncio.get_event_loop()
-
         tasks = [loop.create_task(create_instance_with_volume(
                  masters_zones[i].name, masters_zones[i].zone,
-                 nics=masters_zones.nics,
+                 nics=masters_zones[i].nic,
                  *tasks_args_masters))
                  for i in range(0, self._info.n_masters)]
 
@@ -353,21 +372,38 @@ class ClusterBuilder:
 
     def run(self, config):
 
-        nb = NodeBuilder()
-        cpb = ControlPlaneBuilder()
+        nb = NodeBuilder(nova, neutron, config)
+        cpb = ControlPlaneBuilder(nova, neutron, config)
+        logger.debug(info("Done collection infromation from OpenStack"))
+        hosts, ips, nics = nb.get_nodes_info(nova, neutron, config)
 
-        ips, hosts, nics = nb.get_nodes_info()
+        cp_hosts, cp_ips, cp_nics = cpb.get_hosts_info()
 
-        cp_ips, cp_hosts, cp_nics = cpb.get_hosts_info()
+        etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
+                          zip(cpb._info.management_names,
+                              [nic['port']['fixed_ips'][0]['ip_address']
+                               for nic in cp_nics])]
 
-        certs = create_certs(config, cp_hosts + hosts, cp_ips + ips)
+        certs = create_certs(config,
+                             list(cp_hosts) + list(hosts),
+                             list(cp_ips) + list(ips))
+
         calico_token = uuid.uuid4().hex[:32]
+        kubelet_token = uuid.uuid4().hex[:32]
 
-        tasks = nb.create_hosts_tasks(nics, hosts, certs, calico_token)
-        cp_tasks = cpb.create_hosts_tasks(nics, hosts, certs, calico_token)
+        hosts = {}
+        tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
+                                      calico_token, etcd_host_list)
+        logger.debug(info("Done creating nodes tasks"))
+        cp_tasks = cpb.create_hosts_tasks(nics, hosts, certs,
+                                          kubelet_token,
+                                          calico_token,
+                                          etcd_host_list)
+        logger.debug(info("Done creating control plane tasks"))
 
+        tasks = list(map(list, (cp_tasks, tasks)))
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(asyncio.wait(cp_tasks + tasks))
+        loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
 
 
@@ -494,101 +530,6 @@ def create_machines(nova, neutron, cinder, config):
     loop.close()
 
 
-def create_certs(config, names, ips, write=True, ca_bundle=None):
-    """
-    create new certificates, useful for replacing certificates
-    and later for adding nodes ...
-    """
-    country = "DE"
-    state = "Bayern"
-    location = "NUE"
-
-    if not ca_bundle:
-        ca_key = create_key()
-        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
-                            state, location, "Kubernetes", "CDA\PI",
-                            "kubernetes")
-        ca_bundle = CertBundle(ca_key, ca_cert)
-
-    else:
-        ca_key = ca_bundle.key
-        ca_cert = ca_bundle.cert
-
-    k8s_bundle = CertBundle.create_signed(ca_key,
-                                          country,
-                                          state,
-                                          location,
-                                          "Kubernetes",
-                                          "CDA\PI",
-                                          "kubernetes",
-                                          names,
-                                          ips)
-
-    svc_accnt_bundle = CertBundle.create_signed(ca_key,
-                                                country,
-                                                state,
-                                                location,
-                                                "Kubernetes",
-                                                "CDA\PI",
-                                                name="service-accounts",
-                                                hosts="",
-                                                ips="")
-
-    admin_bundle = CertBundle.create_signed(ca_key,
-                                            country,
-                                            state,
-                                            location,
-                                            "system:masters",
-                                            "CDA\PI",
-                                            name="admin",
-                                            hosts="",
-                                            ips=""
-                                            )
-
-    kubelet_bundle = CertBundle.create_signed(ca_key,
-                                              country,
-                                              state,
-                                              location,
-                                              "system:masters",
-                                              "CDA\PI",
-                                              name="kubelet",
-                                              hosts=names,
-                                              ips=ips
-                                              )
-
-    nodes = []
-    node_bundles = []
-    node_ip = None
-    # todo: add node_ip
-    for node in nodes:
-        node_bundles.append(CertBundle.create_signed(ca_key,
-                                                     country,
-                                                     state,
-                                                     location,
-                                                     "system:nodes",
-                                                     "CDA\PI",
-                                                     name="system:node:%s" % node,  # noqa
-                                                     hosts=[node],
-                                                     ips=[node_ip]))
-
-    if write:  # pragma: no coverage
-        cert_dir = "-".join(("certs", config["cluster-name"]))
-
-        if not os.path.exists(cert_dir):
-            os.mkdir(cert_dir)
-
-        write_key(ca_key, filename=cert_dir + "/ca-key.pem")
-        write_cert(ca_cert, cert_dir + "/ca.pem")
-
-        k8s_bundle.save("kubernetes", cert_dir)
-        svc_accnt_bundle.save("service-account", cert_dir)
-        admin_bundle.save("admin", cert_dir)
-        kubelet_bundle.save("kubelet", cert_dir)
-
-    return (ca_bundle, k8s_bundle,
-            svc_accnt_bundle, admin_bundle, kubelet_bundle)
-
-
 def main():  # pragma: no coverage
     global nova, neutron, cinder
 
@@ -631,5 +572,7 @@ def main():  # pragma: no coverage
         print(red("You must have an odd number (>1) of etcd machines!"))
         sys.exit(2)
 
-    create_machines(nova, neutron, cinder, config)
+    builder = ClusterBuilder()
+    builder.run(config)
+    #create_machines(nova, neutron, cinder, config)
     print(info("Cluster successfully set up."))
