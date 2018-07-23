@@ -27,12 +27,11 @@ def test_osclusterinfo():
     info = OSClusterInfo(nova, neutron, config)
 
     assert info.nodes_names == ['node-1-test', 'node-2-test', 'node-3-test']
-
-    args = list(info.node_args_builder("generic_user_data"))
-
+    hosts = {}
+    args = list(info.node_args_builder("generic_user_data", hosts))
     assert args == [
         'ECS.C1.4-8', 'Ubuntu', 'otiram',
-        ['acedfr3c4223ee21'], 'node', 'generic_user_data']
+        ['acedfr3c4223ee21'], 'generic_user_data', {}]
 
     nodes_zones = info.distribute_nodes()
 
