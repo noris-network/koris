@@ -25,10 +25,8 @@ from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
 from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan
-from .ssl import (create_key,
-                  create_ca,
-                  write_key, write_cert, CertBundle)
-from .util import (EtcdHost, NodeZoneNic,
+from .ssl import CertBundle
+from .util import (EtcdHost,
                    OSCloudConfig, OSClusterInfo,
                    get_server_info_from_openstack,
                    get_token_csv,
@@ -140,7 +138,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
                                        userdata=userdata,
                                        )
 
-    except NovaClientException:
+    except NovaClientException as E:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
     except KeyboardInterrupt:
@@ -285,20 +283,19 @@ class NodeBuilder:
 
         task_args_node = self._info.node_args_builder(user_data, hosts)
 
-        nodes_zones = self._info.distribute_nodes()
+        # nodes_zones = self._info.distribute_nodes()
 
-        #hosts = list(NodeZoneNic.hosts_distributor(nodes_zones))
-
+        # hosts = list(NodeZoneNic.hosts_distributor(nodes_zones))
         hosts = self._info.distribute_nodes()
         self._info.assign_nics_to_nodes(hosts, nics)
 
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
-                 nodes_zones[i].name, nodes_zones[i].zone,
-                 nics=nodes_zones[i].nic,
+                 host.name, host.zone,
+                 nics=host.nic,
                  *task_args_node))
-                 for i in range(0, self._info.n_nodes)]
+                 for host in hosts]
 
         return tasks
 
@@ -574,5 +571,5 @@ def main():  # pragma: no coverage
 
     builder = ClusterBuilder()
     builder.run(config)
-    #create_machines(nova, neutron, cinder, config)
+    # create_machines(nova, neutron, cinder, config)
     print(info("Cluster successfully set up."))
