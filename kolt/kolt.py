@@ -300,7 +300,7 @@ class NodeBuilder:
                  *task_args_node))
                  for i in range(0, self._info.n_nodes)]
 
-        yield tasks
+        return tasks
 
 
 class ControlPlaneBuilder:
@@ -365,7 +365,7 @@ class ControlPlaneBuilder:
                  *tasks_args_masters))
                  for i in range(0, self._info.n_masters)]
 
-        yield tasks
+        return tasks
 
 
 class ClusterBuilder:
@@ -401,7 +401,7 @@ class ClusterBuilder:
                                           etcd_host_list)
         logger.debug(info("Done creating control plane tasks"))
 
-        tasks = list(map(list, (cp_tasks, tasks)))
+        tasks = cp_tasks + tasks
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.wait(tasks))
         loop.close()

@@ -103,7 +103,6 @@ class OSClusterInfo:
                                          'port-id': nic['port']['id']}]
 
     def assign_nics_to_nodes(self, nodes_zones, nics):
-        import pdb; pdb.set_trace()
         for idx, nic in enumerate(nics):
             nodes_zones[idx].nic = [{'net-id': self.net['id'],
                                      'port-id': nic['port']['id']}]
