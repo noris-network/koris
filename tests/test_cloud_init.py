@@ -3,6 +3,8 @@ import re
 import uuid
 import yaml
 
+import pytest
+
 from kolt.cloud import MasterInit, NodeInit
 from kolt.kolt import create_certs
 from kolt.util import (EtcdHost, get_kubeconfig_yaml,
@@ -26,9 +28,7 @@ cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
                              region_name="de-nbg6-1")
 
 
-(ca_bundle, k8s_bundle,
- svc_accnt_bundle, admin_bundle,
-    kubelet_bundle) = create_certs({}, hostnames, ips, write=False)
+certs = create_certs({}, hostnames, ips, write=False)
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
@@ -38,39 +38,45 @@ calico_token = uuid.uuid4().hex[:32]
 token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 
-def test_token_cvs():
-
+@pytest.fixture
+def ci_master():
     ci = MasterInit("master", test_cluster,
-                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
+                    cert_bundle=(certs['ca'],
+                                 certs['k8s'],
+                                 certs['service-account']),
                     encryption_key=encryption_key,
-                    cloud_provider=cloud_config,
-                    token_csv_data=token_csv_data)
+                    cloud_provider=cloud_config)
+    return ci
 
-    token_csv = ci._get_token_csv()
+
+@pytest.fixture
+def ci_node():
+    ci = NodeInit("node",
+                  kubelet_token,
+                  certs['ca'],
+                  certs['k8s'],
+                  certs['service-account'],
+                  test_cluster,
+                  calico_token
+                  )
+    return ci
+
+
+def test_token_cvs(ci_master):
+
+    token_csv = ci_master._get_token_csv()
     assert yaml.load(token_csv)[0]['permissions'] == '0600'
 
 
-def test_cloud_config():
+def test_cloud_config(ci_master):
 
-    ci = MasterInit("master", test_cluster,
-                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                    encryption_key=encryption_key,
-                    cloud_provider=cloud_config,
-                    token_csv_data=token_csv_data)
-
-    _cloud_config = ci._get_cloud_provider()
+    _cloud_config = ci_master._get_cloud_provider()
     assert yaml.load(_cloud_config)[0]['permissions'] == '0600'
 
 
-def test_encryption_config():
+def test_encryption_config(ci_master):
 
-    ci = MasterInit("master", test_cluster,
-                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                    encryption_key=encryption_key,
-                    cloud_provider=cloud_config,
-                    token_csv_data=token_csv_data)
-
-    _config = ci._get_encryption_config()
+    _config = ci_master._get_encryption_config()
 
     _config = yaml.load(_config)[0]
 
@@ -82,26 +88,16 @@ def test_encryption_config():
         'aescbc']['keys'][0]['secret'] == encryption_key
 
 
-def test_certificate_info():
+def test_certificate_info(ci_master):
 
-    ci = MasterInit("master", test_cluster,
-                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                    encryption_key=encryption_key,
-                    cloud_provider=cloud_config,
-                    token_csv_data=token_csv_data)
-
-    certs_config = ci._get_certificate_info()
+    certs_config = ci_master._get_certificate_info()
 
     assert 4 == len(yaml.load(certs_config))
 
 
-def test_cloud_init():
-    ci = MasterInit("master", test_cluster,
-                    cert_bundle=(ca_bundle, k8s_bundle, svc_accnt_bundle),
-                    encryption_key=encryption_key,
-                    cloud_provider=cloud_config)
+def test_cloud_init(ci_master):
 
-    config = ci.get_files_config()
+    config = ci_master.get_files_config()
     config = yaml.load(config)
 
     assert len(config['write_files']) == 10
@@ -116,16 +112,8 @@ def test_cloud_init():
         etcd_env['content'])
 
 
-def test_node_init():
-    ci = NodeInit("node",
-                  kubelet_token,
-                  ca_bundle,
-                  k8s_bundle,
-                  svc_accnt_bundle,
-                  test_cluster,
-                  calico_token
-                  )
-    config = ci.get_files_config()
+def test_node_init(ci_node):
+    config = ci_node.get_files_config()
     config = yaml.load(config)
 
     assert len(config['write_files']) == 8
