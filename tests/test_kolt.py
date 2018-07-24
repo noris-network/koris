@@ -7,9 +7,9 @@ import pytest
 import uuid
 import yaml
 
-from kolt.kolt import host_names
-from kolt.kolt import write_kubeconfig
-from kolt.kolt import get_kubeconfig_yaml
+from kolt.util import host_names
+from kolt.cli import write_kubeconfig
+from kolt.util import get_kubeconfig_yaml
 from kolt.util import EtcdHost
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,

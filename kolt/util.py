@@ -1,10 +1,111 @@
 import base64
 import copy
 import textwrap
-import uuid
+
+from functools import lru_cache
+from ipaddress import IPv4Address
 
 import yaml
-from ipaddress import IPv4Address
+
+
+class NodeZoneNic:
+
+    """
+    A Simple data class for holding information about a host
+    """
+
+    def __init__(self, name, zone, nic=None):
+        self.name = name
+        self.zone = zone
+        self.nic = nic
+
+    @classmethod
+    def hosts_distributor(cls, hosts_zones):
+        for item in hosts_zones:
+            hosts, zone = item[0], item[1]
+            for host in hosts:
+                yield cls(host, zone, None)
+
+
+def distribute_hosts(hosts_zones):
+    """
+    Given  [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]
+    return:
+    [(host1, zone),
+     (host2, zone),
+     (host3, zone),
+     (host4, zone),
+     (host5, zone)]
+    """
+    for item in hosts_zones:
+        hosts, zone = item[0], item[1]
+        for host in hosts:
+            yield [host, zone, None]
+
+
+def get_host_zones(hosts, zones):
+    # brain fuck warning
+    # this divides the lists of hosts into zones
+    # >>> hosts
+    # >>> ['host1', 'host2', 'host3', 'host4', 'host5']
+    # >>> zones
+    # >>> ['A', 'B']
+    # >>> list(zip([hosts[i:i + n] for i in range(0, len(hosts), n)], zones)) # noqa
+    # >>> [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]  # noqa
+    if len(zones) == len(hosts):
+        return list(zip(hosts, zones))
+    else:
+        end = len(zones) + 1 if len(zones) % 2 else len(zones)
+        host_zones = list(zip([hosts[i:i + end] for i in
+                               range(0, len(hosts), end)],
+                              zones))
+        return NodeZoneNic.hosts_distributor(host_zones)
+
+
+class OSClusterInfo:
+
+    def __init__(self, nova, neutron, config):
+        self.keypair = nova.keypairs.get(config['keypair'])
+        self.image = nova.glance.find_image(config['image'])
+        self.node_flavor = nova.flavors.find(name=config['node_flavor'])
+        secgroup = neutron.find_resource('security_group',
+                                         config['security_group'])
+        self.secgroups = [secgroup['id']]
+
+        self.net = neutron.find_resource("network", config["private_net"])
+        self.name = config['cluster-name']
+        self.n_nodes = config['n-nodes']
+        self.n_masters = config['n-masters']
+        self.azones = config['availibility-zones']
+
+    @property
+    def nodes_names(self):
+        return host_names("node", self.n_nodes, self.name)
+
+    @property
+    def management_names(self):
+        return host_names("master", self.n_masters, self.name)
+
+    def node_args_builder(self, user_data, hosts):
+
+        return [self.node_flavor, self.image, self.keypair, self.secgroups,
+                user_data, hosts]
+
+    def distribute_management(self):
+        return list(get_host_zones(self.management_names, self.azones))
+
+    def distribute_nodes(self):
+        return list(get_host_zones(self.nodes_names, self.azones))
+
+    def assign_nics_to_management(self, management_zones, nics):
+        for idx, nic in enumerate(nics):
+            management_zones[idx].nic = [{'net-id': self.net['id'],
+                                         'port-id': nic['port']['id']}]
+
+    def assign_nics_to_nodes(self, nodes_zones, nics):
+        for idx, nic in enumerate(nics):
+            nodes_zones[idx].nic = [{'net-id': self.net['id'],
+                                     'port-id': nic['port']['id']}]
 
 
 class OSCloudConfig:
@@ -193,3 +294,9 @@ def get_token_csv(adminToken, calicoToken, kubeletToken):
     )
 
     return base64.b64encode(textwrap.dedent(content).encode()).decode()
+
+
+@lru_cache(maxsize=10)
+def host_names(role, num, cluster_name):
+    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+            range(1, num + 1)]
