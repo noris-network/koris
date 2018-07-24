@@ -1,9 +1,6 @@
-image: oz123/sphinx-server
+image: mleiner/kolt-base:0.1
 
 test:
   script:
-    - apk update
-    - apk add alpine-sdk python3-dev linux-headers py-cryptography
-    - pip3 install -r requirements_dev.txt
     - pip3 install -e .
     - make coverage PY=python3
