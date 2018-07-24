@@ -289,7 +289,6 @@ def get_token_csv(adminToken, calicoToken, kubeletToken):
     {adminToken},admin,admin,"cluster-admin,system:masters"
     {calicoToken},calico,calico,"cluster-admin,system:masters"
     {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
-    {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
     """.format(
         adminToken=adminToken,
         calicoToken=calicoToken,
