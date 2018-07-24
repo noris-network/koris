@@ -244,10 +244,11 @@ def create_userdata(role, img_name, cluster_info=None,
 
 def create_nics(neutron, num, netid, security_groups):
     for i in range(num):
-        yield neutron.create_port(
+        port = neutron.create_port(
             {"port": {"admin_state_up": True,
                       "network_id": netid,
                       "security_groups": security_groups}})
+        yield port
 
 
 class NodeBuilder:
@@ -291,6 +292,7 @@ class NodeBuilder:
 
         # hosts = list(NodeZoneNic.hosts_distributor(nodes_zones))
         hosts = self._info.distribute_nodes()
+
         self._info.assign_nics_to_nodes(hosts, nics)
 
         loop = asyncio.get_event_loop()
@@ -356,7 +358,6 @@ class ControlPlaneBuilder:
         tasks_args_masters = self._info.node_args_builder(user_data, hosts)
 
         masters_zones = self._info.distribute_management()
-
         self._info.assign_nics_to_management(masters_zones, nics)
 
         loop = asyncio.get_event_loop()
@@ -396,7 +397,7 @@ class ClusterBuilder:
         tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
                                       calico_token, etcd_host_list)
         logger.debug(info("Done creating nodes tasks"))
-        cp_tasks = cpb.create_hosts_tasks(nics, hosts, certs,
+        cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                           kubelet_token,
                                           calico_token,
                                           etcd_host_list)

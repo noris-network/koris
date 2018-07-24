@@ -26,6 +26,10 @@ class NodeZoneNic:
             for host in hosts:
                 yield cls(host, zone, None)
 
+    def __repr__(self):
+
+        return "<%s@%s>" % (self.name, self.zone)
+
 
 def distribute_hosts(hosts_zones):
     """
