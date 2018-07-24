@@ -67,9 +67,9 @@ install -v -m 0750 -o root -g root -d /etc/calico/kube
 install -v -m 0755 -g root -o root -d /opt/cni/bin/
 
 mkdir -pv /var/lib/kubernetes/
-ln -vs /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
-ln -vs /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
-ln -vs /etc/ssl/kubernetes/ca.pem /var/lib/kubernetes/ca.pem
+cp /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
+cp /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
+cp /etc/ssl/kubernetes/ca.pem /var/lib/kubernetes/ca.pem
 #ln -vs /etc/ssl/kubernetes/service-accounts.pem /var/lib/kubernetes/service-accounts.pem
 
 cat << EOF > /etc/systemd/system/kubelet.service

@@ -181,7 +181,7 @@ class MasterInit(BaseInit):
     def _get_cloud_provider(self):
 
         return self.format_file('cloud_config',
-                                '/etc/kubernetes/',
+                                '/etc/kubernetes/cloud.conf',
                                 self.cloud_provider,
                                 encoder=lambda x: bytes(x))
 
