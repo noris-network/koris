@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import sys
 
@@ -8,6 +9,13 @@ from .ssl import (create_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
 from .util import get_kubeconfig_yaml, host_names
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# add ch to logger
+logger.addHandler(ch)
 
 
 def delete_cluster(config, nova, neutron):
@@ -127,6 +135,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                                      hosts=[node],
                                                      ips=[node_ip]))
 
+    logger.debug("Done creating all certificates")
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
