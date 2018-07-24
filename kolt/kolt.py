@@ -23,7 +23,7 @@ from keystoneauth1 import session
 from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
 from .cloud import MasterInit, NodeInit
-from .hue import red, info, que, lightcyan as cyan
+from .hue import red, info, que, lightcyan as cyan, yellow
 from .ssl import CertBundle
 from .util import (EtcdHost,
                    OSCloudConfig, OSClusterInfo,
@@ -99,11 +99,13 @@ async def create_instance_with_volume(name, zone, flavor, image,
         server = nova.servers.find(name=name)
         ip = server.interface_list()[0].fixed_ips[0]['ip_address']
         print(info("This machine already exists ... skipping"))
-
         hosts[name] = (ip)
         return
     except NovaNotFound:
         print(info("Okay, launching %s" % name))
+    except IndexError:
+        logger.debug("Server found in weired state witout IP ... recreating")
+        server.delete()
 
     bdm_v2 = {
         "boot_index": 0,
@@ -139,10 +141,14 @@ async def create_instance_with_volume(name, zone, flavor, image,
     except NovaClientException as E:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
+        print(info(yellow(E.message)))
+        # TODO: clean volume and nic here
     except KeyboardInterrupt:
         print(info(red("Oky doky, stopping as you interrupted me ...")))
         print(info(red("Cleaning after myself")))
-        v.delete
+        # TODO: clean volume and nic here
+        # clean volume
+        v.delete()
 
     inst_status = instance.status
     print("waiting for 10 seconds for the machine to be launched ... ")
@@ -238,10 +244,11 @@ def create_userdata(role, img_name, cluster_info=None,
 
 def create_nics(neutron, num, netid, security_groups):
     for i in range(num):
-        yield neutron.create_port(
+        port = neutron.create_port(
             {"port": {"admin_state_up": True,
                       "network_id": netid,
                       "security_groups": security_groups}})
+        yield port
 
 
 class NodeBuilder:
@@ -285,6 +292,7 @@ class NodeBuilder:
 
         # hosts = list(NodeZoneNic.hosts_distributor(nodes_zones))
         hosts = self._info.distribute_nodes()
+
         self._info.assign_nics_to_nodes(hosts, nics)
 
         loop = asyncio.get_event_loop()
@@ -350,7 +358,6 @@ class ControlPlaneBuilder:
         tasks_args_masters = self._info.node_args_builder(user_data, hosts)
 
         masters_zones = self._info.distribute_management()
-
         self._info.assign_nics_to_management(masters_zones, nics)
 
         loop = asyncio.get_event_loop()
@@ -390,7 +397,7 @@ class ClusterBuilder:
         tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
                                       calico_token, etcd_host_list)
         logger.debug(info("Done creating nodes tasks"))
-        cp_tasks = cpb.create_hosts_tasks(nics, hosts, certs,
+        cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                           kubelet_token,
                                           calico_token,
                                           etcd_host_list)
