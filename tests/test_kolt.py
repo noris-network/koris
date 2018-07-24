@@ -7,7 +7,7 @@ import pytest
 import uuid
 import yaml
 
-from kolt.kolt import host_names
+from kolt.util import host_names
 from kolt.cli import write_kubeconfig
 from kolt.util import get_kubeconfig_yaml
 from kolt.util import EtcdHost
