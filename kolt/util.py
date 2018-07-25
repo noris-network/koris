@@ -26,6 +26,10 @@ class NodeZoneNic:
             for host in hosts:
                 yield cls(host, zone, None)
 
+    def __repr__(self):
+
+        return "<%s@%s>" % (self.name, self.zone)
+
 
 def distribute_hosts(hosts_zones):
     """
@@ -284,7 +288,6 @@ def get_token_csv(adminToken, calicoToken, kubeletToken):
     content = """
     {adminToken},admin,admin,"cluster-admin,system:masters"
     {calicoToken},calico,calico,"cluster-admin,system:masters"
-    {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
     {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
     """.format(
         adminToken=adminToken,
