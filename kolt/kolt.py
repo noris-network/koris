@@ -327,7 +327,9 @@ class ControlPlaneBuilder:
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
                            calico_token,
+                           admin_token,
                            etcd_host_list):
+
         # generate a random string
         # this should be the equal of
         # ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
@@ -338,7 +340,6 @@ class ControlPlaneBuilder:
         cloud_provider_info = OSCloudConfig(
             **read_os_auth_variables(trim=False))
 
-        admin_token = uuid.uuid4().hex[:32]
         token_csv_data = get_token_csv(admin_token,
                                        calico_token,
                                        kubelet_token)
@@ -392,10 +393,12 @@ class ClusterBuilder:
 
         calico_token = uuid.uuid4().hex[:32]
         kubelet_token = uuid.uuid4().hex[:32]
+        admin_token = uuid.uuid4().hex[:32]
 
         hosts = {}
         tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
-                                      calico_token, etcd_host_list)
+                                      calico_token, admin_token,
+                                      etcd_host_list)
         logger.debug(info("Done creating nodes tasks"))
         cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                           kubelet_token,
@@ -404,9 +407,12 @@ class ClusterBuilder:
         logger.debug(info("Done creating control plane tasks"))
 
         tasks = cp_tasks + tasks
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(asyncio.wait(tasks))
-        loop.close()
+
+        if tasks:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.wait(tasks))
+            loop.close()
+            write_kubeconfig(config, etcd_host_list, admin_token)
 
 
 def main():  # pragma: no coverage
@@ -453,5 +459,5 @@ def main():  # pragma: no coverage
 
     builder = ClusterBuilder()
     builder.run(config)
-    # create_machines(nova, neutron, cinder, config)
+
     print(info("Cluster successfully set up."))
