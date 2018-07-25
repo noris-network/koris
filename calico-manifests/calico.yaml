@@ -204,12 +204,12 @@ spec:
             # Auto-detect the BGP IP address.
             - name: ENABLED_CONTROLLERS
               value: policy,profile,workloadendpoint,node
-            - name: KUBERNETES_SERVICE_HOST
-              value: ""
-            - name: KUBERNETES_SERVICE_PORT_HTTPS
-              value: "6443"
-            - name: KUBERNETES_SERVICE_PORT
-              value: "6443"
+            #- name: KUBERNETES_SERVICE_HOST
+            #  value: ""
+            #- name: KUBERNETES_SERVICE_PORT_HTTPS
+            #  value: "6443"
+            #- name: KUBERNETES_SERVICE_PORT
+            #  value: "6443"
           volumeMounts:
             - mountPath: /var/lib/kubernetes
               name: var-lib-k8s
