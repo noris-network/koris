@@ -81,6 +81,7 @@ class OSClusterInfo:
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
         self.azones = config['availibility-zones']
+        self.storage_class = config['storage_class']
 
     @property
     def nodes_names(self):
