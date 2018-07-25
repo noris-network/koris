@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 
-from .hue import red
+from .hue import red, yellow
 
 from .ssl import (create_key,
                   create_ca,
@@ -47,15 +47,20 @@ def delete_cluster(config, nova, neutron):
 
 def write_kubeconfig(config, etcd_cluster_info, admin_token,
                      write=False):
-    master = host_names("master", config["n-masters"],
-                        config['cluster-name'])[0]
+
     username = "admin"
-    master_uri = "http://%s:3210" % master
+    master_uri = "https://%s:6443" % etcd_cluster_info[0].ip_address
     kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token, write,
-                                     encode=False)
+                                     encode=False,
+                                     ca=os.path.join(
+                                         "certs-%s" % config['cluster-name'],
+                                         "ca.pem"))
     if write:
-        with open('-'.join(config['cluster-name'], 'admin.conf'), "w") as f:
+        path = '-'.join((config['cluster-name'], 'admin.conf'))
+        with open(path, "w") as f:
             f.write(kubeconfig)
+        logger.info(yellow("You can now access your cluster with"))
+        logger.info(yellow("kubectl get nodes --kubeconfig=%s" % path))
 
 
 def create_certs(config, names, ips, write=True, ca_bundle=None):

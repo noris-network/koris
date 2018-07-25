@@ -320,7 +320,8 @@ class NodeInit(BaseInit):
         """.format(get_kubeconfig_yaml(
             "https://%s:6443" % self.etcd_cluster_info[0].name,
             "calico",
-            self.calico_token))
+            self.calico_token,
+            skip_tls=True))
 
         return textwrap.dedent(kubeconfig_part).lstrip()
 
@@ -346,7 +347,8 @@ class NodeInit(BaseInit):
 
     def _get_calico_config(self):
         calicoconfig['etcd_endpoints'] = ",".join(
-            str(etcd_host) for etcd_host in self.etcd_cluster_info)
+            "http://%s:%d" % (etcd_host.ip_address, etcd_host.port)
+            for etcd_host in self.etcd_cluster_info)
 
         cc = json.dumps(calicoconfig, indent=2).encode()
         return self.format_file(
