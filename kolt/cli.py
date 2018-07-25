@@ -3,12 +3,12 @@ import logging
 import os
 import sys
 
-from .hue import red
+from .hue import red, yellow
 
 from .ssl import (create_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
-from .util import get_kubeconfig_yaml, host_names
+from .util import get_kubeconfig_yaml
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -47,14 +47,16 @@ def delete_cluster(config, nova, neutron):
 
 def write_kubeconfig(config, etcd_cluster_info, admin_token,
                      write=False):
-    master = host_names("master", config["n-masters"],
-                        config['cluster-name'])[0]
     username = "admin"
-    master_uri = "http://%s:3210" % master
-    kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token, write,
-                                     encode=False)
+    master_uri = "https://%s:6443" % etcd_cluster_info[0].ip_address
+    kubeconfig = get_kubeconfig_yaml(
+        master_uri, username, admin_token, write,
+        encode=False, ca='certs-%s/ca.pem' % config['cluster-name'])
     if write:
-        with open('-'.join(config['cluster-name'], 'admin.conf'), "w") as f:
+        path = '-'.join((config['cluster-name'], 'admin.conf'))
+        logger.info(yellow("You can use your config with:"))
+        logger.info(yellow("kubectl get nodes --kubeconfig=%s" % path))
+        with open(path, "w") as f:
             f.write(kubeconfig)
 
 

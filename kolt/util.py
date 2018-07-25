@@ -191,12 +191,13 @@ kubeconfig = {'apiVersion': 'v1',
 
 
 def get_kubeconfig_yaml(master_uri, username, token,
-                        skip_tls=False,
+                        skip_tls=False, ca='/var/lib/kubernetes/ca.pem',
                         encode=True):
     config = copy.deepcopy(kubeconfig)
     if skip_tls:
         config['clusters'][0]['cluster'].pop('insecure-skip-tls-verify')
         config['clusters'][0]['cluster']['server'] = master_uri
+        config['clusters'][0]['cluster']['certificate-authority'] = ca
     else:
         config['clusters'][0]['cluster'].pop('server')
 
