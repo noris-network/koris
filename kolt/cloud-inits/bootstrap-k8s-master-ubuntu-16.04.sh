@@ -107,7 +107,7 @@ ExecStart=/usr/bin/kube-apiserver \\
   --audit-log-maxsize=100 \\
   --audit-log-path=/var/log/audit.log \\
   --authorization-mode=Node,RBAC \\
-  --bind-address=0.0.0.0 \\
+  --bind-address=${CURRENT_IP} \\
   --client-ca-file=/var/lib/kubernetes/ca.pem \\
   --cloud-config=/etc/kubernetes/cloud.conf \\
   --cloud-provider=openstack \\
@@ -125,6 +125,7 @@ ExecStart=/usr/bin/kube-apiserver \\
   --kubelet-client-key=/var/lib/kubernetes/kubernetes-key.pem \\
   --kubelet-https=true \\
   --runtime-config=api/all \\
+  --secure-port 6443 \\
   --service-account-key-file=/var/lib/kubernetes/service-accounts.pem \\
   --service-cluster-ip-range=${CLUSTER_IP_RANGE} \\
   --service-node-port-range=30000-32767 \\

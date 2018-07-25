@@ -57,14 +57,12 @@ mkdir -pv /etc/cni/net.d
 curl -L https://github.com/projectcalico/calicoctl/releases/download/v${calico_version}/calicoctl -o ${BIN_PATH}/calicoctl && chmod -v +x /usr/bin/calicoctl &
 
 
+install -v -m 0755 -g root -o root -d /opt/cni/bin/
+
 for item in calico calico-ipam; do
     curl -L ${CALICO_URL}/v${calico_version}/${item} \
-        -o /usr/bin/${item} && chmod -v +x ${BIN_PATH}/${item} &
+        -o /opt/cni/bin/${item} && chmod -v +x /opt/cni/bin/${item} &
 done
-
-
-install -v -m 0750 -o root -g root -d /etc/calico/kube
-install -v -m 0755 -g root -o root -d /opt/cni/bin/
 
 mkdir -pv /var/lib/kubernetes/
 cp /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
