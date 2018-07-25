@@ -433,7 +433,7 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            write_kubeconfig(config, etcd_host_list, admin_token)
+            write_kubeconfig(config, etcd_host_list, admin_token, True)
 
 
 def main():  # pragma: no coverage
