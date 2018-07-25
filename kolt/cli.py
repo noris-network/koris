@@ -45,7 +45,8 @@ def delete_cluster(config, nova, neutron):
         sys.exit(1)
 
 
-def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
+def write_kubeconfig(config, etcd_cluster_info, admin_token,
+                     write=False):
     master = host_names("master", config["n-masters"],
                         config['cluster-name'])[0]
     username = "admin"
@@ -53,8 +54,7 @@ def write_kubeconfig(config, etcd_cluster_info, admin_token, write=False):
     kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token, write,
                                      encode=False)
     if write:
-        filename = "admin.conf"
-        with open(filename, "w") as f:
+        with open('-'.join(config['cluster-name'], 'admin.conf'), "w") as f:
             f.write(kubeconfig)
 
 
