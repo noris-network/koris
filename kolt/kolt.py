@@ -407,9 +407,11 @@ class ClusterBuilder:
                               [nic['port']['fixed_ips'][0]['ip_address']
                                for nic in cp_nics])]
 
-        certs = create_certs(config,
-                             list(cp_hosts) + list(hosts),
-                             list(cp_ips) + list(ips))
+        ips = list(cp_ips) + list(ips) + ['127.0.0.1', "10.32.0.1"]
+        hosts = list(cp_hosts) + list(hosts) \
+            + ["kubernetes.default",
+               "kubernetes.default.svc.cluster.local"]
+        certs = create_certs(config, hosts, ips)
 
         calico_token = uuid.uuid4().hex[:32]
         kubelet_token = uuid.uuid4().hex[:32]
