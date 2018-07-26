@@ -346,7 +346,7 @@ class NodeInit(BaseInit):
         return textwrap.dedent(kubelet_config_part).lstrip()
 
     def _get_calico_config(self):
-        calicoconfig['plugins'][0]['etcd_endpoints'] = ",".join(
+        calicoconfig['etcd_endpoints'] = ",".join(
             "http://%s:%d" % (etcd_host.ip_address, etcd_host.port)
             for etcd_host in self.etcd_cluster_info)
 
