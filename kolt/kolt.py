@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import base64
+import copy
 import logging
 import os
 import uuid
@@ -88,9 +89,42 @@ def get_host_zones(hosts, zones):
 nova, cinder, neutron = None, None, None
 
 
+async def create_volume(cinder, image, zone, klass):
+
+    bdm_v2 = {
+        "boot_index": 0,
+        "source_type": "volume",
+        "volume_size": "25",
+        "destination_type": "volume",
+        "delete_on_termination": True}
+
+    v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
+                              availability_zone=zone,
+                              volume_type=klass)
+
+    while v.status != 'available':
+        await asyncio.sleep(1)
+        v = cinder.volumes.get(v.id)
+
+    logger.debug("created volume %s %s" % (v, v.volume_type))
+
+    if v.bootable != 'true':
+        v.update(bootable=True)
+        # wait for mark as bootable
+        await asyncio.sleep(2)
+
+    volume_data = copy.deepcopy(bdm_v2)
+    volume_data['uuid'] = v.id
+
+    return volume_data
+
+
 async def create_instance_with_volume(name, zone, flavor, image,
                                       keypair, secgroups, userdata,
-                                      hosts, nics=None):
+                                      hosts,
+                                      nics=None,
+                                      volume_klass=""
+                                      ):
 
     global nova, neutron, cinder
 
@@ -107,12 +141,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
         logger.debug("Server found in weired state witout IP ... recreating")
         server.delete()
 
-    bdm_v2 = {
-        "boot_index": 0,
-        "source_type": "volume",
-        "volume_size": "25",
-        "destination_type": "volume",
-        "delete_on_termination": True}
+    volume_data = await create_volume(cinder, image, zone, volume_klass)
 
     try:
         v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
@@ -134,7 +163,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
                                        key_name=keypair.name,
                                        flavor=flavor,
                                        nics=nics, security_groups=secgroups,
-                                       block_device_mapping_v2=[bdm_v2],
+                                       block_device_mapping_v2=[volume_data],
                                        userdata=userdata,
                                        )
 
@@ -148,11 +177,11 @@ async def create_instance_with_volume(name, zone, flavor, image,
         print(info(red("Cleaning after myself")))
         # TODO: clean volume and nic here
         # clean volume
-        v.delete()
+        cinder.volumes.delete(volume_data["id"])
 
     inst_status = instance.status
-    print("waiting for 10 seconds for the machine to be launched ... ")
-    await asyncio.sleep(10)
+    print("waiting for 5 seconds for the machine to be launched ... ")
+    await asyncio.sleep(5)
 
     while inst_status == 'BUILD':
         print("Instance: " + instance.name + " is in " + inst_status +
@@ -294,12 +323,12 @@ class NodeBuilder:
         hosts = self._info.distribute_nodes()
 
         self._info.assign_nics_to_nodes(hosts, nics)
-
+        volume_klass = self._info.storage_class
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
                  host.name, host.zone,
-                 nics=host.nic,
+                 nics=host.nic, volume_klass=volume_klass,
                  *task_args_node))
                  for host in hosts]
 
@@ -361,10 +390,13 @@ class ControlPlaneBuilder:
         masters_zones = self._info.distribute_management()
         self._info.assign_nics_to_management(masters_zones, nics)
 
+        volume_klass = self._info.storage_class
         loop = asyncio.get_event_loop()
+
         tasks = [loop.create_task(create_instance_with_volume(
                  masters_zones[i].name, masters_zones[i].zone,
                  nics=masters_zones[i].nic,
+                 volume_klass=volume_klass,
                  *tasks_args_masters))
                  for i in range(0, self._info.n_masters)]
 
@@ -387,9 +419,11 @@ class ClusterBuilder:
                               [nic['port']['fixed_ips'][0]['ip_address']
                                for nic in cp_nics])]
 
-        certs = create_certs(config,
-                             list(cp_hosts) + list(hosts),
-                             list(cp_ips) + list(ips))
+        ips = list(cp_ips) + list(ips) + ['127.0.0.1', "10.32.0.1"]
+        hosts = list(cp_hosts) + list(hosts) \
+            + ["kubernetes.default",
+               "kubernetes.default.svc.cluster.local"]
+        certs = create_certs(config, hosts, ips)
 
         calico_token = uuid.uuid4().hex[:32]
         kubelet_token = uuid.uuid4().hex[:32]
@@ -397,12 +431,13 @@ class ClusterBuilder:
 
         hosts = {}
         tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
-                                      calico_token, admin_token,
+                                      calico_token,
                                       etcd_host_list)
         logger.debug(info("Done creating nodes tasks"))
         cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                           kubelet_token,
                                           calico_token,
+                                          admin_token,
                                           etcd_host_list)
         logger.debug(info("Done creating control plane tasks"))
 
@@ -412,7 +447,8 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            write_kubeconfig(config, etcd_host_list, admin_token)
+            write_kubeconfig(config, etcd_host_list, admin_token,
+                             True)
 
 
 def main():  # pragma: no coverage

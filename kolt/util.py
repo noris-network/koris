@@ -81,6 +81,7 @@ class OSClusterInfo:
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
         self.azones = config['availibility-zones']
+        self.storage_class = config['storage_class']
 
     @property
     def nodes_names(self):
@@ -191,11 +192,16 @@ kubeconfig = {'apiVersion': 'v1',
 
 def get_kubeconfig_yaml(master_uri, username, token,
                         skip_tls=False,
-                        encode=True):
+                        encode=True,
+                        ca="/var/lib/kubernetes/ca.pem"):
     config = copy.deepcopy(kubeconfig)
     if skip_tls:
         config['clusters'][0]['cluster'].pop('insecure-skip-tls-verify')
-    config['clusters'][0]['cluster']['server'] = master_uri
+        config['clusters'][0]['cluster']['server'] = master_uri
+        config['clusters'][0]['cluster']['certificate-authority'] = ca
+    else:
+        config['clusters'][0]['cluster'].pop('server')
+
     config['contexts'][0]['name'] = "%s-context" % username
     config['contexts'][0]['context']['user'] = "%s" % username
     config['current-context'] = "%s-context" % username
