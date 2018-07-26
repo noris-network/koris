@@ -174,7 +174,7 @@ kubeconfig = {'apiVersion': 'v1',
                   {'cluster': {'insecure-skip-tls-verify': True,
                                'server': '%%%%MASTERURI%%%',
                                'certificate-authority':
-                               '%%CA%%'},
+                               '/var/lib/kubernetes/ca.pem'},
                    'name': 'kubernetes'}],
               'contexts': [
                   {'context':
@@ -197,11 +197,11 @@ def get_kubeconfig_yaml(master_uri, username, token,
     config = copy.deepcopy(kubeconfig)
     if skip_tls:
         config['clusters'][0]['cluster'].pop('insecure-skip-tls-verify')
+        config['clusters'][0]['cluster']['server'] = master_uri
         config['clusters'][0]['cluster']['certificate-authority'] = ca
     else:
-        config['clusters'][0]['cluster'].pop('certificate-authority')
+        config['clusters'][0]['cluster'].pop('server')
 
-    config['clusters'][0]['cluster']['server'] = master_uri
     config['contexts'][0]['name'] = "%s-context" % username
     config['contexts'][0]['context']['user'] = "%s" % username
     config['current-context'] = "%s-context" % username

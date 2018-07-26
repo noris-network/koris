@@ -8,7 +8,7 @@ text/x-shellscript
 OS=linux
 ARCH=amd64
 CLUSTER_IP_RANGE=10.32.0.0/16
-PODS_SUBNET=10.233.64.0/18
+PODS_SUBNET=10.233.0.0/16
 # etcd
 ETCD_URL=https://github.com/coreos/etcd/releases/download
 ETCD_VERSION=v3.3.8
@@ -150,6 +150,7 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 [Service]
 ExecStart=/usr/bin/kube-controller-manager \\
   --address=0.0.0.0 \\
+  --allocate-node-cidrs=true \\
   --cloud-config=/etc/kubernetes/cloud.conf \\
   --cloud-provider=openstack \\
   --cluster-cidr=${PODS_SUBNET} \\
