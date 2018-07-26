@@ -123,7 +123,13 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+sudo iptables -P FORWARD ACCEPT
+
+sed -i "s/__NODENAME__/"$(hostname -s)"/g"  /etc/cni/net.d/10-calico.conf
+
 sudo systemctl enable kubelet
 sudo systemctl start kubelet
 sudo systemctl start kube-proxy
-sudo systemctl start kube-proxy
+sudo systemctl enable kube-proxy
+
+
