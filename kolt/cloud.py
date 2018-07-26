@@ -320,7 +320,8 @@ class NodeInit(BaseInit):
         """.format(get_kubeconfig_yaml(
             "https://%s:6443" % self.etcd_cluster_info[0].name,
             "calico",
-            self.calico_token))
+            self.calico_token,
+            skip_tls=True))
 
         return textwrap.dedent(kubeconfig_part).lstrip()
 
