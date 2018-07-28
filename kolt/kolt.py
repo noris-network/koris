@@ -144,18 +144,6 @@ async def create_instance_with_volume(name, zone, flavor, image,
     volume_data = await create_volume(cinder, image, zone, volume_klass)
 
     try:
-        v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
-                                  availability_zone=zone)
-
-        while v.status != 'available':
-            await asyncio.sleep(1)
-            v = cinder.volumes.get(v.id)
-
-        v.update(bootable=True)
-        # wait for mark as bootable
-        await asyncio.sleep(2)
-
-        bdm_v2["uuid"] = v.id
         print("Creating instance %s... " % name)
         instance = nova.servers.create(name=name,
                                        availability_zone=zone,
