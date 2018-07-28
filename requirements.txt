@@ -48,3 +48,4 @@ chardet==3.0.4
 requestsexceptions==1.4.0
 pyperclip==1.6.0
 cryptography
+mach.py
