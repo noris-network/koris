@@ -1,6 +1,5 @@
 # https://support.ultimum.io/support/solutions/articles/1000125460-python-novaclient-neutronclient-glanceclient-swiftclient-heatclient
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
-import argparse
 import asyncio
 import base64
 import copy
@@ -12,6 +11,7 @@ import sys
 
 import yaml
 
+from mach import mach1
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound,
                                    ClientException as NovaClientException)
@@ -407,6 +407,10 @@ class ClusterBuilder:
 
     def run(self, config):
 
+        if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
+            print(red("You must have an odd number (>1) of etcd machines!"))
+            sys.exit(2)
+
         nb = NodeBuilder(nova, neutron, config)
         cpb = ControlPlaneBuilder(nova, neutron, config)
         logger.debug(info("Done collection infromation from OpenStack"))
@@ -451,49 +455,62 @@ class ClusterBuilder:
                              True)
 
 
-def main():  # pragma: no coverage
-    global nova, neutron, cinder
+@mach1
+class Kolt:
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config", help="YAML configuration")
-    parser.add_argument("--destroy", help="Delete cluster",
-                        action="store_true")
-    parser.add_argument("--certs", help="Create cluster CA and certs only",
-                        action="store_true")
+    def __init__(self):
 
-    parser.add_argument("--ca", help="CA to reuse")
-    parser.add_argument("--key", help="CA key to reuse")
+        global nova, neutron, cinder
+        nova, neutron, cinder = get_clients()
 
-    args = parser.parse_args()
-
-    if not args.config:
-        parser.print_help()
-        sys.exit(2)
-
-    with open(args.config, 'r') as stream:
-        config = yaml.load(stream)
-
-    nova, neutron, cinder = get_clients()
-
-    if args.certs:
-        if args.key and args.ca:
-            ca_bundle = CertBundle.read_bundle(args.key, args.ca)
+    def certs(config, key=None, ca=None):
+        """
+        Create cluster certificates
+        """
+        if key and ca:
+            ca_bundle = CertBundle.read_bundle(key, ca)
         else:
             ca_bundle = None
 
         names, ips = get_server_info_from_openstack(config, nova)
         create_certs(config, names, ips, ca_bundle=ca_bundle)
+
+    def k8s(self, config, inventory=None):
+        """
+        Bootstrap a Kubernetes cluster
+
+        config - configuration file
+        inventory - invetory file to write
+        """
+        with open(config, 'r') as stream:
+            config = yaml.load(stream)
+
+        builder = ClusterBuilder()
+        builder.run(config)
+
+    def kubespray(config):
+        """
+        Launch machines on opentack and write a configuration for kubespray
+        """
+        print("Not implemented yet ...")
+
+    def destroy(self, config):
+        """
+        Delete the complete cluster stack
+        """
+        delete_cluster(config)
         sys.exit(0)
 
-    if args.destroy:
-        delete_cluster(config, nova, neutron)
-        sys.exit(0)
+    def oc(self, config, inventory=None):
+        """
+        Create OpenStack machines for Openshift installation with Ansible
 
-    if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
-        print(red("You must have an odd number (>1) of etcd machines!"))
-        sys.exit(2)
+        config - configuration file
+        inventory - invetory file to write
+        """
+        print("Not implemented yet ...")
 
-    builder = ClusterBuilder()
-    builder.run(config)
 
-    print(info("Cluster successfully set up."))
+def main():
+    k = Kolt()
+    k.run()
