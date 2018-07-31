@@ -119,7 +119,7 @@ If you encounter the following message before failure:
    FAILED - RETRYING: Master | wait for the apiserver to be running (19 retries left).
    FAILED - RETRYING: Master | wait for the apiserver to be running (19 retries left).
 
-Check on your masters that the kubelete service can start:
+Check on your masters that the kubelet service can start:
 
 .. code:: shell
 
