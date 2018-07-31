@@ -402,9 +402,9 @@ class ControlPlaneBuilder:
 
 class ClusterBuilder:
 
-    def run(self, config):
+    def run(self, config, no_cloud_init=False):
 
-        if not (config['n-etcd'] % 2 and config['n-etcd'] > 1):
+        if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
             print(red("You must have an odd number (>1) of etcd machines!"))
             sys.exit(2)
 
@@ -426,20 +426,29 @@ class ClusterBuilder:
                "kubernetes.default.svc.cluster.local"]
         certs = create_certs(config, hosts, ips)
 
-        calico_token = uuid.uuid4().hex[:32]
-        kubelet_token = uuid.uuid4().hex[:32]
-        admin_token = uuid.uuid4().hex[:32]
+        if no_cloud_init:
+            calico_token = uuid.uuid4().hex[:32]
+            kubelet_token = uuid.uuid4().hex[:32]
+            admin_token = uuid.uuid4().hex[:32]
+        else:
+            certs = None
+            calico_token = None
+            kubelet_token = None
+            admin_token = None
 
         hosts = {}
         tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
-                                      calico_token,
-                                      etcd_host_list)
+                                      calico_token, etcd_host_list,
+                                      no_cloud_init=no_cloud_init)
+
         logger.debug(info("Done creating nodes tasks"))
+
         cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
-                                          kubelet_token,
-                                          calico_token,
+                                          kubelet_token, calico_token,
                                           admin_token,
-                                          etcd_host_list)
+                                          etcd_host_list,
+                                          no_cloud_init=no_cloud_init)
+
         logger.debug(info("Done creating control plane tasks"))
 
         tasks = cp_tasks + tasks
@@ -450,56 +459,8 @@ class ClusterBuilder:
             loop.close()
             write_kubeconfig(config, etcd_host_list, admin_token,
                              True)
-
-
-class KubesprayBuilder(ClusterBuilder):
-
-    def run(self, config):
-
-        if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
-            print(red("You must have an odd number (>1) of etcd machines!"))
-            sys.exit(2)
-
-        nb = NodeBuilder(nova, neutron, config)
-        cpb = ControlPlaneBuilder(nova, neutron, config)
-        logger.debug(info("Done collecting infromation from OpenStack"))
-        hosts, ips, nics = nb.get_nodes_info(nova, neutron, config)
-
-        cp_hosts, cp_ips, cp_nics = cpb.get_hosts_info()
-
-        etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
-                          zip(cpb._info.management_names,
-                              [nic['port']['fixed_ips'][0]['ip_address']
-                               for nic in cp_nics])]
-
-        certs = None
-        calico_token = None
-        kubelet_token = None
-        admin_token = None
-
-        hosts = {}
-
-        tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
-                                      calico_token,
-                                      etcd_host_list,
-                                      no_cloud_init=True)
-        logger.debug(info("Done creating nodes tasks"))
-        cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
-                                          kubelet_token,
-                                          calico_token,
-                                          admin_token,
-                                          etcd_host_list,
-                                          no_cloud_init=True)
-        logger.debug(info("Done creating control plane tasks"))
-
-        tasks = cp_tasks + tasks
-
-        if tasks:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(asyncio.wait(tasks))
-            loop.close()
-
-        return create_inventory(hosts, config)
+        if no_cloud_init:
+            return create_inventory(hosts, config)
 
 
 @mach1()
@@ -542,8 +503,8 @@ class Kolt:
         with open(config, 'r') as stream:
             config = yaml.load(stream)
 
-        builder = KubesprayBuilder()
-        cfg = builder.run(config)
+        builder = ClusterBuilder()
+        cfg = builder.run(config, no_cloud_init=True)
 
         if inventory:
             with open(inventory, 'w') as f:
