@@ -17,7 +17,7 @@ OS=linux
 ARCH=amd64
 CNI_VERSION=0.6.0
 
-# CALICON VERSIONS - edit with care <3 !
+# CALICO VERSIONS - edit with care <3 !
 calico_version=3.1.3
 
 #### DON'T CHANGE ANYTHING BELOW ===============================================================================
@@ -65,9 +65,11 @@ for item in calico calico-ipam; do
 done
 
 mkdir -pv /var/lib/kubernetes/
-cp /etc/ssl/kubernetes/kubernetes-key.pem /var/lib/kubernetes/kubernetes-key.pem
-cp /etc/ssl/kubernetes/kubernetes.pem /var/lib/kubernetes/kubernetes.pem
-cp /etc/ssl/kubernetes/ca.pem /var/lib/kubernetes/ca.pem
+
+for item in kubernetes-key.pem kubernetes.pem ca.pem; do
+    cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
+done
+
 #ln -vs /etc/ssl/kubernetes/service-accounts.pem /var/lib/kubernetes/service-accounts.pem
 
 cat << EOF > /etc/systemd/system/kubelet.service
@@ -131,5 +133,3 @@ sudo systemctl enable kubelet
 sudo systemctl start kubelet
 sudo systemctl start kube-proxy
 sudo systemctl enable kube-proxy
-
-
