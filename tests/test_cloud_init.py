@@ -3,10 +3,12 @@ import re
 import uuid
 import yaml
 
-from kolt.cloud import CloudInit, NodeInit
+import pytest
+
+from kolt.cloud import MasterInit, NodeInit
 from kolt.kolt import create_certs
 from kolt.util import (EtcdHost, get_kubeconfig_yaml,
-                       OSCloudConfig)
+                       OSCloudConfig, get_token_csv)
 
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,
@@ -26,26 +28,79 @@ cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
                              region_name="de-nbg6-1")
 
 
-(_, ca_cert, k8s_bundle,
- svc_accnt_bundle, admin_bundle) = create_certs({},
-                                                hostnames,
-                                                ips, write=False)
+certs = create_certs({}, hostnames, ips, write=False)
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
-kubelet_token = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
+
+admin_token = uuid.uuid4().hex[:32]
+kubelet_token = uuid.uuid4().hex[:32]
 calico_token = uuid.uuid4().hex[:32]
+token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 
-def test_cloud_init():
-    ci = CloudInit("master", "master-1-k8s", test_cluster,
-                   cert_bundle=(ca_cert, k8s_bundle, svc_accnt_bundle),
-                   encryption_key=encryption_key,
-                   cloud_provider=cloud_config)
+@pytest.fixture
+def ci_master():
+    ci = MasterInit("master", test_cluster,
+                    cert_bundle=(certs['ca'],
+                                 certs['k8s'],
+                                 certs['service-account']),
+                    encryption_key=encryption_key,
+                    cloud_provider=cloud_config)
+    return ci
 
-    config = ci.get_files_config()
+
+@pytest.fixture
+def ci_node():
+    ci = NodeInit("node",
+                  kubelet_token,
+                  certs['ca'],
+                  certs['k8s'],
+                  certs['service-account'],
+                  test_cluster,
+                  calico_token
+                  )
+    return ci
+
+
+def test_token_cvs(ci_master):
+
+    token_csv = ci_master._get_token_csv()
+    assert yaml.load(token_csv)[0]['permissions'] == '0600'
+
+
+def test_cloud_config(ci_master):
+
+    _cloud_config = ci_master._get_cloud_provider()
+    assert yaml.load(_cloud_config)[0]['permissions'] == '0600'
+
+
+def test_encryption_config(ci_master):
+
+    _config = ci_master._get_encryption_config()
+
+    _config = yaml.load(_config)[0]
+
+    assert _config['path'] == '/var/lib/kubernetes/encryption-config.yaml'
+
+    content = _config['content']
+    enc_ = yaml.load(base64.b64decode(content).decode())
+    assert enc_['resources'][0]['providers'][0][
+        'aescbc']['keys'][0]['secret'] == encryption_key
+
+
+def test_certificate_info(ci_master):
+
+    certs_config = ci_master._get_certificate_info()
+
+    assert 4 == len(yaml.load(certs_config))
+
+
+def test_cloud_init(ci_master):
+
+    config = ci_master.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 9
+    assert len(config['write_files']) == 10
 
     etcd_host = test_cluster[0]
 
@@ -57,17 +112,11 @@ def test_cloud_init():
         etcd_env['content'])
 
 
-def test_node_init():
-    ci = NodeInit("node", "node-1-k8s",
-                  kubelet_token,
-                  ca_cert,
-                  k8s_bundle, test_cluster,
-                  calico_token
-                  )
-    config = ci.get_files_config()
+def test_node_init(ci_node):
+    config = ci_node.get_files_config()
     config = yaml.load(config)
 
-    assert len(config['write_files']) == 6
+    assert len(config['write_files']) == 8
 
 
 def test_get_kube_config():
@@ -78,5 +127,3 @@ def test_get_kube_config():
 
     kcy_dict = yaml.load(kcy)
     assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']
-    import pdb
-    pdb.set_trace()

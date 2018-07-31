@@ -2,6 +2,31 @@
 Usage
 =====
 
-To use colt in a project::
+To use kolt with kubespray 2.4::
 
-    import colt
+    
+    git clone -b 'v2.4.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
+    cd kubespray
+    kolt k8s-machines-config.yml -i inventory/mycluster.ini
+        ansible-playbook -i inventory/mycluster.ini cluster.yml  --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu  -e ansible_python_interpreter="/usr/bin/python3" -b --flush-cache
+    
+    
+To use kolt with kubespray 2.5::
+
+    git clone -b 'v2.5.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
+    cd kubespray
+    kolt k8s-machines-config.yml -i inventory/local/mycluster.ini
+    source ~/OS-RC-FILE-v2
+    export OS_USER_DOMAIN_NAME="noris.de"  # your domain
+    export OS_PROJECT_NAME="PI"  # your project
+
+    ansible-playbook -i inventory/local/mycluster.ini cluster.yml  --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu  -e ansible_python_interpreter="/usr/bin/python3" -b --flush-cache
+    
+Docker is not configured properly in this kubespray version. See discussion on
+[failing to build docker images here][1]. To fix it run::
+
+   sed -i '/--iptables=false/--iptables=true/' /etc/systemd/system/docker.service.d/docker-options.conf 
+
+
+
+[1]: https://github.com/kubernetes-incubator/kubespray/issues/2175

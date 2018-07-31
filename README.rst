@@ -58,6 +58,12 @@ You need to have some things pre-created, but the file is self explaining.
 
    bootstrap_os: ubuntu
 
+You must set the following option:
+
+.. code::
+
+   cloud_provider: openstack
+
 6. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml` and set the following options:
 
 .. code::
@@ -68,16 +74,24 @@ You need to have some things pre-created, but the file is self explaining.
 
 7. Note for people with ansible pre-knowledge, **YOU DON'T** need to create your own inventory file, it will be automatically created for you.
 
-8. Run colt with your cluster configuration, this will create your inventory
+8. Run colt with your cluster configuration, this will create your inventory (the file ``k8s-machines-config.yml`` can be found in the directory ``kolt/docs``, so change to this directory before issuing the next command)
 
 .. code:: shell
 
    $ kolt k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
-Save the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``.
 
-9. Run ansible kubespray on your newly created machines:
+.. important:: Copy the above inventory file ``mycluster.ini`` to ``kubespray/inventory/`` with the following command (you may need to adjust the path if you cloned kubespray to some other location).
+
+.. code:: shell
+
+   $ cp mycluster.ini ../../kubespray/inventory/
+
+9. Run ansible kubespray on your newly created machines. 
+
+.. note::
+   You **must** to call the `ansible-playbook` command from the `kubespray` directory.
 
 .. code:: shell
 
