@@ -3,7 +3,6 @@
 import asyncio
 import base64
 import copy
-import logging
 import os
 import uuid
 import textwrap
@@ -29,16 +28,12 @@ from .ssl import CertBundle
 from .util import (EtcdHost,
                    OSCloudConfig, OSClusterInfo,
                    create_inventory,
+                   get_logger,
                    get_server_info_from_openstack,
                    get_token_csv,
                    )
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-# add ch to logger
-logger.addHandler(ch)
+logger = get_logger(__name__)
 
 
 def chunks(l, n):

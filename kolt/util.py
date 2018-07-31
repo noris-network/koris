@@ -1,5 +1,6 @@
 import base64
 import copy
+import logging
 import textwrap
 
 from configparser import ConfigParser
@@ -7,6 +8,16 @@ from functools import lru_cache
 from ipaddress import IPv4Address
 
 import yaml
+
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    # add ch to logger
+    logger.addHandler(ch)
+    return logger
 
 
 class NodeZoneNic:

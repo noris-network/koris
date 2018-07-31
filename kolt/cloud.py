@@ -5,7 +5,6 @@ provided
 """
 import base64
 import json
-import logging
 import os
 import re
 import textwrap
@@ -17,14 +16,10 @@ from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
 from kolt.util import (encryption_config_tmpl,
-                       calicoconfig, get_kubeconfig_yaml)
+                       calicoconfig, get_kubeconfig_yaml,
+                       get_logger)
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-# add ch to logger
-logger.addHandler(ch)
+logger = get_logger(__name__)
 
 
 class BaseInit:
