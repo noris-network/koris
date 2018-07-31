@@ -12,7 +12,7 @@ K8S_VERSION=v1.10.4
 # Specify the Kubernetes version to use.
 # can only use docker 17.03.X
 # https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md
-DOCKER_VERSION=17.03
+DOCKER_VERSION=17.12
 OS=linux
 ARCH=amd64
 CNI_VERSION=0.6.0
@@ -20,6 +20,7 @@ CNI_VERSION=0.6.0
 # CALICON VERSIONS - edit with care <3 !
 calico_version=3.1.3
 
+PODS_SUBNET=10.233.0.0/16
 #### DON'T CHANGE ANYTHING BELOW ===============================================================================
 
 apt-get update
@@ -114,6 +115,7 @@ ExecStart=/usr/bin/kube-proxy \\
   --proxy-mode=iptables \\
   --iptables-min-sync-period=2s \\
   --iptables-sync-period=5s \\
+  --cluster-cidr=${PODS_SUBNET} \\
   --v=2
 
 Restart=on-failure
