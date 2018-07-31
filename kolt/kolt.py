@@ -28,6 +28,7 @@ from .hue import red, info, que, lightcyan as cyan, yellow
 from .ssl import CertBundle
 from .util import (EtcdHost,
                    OSCloudConfig, OSClusterInfo,
+                   create_inventory,
                    get_server_info_from_openstack,
                    get_token_csv,
                    )
@@ -292,16 +293,23 @@ class NodeBuilder:
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
                            calico_token,
-                           etcd_host_list
+                           etcd_host_list,
+                           no_cloud_init=False
                            ):
         node_args = {'kubelet_token': kubelet_token,
-                     'ca_cert': certs['ca'],
-                     'cert_bundle': certs['k8s'],
                      'cluster_info': etcd_host_list,
                      'calico_token': calico_token,
-                     'service_account_bundle': certs['service-account']}
+                     }
 
-        user_data = create_userdata('node', self._info.image.name, **node_args)
+        if no_cloud_init:
+            user_data = create_userdata('no-role', self._info.image.name,
+                                        **node_args)
+        else:
+            node_args.update({'ca_cert': certs['ca'],
+                              'service_account_bundle': certs['service-account'], # noqa
+                              'cert_bundle': certs['k8s']})
+            user_data = create_userdata('node', self._info.image.name,
+                                        **node_args)
 
         task_args_node = self._info.node_args_builder(user_data, hosts)
 
@@ -345,7 +353,8 @@ class ControlPlaneBuilder:
                            kubelet_token,
                            calico_token,
                            admin_token,
-                           etcd_host_list):
+                           etcd_host_list,
+                           no_cloud_init=False):
 
         # generate a random string
         # this should be the equal of
@@ -363,15 +372,20 @@ class ControlPlaneBuilder:
 
         master_args = dict(
             cloud_provider=cloud_provider_info,
-            cert_bundle=(certs['ca'], certs['k8s'],
-                         certs['service-account']),
             encryption_key=encryption_key,
             token_csv_data=token_csv_data,
             cluster_info=etcd_host_list,
         )
 
-        user_data = create_userdata('master', self._info.image.name,
-                                    **master_args)
+        if no_cloud_init:
+            user_data = create_userdata('no-role', self._info.image.name,
+                                        **master_args)
+        else:
+            master_args.update({'cert_bundle':
+                                (certs['ca'], certs['k8s'],
+                                 certs['service-account'])})
+            user_data = create_userdata('master', self._info.image.name,
+                                        **master_args)
 
         tasks_args_masters = self._info.node_args_builder(user_data, hosts)
 
@@ -401,7 +415,7 @@ class ClusterBuilder:
 
         nb = NodeBuilder(nova, neutron, config)
         cpb = ControlPlaneBuilder(nova, neutron, config)
-        logger.debug(info("Done collection infromation from OpenStack"))
+        logger.debug(info("Done collecting infromation from OpenStack"))
         hosts, ips, nics = nb.get_nodes_info(nova, neutron, config)
 
         cp_hosts, cp_ips, cp_nics = cpb.get_hosts_info()
@@ -443,7 +457,57 @@ class ClusterBuilder:
                              True)
 
 
-@mach1
+class KubesprayBuilder(ClusterBuilder):
+
+    def run(self, config):
+
+        if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
+            print(red("You must have an odd number (>1) of etcd machines!"))
+            sys.exit(2)
+
+        nb = NodeBuilder(nova, neutron, config)
+        cpb = ControlPlaneBuilder(nova, neutron, config)
+        logger.debug(info("Done collecting infromation from OpenStack"))
+        hosts, ips, nics = nb.get_nodes_info(nova, neutron, config)
+
+        cp_hosts, cp_ips, cp_nics = cpb.get_hosts_info()
+
+        etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
+                          zip(cpb._info.management_names,
+                              [nic['port']['fixed_ips'][0]['ip_address']
+                               for nic in cp_nics])]
+
+        certs = None
+        calico_token = None
+        kubelet_token = None
+        admin_token = None
+
+        hosts = {}
+
+        tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
+                                      calico_token,
+                                      etcd_host_list,
+                                      no_cloud_init=True)
+        logger.debug(info("Done creating nodes tasks"))
+        cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
+                                          kubelet_token,
+                                          calico_token,
+                                          admin_token,
+                                          etcd_host_list,
+                                          no_cloud_init=True)
+        logger.debug(info("Done creating control plane tasks"))
+
+        tasks = cp_tasks + tasks
+
+        if tasks:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.wait(tasks))
+            loop.close()
+
+        return create_inventory(hosts, config)
+
+
+@mach1()
 class Kolt:
 
     def __init__(self):
@@ -476,11 +540,24 @@ class Kolt:
         builder = ClusterBuilder()
         builder.run(config)
 
-    def kubespray(config):
+    def kubespray(self, config, inventory=None):
         """
         Launch machines on opentack and write a configuration for kubespray
         """
-        print("Not implemented yet ...")
+        with open(config, 'r') as stream:
+            config = yaml.load(stream)
+
+        builder = KubesprayBuilder()
+        cfg = builder.run(config)
+
+        if inventory:
+            with open(inventory, 'w') as f:
+                cfg.write(f)
+        else:
+            print(info("Here is your inventory ..."))
+            print(
+                red("You can save this inventory to a file with the option -i")) # noqa
+            cfg.write(sys.stdout)
 
     def destroy(self, config):
         """

@@ -2,6 +2,7 @@ import base64
 import copy
 import textwrap
 
+from configparser import ConfigParser
 from functools import lru_cache
 from ipaddress import IPv4Address
 
@@ -219,6 +220,7 @@ calicoconfig = {
     "name": "calico-k8s-network",
     "type": "calico",
     "datastore_type": "etcdv3",
+    "log_level": "DEBUG",
     "etcd_endpoints": "",
     "etcd_key_file": "/var/lib/kubernetes/kubernetes-key.pem",
     "etcd_cert_file": "/var/lib/kubernetes/kubernetes.pem",
@@ -226,15 +228,18 @@ calicoconfig = {
     "ipam": {
         "type": "calico-ipam",
         "assign_ipv4": "true",
-        "assign_ipv6": "false"
+        "assign_ipv6": "false",
+        "ipv4_pools": ["10.233.0.0/16"]
     },
     "policy": {
         "type": "k8s"
     },
-    "kubernetes": {
-        "kubeconfig": "/etc/calico/kube/kubeconfig"
-    }
+    "nodename": "__NODENAME__"  # <- This is replaced during boot
 }
+
+#    "kubernetes": {
+#        "kubeconfig": "/etc/calico/kube/kubeconfig"
+#    }
 
 
 def get_node_info_from_openstack(config, nova, role):
@@ -309,3 +314,40 @@ def get_token_csv(adminToken, calicoToken, kubeletToken):
 def host_names(role, num, cluster_name):
     return ["%s-%s-%s" % (role, i, cluster_name) for i in
             range(1, num + 1)]
+
+
+def create_inventory(hosts, config):
+    """
+    :hosts:
+    :config: config dictionary
+    """
+
+    cfg = ConfigParser(allow_no_value=True, delimiters=('\t', ' '))
+
+    [cfg.add_section(item) for item in ["all", "kube-master", "kube-node",
+                                        "etcd", "k8s-cluster:children"]]
+    masters = []
+    nodes = []
+
+    for (host, ip) in hosts.items():
+        cfg.set("all", host, "ansible_ssh_host=%s  ip=%s" % (ip, ip))
+        if host.startswith("master"):
+            cfg.set("kube-master", host)
+            masters.append(host)
+        if host.startswith("node"):
+            cfg.set("kube-node", host)
+            nodes.append(host)
+
+    # add etcd
+    for master in masters:
+        cfg.set("etcd", master)
+
+    etcds_missing = config["n-etcds"] - len(masters)
+    for node in nodes[:etcds_missing]:
+        cfg.set("etcd", node)
+
+    # add all cluster groups
+    cfg.set("k8s-cluster:children", "kube-node")
+    cfg.set("k8s-cluster:children", "kube-master")
+
+    return cfg
