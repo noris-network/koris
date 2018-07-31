@@ -2,8 +2,14 @@
 kolt
 ====
 
-launch kubernetes clusters on OpenStack using ansible-kubespray
+Launch kubernetes clusters on OpenStack.
+Kolt supports two work modes:
 
+1. In the first mode you create an empty cluster on Openstack,
+   and recieve an inventory for usage with ansible-kubespray.
+
+2. In the second mode (still in alpha) you boot a cluster on openstack.
+   You then recieve a working `kubeconfig` file.
 
 
 Features
@@ -15,44 +21,51 @@ Usage
 -----
 
 Pre-requisits
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
 2. A pre-created network, and security group.
 3. Basic understanding of OpenStack.
 4. Ansible installed on your system.
-5. A local and working version of `cfssl`
 
 Get started
 ~~~~~~~~~~~
-
-1. Clone your colt locally:
-
-.. code:: shell
-
-   $ git clone git@gitlab.noris.net:PI/kolt.git
-
-2. Install colt to your system:
+1. Create a local virtual environment for kolt:
 
 .. code:: shell
 
-   $ python3 setup.py install
+   mkdir FooBar
+   cd FooBar && pipenv --python 3.6
+   pip install -e git+git@gitlab.noris.net:PI/kolt.git@v0.2#egg=kolt
 
-3. edit your own configuration file:
+2. Create a security group in openstack which allows `ipip` and `BGP` protocol.
 
 .. code:: shell
 
-   $ editor docs/k8s-machines-config.yml
+   neutron security-group-create foo
+   neutron security-group-rule-create  --protocol 4  --direction egress foo
+   neutron security-group-rule-create  --protocol 4  --direction igress foo
+   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction egress foo
+   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress foo
 
-You need to have some things pre-created, but the file is self explaining.
+2. edit your own configuration file:
 
-4. clone kubespray:
+.. code:: shell
+
+   $ editor k8s-machines-config.yml
+
+See the `source repository`_ `docs/k8s-machines-config.yml` for an example.
+
+.. _source repository: https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml
+
+3. clone kubespray:
 
 .. code:: shell
 
    $ git clone -b 'v2.4.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
 
-5. You should now edit the file `kubespray/inventory/group_vars/all.yml` and set the and set options as you like, for example:
+4. You should now edit the file `kubespray/inventory/group_vars/all.yml`
+   and set the and set options as you like, for example:
 
 .. code::
 
@@ -64,7 +77,8 @@ You must set the following option:
 
    cloud_provider: openstack
 
-6. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml` and set the following options:
+5. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml`
+   and set the following options:
 
 .. code::
 
@@ -72,23 +86,30 @@ You must set the following option:
    cluster_name: your-cluster-name.local
    dashboard_enabled: true
 
-7. Note for people with ansible pre-knowledge, **YOU DON'T** need to create your own inventory file, it will be automatically created for you.
+6. Note for people with ansible pre-knowledge, **YOU DON'T** need to create your
+   own inventory file, it will be automatically created for you.
 
-8. Run colt with your cluster configuration, this will create your inventory (the file ``k8s-machines-config.yml`` can be found in the directory ``kolt/docs``, so change to this directory before issuing the next command)
+7. Run colt with your cluster configuration, this will create your
+   inventory (the file ``k8s-machines-config.yml`` can be found in the directory
+   ``kolt/docs``, so change to this directory before issuing the next command)
 
 .. code:: shell
 
-   $ kolt k8s-machines-config.yml -i mycluster.ini
+   $ kolt kubespray k8s-machines-config.yml -i mycluster.ini
 
 This last step takes about one minute to complete.
 
-.. important:: Copy the above inventory file ``mycluster.ini`` to ``kubespray/inventory/`` with the following command (you may need to adjust the path if you cloned kubespray to some other location).
+.. important::
+   
+   Copy the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``
+   with the following command (you may need to adjust the path if you
+   cloned kubespray to some other location).
 
 .. code:: shell
 
    $ cp mycluster.ini ../../kubespray/inventory/
 
-9. Run ansible kubespray on your newly created machines. 
+8. Run ansible kubespray on your newly created machines.
 
 .. note::
    You **must** to call the `ansible-playbook` command from the `kubespray` directory.
