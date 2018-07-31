@@ -451,7 +451,7 @@ class Kolt:
         global nova, neutron, cinder
         nova, neutron, cinder = get_clients()
 
-    def certs(config, key=None, ca=None):
+    def certs(self, config, key=None, ca=None):
         """
         Create cluster certificates
         """
@@ -463,7 +463,7 @@ class Kolt:
         names, ips = get_server_info_from_openstack(config, nova)
         create_certs(config, names, ips, ca_bundle=ca_bundle)
 
-    def k8s(self, config, inventory=None):
+    def k8s(self, config):
         """
         Bootstrap a Kubernetes cluster
 
@@ -486,7 +486,10 @@ class Kolt:
         """
         Delete the complete cluster stack
         """
-        delete_cluster(config)
+        with open(config, 'r') as stream:
+            config = yaml.load(stream)
+
+        delete_cluster(config, nova, neutron)
         sys.exit(0)
 
     def oc(self, config, inventory=None):
