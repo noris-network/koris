@@ -64,7 +64,7 @@ See the `source repository`_ `docs/k8s-machines-config.yml` for an example.
 
 .. code:: shell
 
-   $ git clone -b 'v2.4.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
+   $ git clone -b 'v2.5.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
 
 4. You should now edit the file `kubespray/inventory/group_vars/all.yml`
    and set the and set options as you like, for example:
