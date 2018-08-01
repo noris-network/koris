@@ -36,7 +36,7 @@ Get started
 
    mkdir FooBar
    cd FooBar && pipenv --python 3.6
-   pip install -e git+git@gitlab.noris.net:PI/kolt.git@v0.2#egg=kolt
+   pip install -e git+git@gitlab.noris.net:PI/kolt.git@v0.3#egg=kolt
 
 2. Create a security group in openstack which allows `ipip` and `BGP` protocol.
 
