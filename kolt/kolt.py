@@ -427,14 +427,14 @@ class ClusterBuilder:
         certs = create_certs(config, hosts, ips)
 
         if no_cloud_init:
-            calico_token = uuid.uuid4().hex[:32]
-            kubelet_token = uuid.uuid4().hex[:32]
-            admin_token = uuid.uuid4().hex[:32]
-        else:
             certs = None
             calico_token = None
             kubelet_token = None
             admin_token = None
+        else:
+            calico_token = uuid.uuid4().hex[:32]
+            kubelet_token = uuid.uuid4().hex[:32]
+            admin_token = uuid.uuid4().hex[:32]
 
         hosts = {}
         tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
