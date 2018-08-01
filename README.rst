@@ -43,6 +43,8 @@ Get started
 .. code:: shell
 
    neutron security-group-create foo
+   neutron security-group-rule-create --protocol 0 --direction egress foo
+   neutron security-group-rule-create --protocol 0 --direction ingress foo
    neutron security-group-rule-create  --protocol 4  --direction egress foo
    neutron security-group-rule-create  --protocol 4  --direction igress foo
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction egress foo
