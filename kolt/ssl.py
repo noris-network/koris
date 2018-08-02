@@ -78,14 +78,14 @@ def create_ca(private_key, public_key, country,
     return cert
 
 
-def create_certificate(private_key, public_key, country,
+def create_certificate(ca_bundle, public_key, country,
                        state_province, locality, orga, unit, name, hosts, ips):
 
     issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
         x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
     ])
@@ -94,9 +94,9 @@ def create_certificate(private_key, public_key, country,
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name),
+        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -149,7 +149,7 @@ def create_certificate(private_key, public_key, country,
         critical=False)
 
     cert = cert.add_extension(
-        x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key),
+        x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_bundle.cert.public_key()),
         critical=False)
 
     if alt_names:
@@ -157,7 +157,7 @@ def create_certificate(private_key, public_key, country,
             x509.SubjectAlternativeName(alt_names),
             critical=False)
 
-    cert = cert.sign(private_key, hashes.SHA256(), default_backend())
+    cert = cert.sign(ca_bundle.key, hashes.SHA256(), default_backend())
 
     return cert
 
@@ -219,11 +219,11 @@ def write_cert(cert, filename):  # pragma: no coverage
 class CertBundle:
 
     @classmethod
-    def create_signed(cls, ca_key, country, state, locality,
+    def create_signed(cls, ca_bundle, country, state, locality,
                       orga, unit, name, hosts, ips):
 
         key = create_key()
-        cert = create_certificate(ca_key,
+        cert = create_certificate(ca_bundle,
                                   key.public_key(),
                                   country,
                                   state,

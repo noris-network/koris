@@ -19,7 +19,7 @@ logger.addHandler(ch)
 
 
 def delete_cluster(config, nova, neutron):
-    print(red("You are about to destroy your cluster!!!"))
+    print(red("You are about to destroy your cluster '{}'!!!".format(config["cluster-name"])))
     print(red("Are you really sure ? [y/N]"))
     ans = input(red("ARE YOU REALLY SURE???"))
 
@@ -59,6 +59,7 @@ def write_kubeconfig(config, etcd_cluster_info, admin_token,
         logger.info(yellow("kubectl get nodes --kubeconfig=%s" % path))
         with open(path, "w") as f:
             f.write(kubeconfig)
+        return path
 
 
 def create_certs(config, names, ips, write=True, ca_bundle=None):
@@ -73,7 +74,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     if not ca_bundle:
         ca_key = create_key()
         ca_cert = create_ca(ca_key, ca_key.public_key(), country,
-                            state, location, "Kubernetes", "CDA\PI",
+                            state, location, "Kubernetes", "CDA-PI",
                             "kubernetes")
         ca_bundle = CertBundle(ca_key, ca_cert)
 
@@ -81,43 +82,43 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
         ca_key = ca_bundle.key
         ca_cert = ca_bundle.cert
 
-    k8s_bundle = CertBundle.create_signed(ca_key,
+    k8s_bundle = CertBundle.create_signed(ca_bundle,
                                           country,
                                           state,
                                           location,
                                           "Kubernetes",
-                                          "CDA\PI",
+                                          "CDA-PI",
                                           "kubernetes",
                                           names,
                                           ips)
 
-    svc_accnt_bundle = CertBundle.create_signed(ca_key,
+    svc_accnt_bundle = CertBundle.create_signed(ca_bundle,
                                                 country,
                                                 state,
                                                 location,
                                                 "Kubernetes",
-                                                "CDA\PI",
+                                                "CDA-PI",
                                                 name="service-accounts",
                                                 hosts="",
                                                 ips="")
 
-    admin_bundle = CertBundle.create_signed(ca_key,
+    admin_bundle = CertBundle.create_signed(ca_bundle,
                                             country,
                                             state,
                                             location,
                                             "system:masters",
-                                            "CDA\PI",
+                                            "CDA-PI",
                                             name="admin",
                                             hosts="",
                                             ips=""
                                             )
 
-    kubelet_bundle = CertBundle.create_signed(ca_key,
+    kubelet_bundle = CertBundle.create_signed(ca_bundle,
                                               country,
                                               state,
                                               location,
                                               "system:masters",
-                                              "CDA\PI",
+                                              "CDA-PI",
                                               name="kubelet",
                                               hosts=names,
                                               ips=ips
@@ -128,12 +129,12 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     node_ip = None
     # todo: add node_ip
     for node in nodes:
-        node_bundles.append(CertBundle.create_signed(ca_key,
+        node_bundles.append(CertBundle.create_signed(ca_bundle,
                                                      country,
                                                      state,
                                                      location,
                                                      "system:nodes",
-                                                     "CDA\PI",
+                                                     "CDA-PI",
                                                      name="system:node:%s" % node,  # noqa
                                                      hosts=[node],
                                                      ips=[node_ip]))

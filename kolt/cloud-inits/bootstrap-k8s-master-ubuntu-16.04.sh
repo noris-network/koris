@@ -90,6 +90,9 @@ for item in kubernetes-key.pem kubernetes.pem ca.pem ca-key.pem service-accounts
     cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
 done
 
+cat /var/lib/kubernetes/kubernetes.pem >> /var/lib/kubernetes/api.cert
+cat  /var/lib/kubernetes/ca.pem >> /var/lib/kubernetes/api.cert
+
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
 Description=Kubernetes API Server
@@ -129,7 +132,7 @@ ExecStart=/usr/bin/kube-apiserver \\
   --service-account-key-file=/var/lib/kubernetes/service-accounts.pem \\
   --service-cluster-ip-range=${CLUSTER_IP_RANGE} \\
   --service-node-port-range=30000-32767 \\
-  --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
+  --tls-cert-file=/var/lib/kubernetes/api.cert \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
   --token-auth-file=/var/lib/kubernetes/token.csv \\
   --v=2 \\
