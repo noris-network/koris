@@ -501,7 +501,12 @@ class ClusterBuilder:
                                                      'config-map.yml')),
                       "r") as f:
                 configmap = yaml.load(f)
-                configmap["data"]["etcd_endpoints"] = str(etcd_host_list[0])
+
+                url = str(etcd_host_list[0].ip_address)+":"+str(etcd_host_list[0].port)
+
+                pdb.set_trace()
+
+                configmap["data"]["etcd_endpoints"] = url
 
                 client.create_namespaced_config_map("kube-system", configmap)
 
