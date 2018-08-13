@@ -494,6 +494,20 @@ class ClusterBuilder:
                       "r") as f:
                 client.create_cluster_role_binding(yaml.load(f))
 
+            # service accounts
+            client = k8sclient.CoreV1Api()
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'serviceaccount-controller.yml')),
+                      "r") as f:
+                client.create_namespaced_service_account("kube-system", yaml.load(f))
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'serviceaccount-node.yml')),
+                      "r") as f:
+                client.create_namespaced_service_account("kube-system", yaml.load(f))
+
             # create calico deployment
             client = k8sclient.CoreV1Api()
             with open(resource_filename(Requirement('kolt'),
@@ -502,8 +516,12 @@ class ClusterBuilder:
                       "r") as f:
                 configmap = yaml.load(f)
 
-                url = str(etcd_host_list[0].ip_address)+":"+str(etcd_host_list[0].port)
-
+                # TODO: make clean, we want to have the etcd client port here, not the etcd peer port!
+                # therefore -1
+                # Apart from this, we may want to specify more than one, separated by comma as
+                # delimiter
+                url = "https://"+str(etcd_host_list[0].ip_address)+":"+str(etcd_host_list[0].port-1)
+                print("etcd_host fuer calico: {}".format(url))
                 pdb.set_trace()
 
                 configmap["data"]["etcd_endpoints"] = url
@@ -534,19 +552,6 @@ class ClusterBuilder:
                                                      'deployment.yml')),
                       "r") as f:
                 client.create_namespaced_deployment("kube-system", yaml.load(f))
-
-            client = k8sclient.CoreV1Api()
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
-                                                     'serviceaccount-controller.yml')),
-                      "r") as f:
-                client.create_namespaced_service_account("kube-system", yaml.load(f))
-
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
-                                                     'serviceaccount-node.yml')),
-                      "r") as f:
-                client.create_namespaced_service_account("kube-system", yaml.load(f))
 
         if no_cloud_init:
             return create_inventory(hosts, config)
