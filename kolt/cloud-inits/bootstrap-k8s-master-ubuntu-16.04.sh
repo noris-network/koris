@@ -160,14 +160,14 @@ ExecStart=/usr/bin/kube-controller-manager \\
   --cluster-name=kubernetes \\
   --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
   --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \\
-  --leader-elect=true \\
+  --leader-elect=false \\
   --master=http://127.0.0.1:8080 \\
   --pod-eviction-timeout 30s \\
   --root-ca-file=/var/lib/kubernetes/ca.pem \\
-  --service-account-private-key-file=/var/lib/kubernetes/ca-key.pem \\
+  --service-account-private-key-file=/etc/ssl/kubernetes/service-accounts-key.pem \\
   --service-cluster-ip-range=${CLUSTER_IP_RANGE} \\
   --node-startup-grace-period 30s \\
-  --v=2
+  --v=3
 
 Restart=on-failure
 RestartSec=5

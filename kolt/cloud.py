@@ -273,7 +273,7 @@ class NodeInit(BaseInit):
     def _get_kubeconfig(self):
         kubeconfig_part = """
         # calico kubeconfig
-         - path: /etc/calico/kube/kubeconfig
+         - path: /etc/cni/net.d/calico-kubeconfig
            encoding: b64
            content: {}
            owner: root:root
@@ -306,6 +306,20 @@ class NodeInit(BaseInit):
 
         return textwrap.dedent(kubelet_config_part).lstrip()
 
+    def _get_kubeproxy_info(self):
+        kubeproxy_part = """
+        # kube proxy configuration
+         - path: /var/lib/kubelet/kube-proxy.env
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(
+            base64.b64encode(("MASTER_IP=%s" % self.etcd_cluster_info[0].ip_address).encode()).decode()            
+            )
+
+        return textwrap.dedent(kubeproxy_part).lstrip()
+
     def _get_calico_config(self):
         calicoconfig['etcd_endpoints'] = ",".join(
             "http://%s:%d" % (etcd_host.ip_address, etcd_host.port)
@@ -330,6 +344,7 @@ class NodeInit(BaseInit):
              + self._get_certificate_info() \
              + self._get_svc_account_info() \
              + self._get_kubeconfig() \
+             + self._get_kubeproxy_info() \
              + self._get_calico_config() \
 
         return config

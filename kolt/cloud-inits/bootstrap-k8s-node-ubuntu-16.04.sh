@@ -83,7 +83,7 @@ Requires=docker.service
 [Service]
 ExecStart=/usr/bin/kubelet \\
   --allow-privileged=true \\
-  --cluster-dns=10.32.0.10  \\
+  --cluster-dns=10.32.0.10 \\
   --hostname-override=$(hostname -s) \\
   --container-runtime=docker \\
   --docker=unix:///var/run/docker.sock \\
@@ -112,12 +112,14 @@ Description=Kubernetes Kube Proxy
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 
 [Service]
+EnvironmentFile=/var/lib/kubelet/kube-proxy.env
 ExecStart=/usr/bin/kube-proxy \\
   --kubeconfig=/var/lib/kubelet/kubeconfig.yaml \\
-  --proxy-mode=iptables \\
+  --proxy-mode=ipvs \\
   --iptables-min-sync-period=2s \\
   --iptables-sync-period=5s \\
   --cluster-cidr=${PODS_SUBNET} \\
+  --master=https://${MASTER_IP}:6443 \\
   --v=2
 
 Restart=on-failure

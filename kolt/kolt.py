@@ -464,6 +464,9 @@ class ClusterBuilder:
 
             k8sconfig.load_kube_config(path)
 
+            # TODO: polling until the kubernetes cluster is running
+            #,currently, this is done externally via:
+            # watch -n 1 kubectl --kubeconfig="koltdev-admin.conf" get nodes
             import pdb
             pdb.set_trace()
 
