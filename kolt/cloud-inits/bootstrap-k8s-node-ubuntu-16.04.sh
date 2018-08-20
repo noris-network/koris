@@ -112,12 +112,14 @@ Description=Kubernetes Kube Proxy
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 
 [Service]
+EnvironmentFile=/etc/systemd/system/kube-proxy.env
 ExecStart=/usr/bin/kube-proxy \\
   --kubeconfig=/var/lib/kubelet/kubeconfig.yaml \\
   --proxy-mode=iptables \\
   --iptables-min-sync-period=2s \\
   --iptables-sync-period=5s \\
   --cluster-cidr=${PODS_SUBNET} \\
+  --master=https://\${MASTER_IP}:6443
   --v=2
 
 Restart=on-failure
@@ -129,7 +131,7 @@ EOF
 
 sudo iptables -P FORWARD ACCEPT
 
-sed -i "s/__NODENAME__/"$(hostname -s)"/g"  /etc/cni/net.d/10-calico.conf
+#sed -i "s/__NODENAME__/"$(hostname -s)"/g"  /etc/cni/net.d/10-calico.conf
 
 sudo systemctl enable kubelet
 sudo systemctl start kubelet

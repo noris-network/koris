@@ -26,7 +26,7 @@ Pre-requisits
 1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
 2. A pre-created network, and security group.
 3. Basic understanding of OpenStack.
-4. Ansible installed on your system.
+4. Ansible installed on your system (only if using kubespray mode).
 
 Get started
 ~~~~~~~~~~~
@@ -37,6 +37,13 @@ Get started
    mkdir FooBar
    cd FooBar && pipenv --python 3.6
    pip install -e git+git@gitlab.noris.net:PI/kolt.git@v0.3#egg=kolt
+
+If you want to develop kolt, you can use the following install command in the
+virtual environment:
+
+.. code:: shell
+
+    pipenv install --dev -e .
 
 2. Create a security group in openstack which allows `ipip` and `BGP` protocol.
 

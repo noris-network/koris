@@ -270,22 +270,6 @@ class NodeInit(BaseInit):
 
         return svc_accnt_key + svc_accnt_cert
 
-    def _get_kubeconfig(self):
-        kubeconfig_part = """
-        # calico kubeconfig
-         - path: /etc/calico/kube/kubeconfig
-           encoding: b64
-           content: {}
-           owner: root:root
-           permissions: '0600'
-        """.format(get_kubeconfig_yaml(
-            "https://%s:6443" % self.etcd_cluster_info[0].name,
-            "calico",
-            self.calico_token,
-            skip_tls=True))
-
-        return textwrap.dedent(kubeconfig_part).lstrip()
-
     def _get_kubelet_config(self):
 
         kubeconfig = get_kubeconfig_yaml(
@@ -306,9 +290,23 @@ class NodeInit(BaseInit):
 
         return textwrap.dedent(kubelet_config_part).lstrip()
 
+    def _get_kubeproxy_info(self):
+        kubeproxy_part = """
+        # kube proxy configuration
+         - path: /etc/systemd/system/kube-proxy.env
+           encoding: b64
+           content: {}
+           owner: root:root
+           permissions: '0600'
+        """.format(
+            base64.b64encode(("MASTER_IP=%s" % self.etcd_cluster_info[0].ip_address).encode()).decode()            
+            )
+
+        return textwrap.dedent(kubeproxy_part).lstrip()
+
     def _get_calico_config(self):
         calicoconfig['etcd_endpoints'] = ",".join(
-            "http://%s:%d" % (etcd_host.ip_address, etcd_host.port)
+            "https://%s:%d" % (etcd_host.ip_address, int(etcd_host.port)-1)
             for etcd_host in self.etcd_cluster_info)
 
         cc = json.dumps(calicoconfig, indent=2).encode()
@@ -329,7 +327,7 @@ class NodeInit(BaseInit):
         """) + self._get_kubelet_config() \
              + self._get_certificate_info() \
              + self._get_svc_account_info() \
-             + self._get_kubeconfig() \
+             + self._get_kubeproxy_info() \
              + self._get_calico_config() \
 
         return config

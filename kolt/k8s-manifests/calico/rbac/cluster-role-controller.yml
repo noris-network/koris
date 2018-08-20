@@ -1,8 +1,9 @@
+---
+
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: calico-policy-controller
-  namespace: kube-system
+  name: calico-kube-controllers
 rules:
   - apiGroups:
     - ""
@@ -10,6 +11,14 @@ rules:
     resources:
       - pods
       - namespaces
+      - networkpolicies
+      - nodes
+    verbs:
+      - watch
+      - list
+  - apiGroups:
+    - networking.k8s.io
+    resources:
       - networkpolicies
     verbs:
       - watch

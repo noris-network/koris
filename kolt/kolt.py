@@ -20,11 +20,14 @@ from neutronclient.v2_0 import client as ntclient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
+from kubernetes import (client as k8sclient, config as k8sconfig)
+from pkg_resources import resource_filename, Requirement
+
 from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
 from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan, yellow
-from .ssl import CertBundle
+from .ssl import CertBundle, b64_key, b64_cert
 from .util import (EtcdHost,
                    OSCloudConfig, OSClusterInfo,
                    create_inventory,
@@ -113,7 +116,6 @@ async def create_volume(cinder, image, zone, klass):
     volume_data['uuid'] = v.id
 
     return volume_data
-
 
 async def create_instance_with_volume(name, zone, flavor, image,
                                       keypair, secgroups, userdata,
@@ -457,8 +459,103 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            write_kubeconfig(config, etcd_host_list, admin_token,
+            path = write_kubeconfig(config, etcd_host_list, admin_token,
                              True)
+
+            k8sconfig.load_kube_config(path)
+
+            # TODO: polling until the kubernetes cluster is running
+            #,currently, this is done externally via:
+            # watch -n 1 kubectl --kubeconfig="koltdev-admin.conf" get nodes
+            import pdb
+            pdb.set_trace()
+
+            # crate rbac realted stuff
+            client = k8sclient.RbacAuthorizationV1beta1Api()
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                                     'cluster-role-controller.yml')), "r") as f:
+                client.create_cluster_role(yaml.load(f))
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                                     'role-binding-controller.yml')),
+                      "r") as f:
+                client.create_cluster_role_binding(yaml.load(f))
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                                     'cluster-role-node.yml')),
+                      "r") as f:
+                client.create_cluster_role(yaml.load(f))
+
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                                     'role-binding-node.yml')),
+                      "r") as f:
+                client.create_cluster_role_binding(yaml.load(f))
+
+            # service accounts
+            client = k8sclient.CoreV1Api()
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'serviceaccount-controller.yml')),
+                      "r") as f:
+                client.create_namespaced_service_account("kube-system", yaml.load(f))
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'serviceaccount-node.yml')),
+                      "r") as f:
+                client.create_namespaced_service_account("kube-system", yaml.load(f))
+
+            # create calico deployment
+            client = k8sclient.CoreV1Api()
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'config-map.yml')),
+                      "r") as f:
+                configmap = yaml.load(f)
+
+                # TODO: make clean, we want to have the etcd client port here, not the etcd peer port!
+                # therefore -1
+                # Apart from this, we may want to specify more than one, separated by comma as
+                # delimiter
+                url = "https://"+str(etcd_host_list[0].ip_address)+":"+str(etcd_host_list[0].port-1)
+                print("etcd_host fuer calico: {}".format(url))
+                pdb.set_trace()
+
+                configmap["data"]["etcd_endpoints"] = url
+
+                client.create_namespaced_config_map("kube-system", configmap)
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'secret.yml')),
+                      "r") as f:
+                secret = yaml.load(f)
+                secret["data"]["etcd-key"] = b64_key(certs["k8s"].key)
+                secret["data"]["etcd-cert"] = b64_cert(certs["k8s"].cert)
+                secret["data"]["etcd-ca"] = b64_cert(certs["ca"].cert)
+
+                client.create_namespaced_secret("kube-system", secret)
+
+            client = k8sclient.ExtensionsV1beta1Api()
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'daemonset.yml')),
+                      "r") as f:
+                client.create_namespaced_daemon_set("kube-system", yaml.load(f))
+
+
+            with open(resource_filename(Requirement('kolt'),
+                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                                     'deployment.yml')),
+                      "r") as f:
+                client.create_namespaced_deployment("kube-system", yaml.load(f))
+
         if no_cloud_init:
             return create_inventory(hosts, config)
 
