@@ -8,7 +8,7 @@ metadata:
   namespace: kube-system
 data:
   # Configure this with the location of your etcd cluster.
-  etcd_endpoints: "http://127.0.0.1:237"
+  etcd_endpoints: "%overriden in kolt.ClusterBuilder.run script%"
 
   # Configure the Calico backend to use.
   calico_backend: "bird"

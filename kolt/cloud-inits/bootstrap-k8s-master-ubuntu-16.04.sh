@@ -86,7 +86,7 @@ mkdir -pv /var/lib/kubernetes/
 # link certificates from /etc/ssl/kubernetes - these are injected with cloud-init
 ##
 
-for item in kubernetes-key.pem kubernetes.pem ca.pem ca-key.pem service-accounts.pem; do
+for item in kubernetes-key.pem kubernetes.pem ca.pem ca-key.pem service-accounts.pem service-accounts-key.pem; do
     cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
 done
 
@@ -160,14 +160,14 @@ ExecStart=/usr/bin/kube-controller-manager \\
   --cluster-name=kubernetes \\
   --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
   --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \\
-  --leader-elect=false \\
+  --leader-elect=true \\
   --master=http://127.0.0.1:8080 \\
   --pod-eviction-timeout 30s \\
   --root-ca-file=/var/lib/kubernetes/ca.pem \\
-  --service-account-private-key-file=/etc/ssl/kubernetes/service-accounts-key.pem \\
-  --service-cluster-ip-range=${CLUSTER_IP_RANGE} \\
+  --service-account-private-key-file=/var/lib/kubernetes/service-accounts-key.pem \\
+  --service-cluster-ip-range=${PODS_SUBNET} \\
   --node-startup-grace-period 30s \\
-  --v=3
+  --v=2
 
 Restart=on-failure
 RestartSec=5
