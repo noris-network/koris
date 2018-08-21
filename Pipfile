@@ -16,6 +16,7 @@ python-novaclient = "*"
 python-neutronclient = "*"
 python-cinderclient = "*"
 "mach.py" = "*"
+kubernetes = "*"
 
 
 [dev-packages]
