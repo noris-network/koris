@@ -279,13 +279,36 @@ class NodeBuilder:
         build nics
         """
 
-        nics = list(create_nics(neutron,
-                                self._info.n_nodes,
-                                self._info.net['id'],
-                                self._info.secgroups))
+        # for each none existing node create a network interfaces
+        nodes = []
+        ips = []
+        nics = []
 
-        ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics)
-        return self._info.nodes_names, ips, nics
+        for name in self._info.nodes_names:
+            try:
+                print(que("Checking if %s does not already exist" % name))
+                server = nova.servers.find(name=name)
+                ip = server.interface_list()[0].fixed_ips[0]['ip_address']
+                print(info("This machine already exists ... skipping"))
+
+                ips.append(ip)
+                port = server.interface_list()[0].to_dict()
+                port['id'] = port['port_id']
+                port['network_id'] = port['net_id']
+                port = {'port': port}
+                nics.append(port)
+
+            except NovaNotFound:
+                print(info("Okay, launching %s" % name))
+                port = neutron.create_port(
+                    {"port": {"admin_state_up": True,
+                     "network_id": netid,
+                     "security_groups": security_groups}})
+                nics.append([])
+
+            nodes.append(name)
+
+        return nodes, ips, nics
 
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
