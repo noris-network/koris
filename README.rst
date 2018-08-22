@@ -43,7 +43,8 @@ virtual environment:
 
 .. code:: shell
 
-    pipenv install --dev -e .
+    pipenv install --dev -r requirements.txt
+    pipenv install --dev -r requirements_dev.txt
 
 2. Create a security group in openstack which allows `ipip` and `BGP` protocol.
 
