@@ -87,6 +87,7 @@ def get_host_zones(hosts, zones):
 
 nova, cinder, neutron = None, None, None
 
+
 def create_nic_for_machines(nova, neutron, machine_names, netid, secgroups):
     """
     for each none existing node in machine_names create a network interfaces
@@ -94,7 +95,7 @@ def create_nic_for_machines(nova, neutron, machine_names, netid, secgroups):
     nodes = []
     ips = []
     nics = []
-    
+
     for name in machine_names:
         try:
             print(que("Checking if %s does not already exist" % name))
@@ -107,13 +108,13 @@ def create_nic_for_machines(nova, neutron, machine_names, netid, secgroups):
             port['id'] = port['port_id']
             port['network_id'] = port['net_id']
             port = {'port': port}
-        
+
         except NovaNotFound:
             print(info("Okay, launching %s" % name))
             port = neutron.create_port(
                 {"port": {"admin_state_up": True,
-                 "network_id": netid,
-                 "security_groups": secgroups}})
+                          "network_id": netid,
+                          "security_groups": secgroups}})
             ips.append(port["port"]["fixed_ips"][0]["ip_address"])
 
         nics.append(port)
@@ -121,8 +122,8 @@ def create_nic_for_machines(nova, neutron, machine_names, netid, secgroups):
 
     return nodes, ips, nics
 
-async def create_volume(cinder, image, zone, klass):
 
+async def create_volume(cinder, image, zone, klass):
     bdm_v2 = {
         "boot_index": 0,
         "source_type": "volume",
@@ -150,13 +151,13 @@ async def create_volume(cinder, image, zone, klass):
 
     return volume_data
 
+
 async def create_instance_with_volume(name, zone, flavor, image,
                                       keypair, secgroups, userdata,
                                       hosts,
                                       nics=None,
                                       volume_klass=""
                                       ):
-
     global nova, neutron, cinder
 
     try:
@@ -289,6 +290,7 @@ def create_userdata(role, img_name, cluster_info=None,
         userdata = textwrap.dedent(userdata).strip()
     return userdata
 
+
 class NodeBuilder:
 
     def __init__(self, nova, neutron, config):
@@ -302,7 +304,7 @@ class NodeBuilder:
         build nics
         """
         return create_nic_for_machines(nova, neutron, self._info.nodes_names,
-                                       self._info.net["id"], 
+                                       self._info.net["id"],
                                        self._info.secgroups)
 
     def create_hosts_tasks(self, nics, hosts, certs,
@@ -321,7 +323,8 @@ class NodeBuilder:
                                         **node_args)
         else:
             node_args.update({'ca_cert': certs['ca'],
-                              'service_account_bundle': certs['service-account'], # noqa
+                              'service_account_bundle': certs[
+                                  'service-account'],  # noqa
                               'cert_bundle': certs['k8s']})
             user_data = create_userdata('node', self._info.image.name,
                                         **node_args)
@@ -338,10 +341,10 @@ class NodeBuilder:
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
-                 host.name, host.zone,
-                 nics=host.nic, volume_klass=volume_klass,
-                 *task_args_node))
-                 for host in hosts]
+            host.name, host.zone,
+            nics=host.nic, volume_klass=volume_klass,
+            *task_args_node))
+            for host in hosts]
 
         return tasks
 
@@ -355,9 +358,9 @@ class ControlPlaneBuilder:
         self._info = OSClusterInfo(nova, neutron, config)
 
     def get_hosts_info(self):
-        return create_nic_for_machines(nova, neutron, 
-                                       self._info.management_names, 
-                                       self._info.net["id"], 
+        return create_nic_for_machines(nova, neutron,
+                                       self._info.management_names,
+                                       self._info.net["id"],
                                        self._info.secgroups)
 
     def create_hosts_tasks(self, nics, hosts, certs,
@@ -393,8 +396,8 @@ class ControlPlaneBuilder:
                                         **master_args)
         else:
             master_args.update({'cert_bundle':
-                                (certs['ca'], certs['k8s'],
-                                 certs['service-account'])})
+                                    (certs['ca'], certs['k8s'],
+                                     certs['service-account'])})
             user_data = create_userdata('master', self._info.image.name,
                                         **master_args)
 
@@ -407,11 +410,11 @@ class ControlPlaneBuilder:
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
-                 masters_zones[i].name, masters_zones[i].zone,
-                 nics=masters_zones[i].nic,
-                 volume_klass=volume_klass,
-                 *tasks_args_masters))
-                 for i in range(0, self._info.n_masters)]
+            masters_zones[i].name, masters_zones[i].zone,
+            nics=masters_zones[i].nic,
+            volume_klass=volume_klass,
+            *tasks_args_masters))
+            for i in range(0, self._info.n_masters)]
 
         return tasks
 
@@ -438,8 +441,8 @@ class ClusterBuilder:
 
         ips = list(cp_ips) + list(ips) + ['127.0.0.1', "10.32.0.1"]
         hosts = list(cp_hosts) + list(hosts) \
-            + ["kubernetes.default",
-               "kubernetes.default.svc.cluster.local"]
+                + ["kubernetes.default",
+                   "kubernetes.default.svc.cluster.local"]
         certs = create_certs(config, hosts, ips)
 
         if no_cloud_init:
@@ -474,12 +477,12 @@ class ClusterBuilder:
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
             path = write_kubeconfig(config, etcd_host_list, admin_token,
-                             True)
+                                    True)
 
             k8sconfig.load_kube_config(path)
 
             # TODO: polling until the kubernetes cluster is running
-            #,currently, this is done externally via:
+            # ,currently, this is done externally via:
             # watch -n 1 kubectl --kubeconfig="koltdev-admin.conf" get nodes
             import pdb
             pdb.set_trace()
@@ -488,25 +491,29 @@ class ClusterBuilder:
             client = k8sclient.RbacAuthorizationV1beta1Api()
 
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
-                                                     'cluster-role-controller.yml')), "r") as f:
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico', 'rbac',
+                                                     'cluster-role-controller.yml')),
+                      "r") as f:
                 client.create_cluster_role(yaml.load(f))
 
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico', 'rbac',
                                                      'role-binding-controller.yml')),
                       "r") as f:
                 client.create_cluster_role_binding(yaml.load(f))
 
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico', 'rbac',
                                                      'cluster-role-node.yml')),
                       "r") as f:
                 client.create_cluster_role(yaml.load(f))
 
-
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico', 'rbac',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico', 'rbac',
                                                      'role-binding-node.yml')),
                       "r") as f:
                 client.create_cluster_role_binding(yaml.load(f))
@@ -514,21 +521,26 @@ class ClusterBuilder:
             # service accounts
             client = k8sclient.CoreV1Api()
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico',
                                                      'serviceaccount-controller.yml')),
                       "r") as f:
-                client.create_namespaced_service_account("kube-system", yaml.load(f))
+                client.create_namespaced_service_account("kube-system",
+                                                         yaml.load(f))
 
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico',
                                                      'serviceaccount-node.yml')),
                       "r") as f:
-                client.create_namespaced_service_account("kube-system", yaml.load(f))
+                client.create_namespaced_service_account("kube-system",
+                                                         yaml.load(f))
 
             # create calico deployment
             client = k8sclient.CoreV1Api()
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico',
                                                      'config-map.yml')),
                       "r") as f:
                 configmap = yaml.load(f)
@@ -537,7 +549,9 @@ class ClusterBuilder:
                 # therefore -1
                 # Apart from this, we may want to specify more than one, separated by comma as
                 # delimiter
-                url = "https://"+str(etcd_host_list[0].ip_address)+":"+str(etcd_host_list[0].port-1)
+                url = "https://" + str(
+                    etcd_host_list[0].ip_address) + ":" + str(
+                    etcd_host_list[0].port - 1)
                 print("etcd_host fuer calico: {}".format(url))
                 pdb.set_trace()
 
@@ -546,7 +560,8 @@ class ClusterBuilder:
                 client.create_namespaced_config_map("kube-system", configmap)
 
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico',
                                                      'secret.yml')),
                       "r") as f:
                 secret = yaml.load(f)
@@ -558,14 +573,15 @@ class ClusterBuilder:
 
             client = k8sclient.ExtensionsV1beta1Api()
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico',
                                                      'daemonset.yml')),
                       "r") as f:
                 client.create_namespaced_daemon_set("kube-system", yaml.load(f))
 
-
             with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests', 'calico',
+                                        os.path.join('kolt', 'k8s-manifests',
+                                                     'calico',
                                                      'deployment.yml')),
                       "r") as f:
                 client.create_namespaced_deployment("kube-system", yaml.load(f))
@@ -623,7 +639,8 @@ class Kolt:
         else:
             print(info("Here is your inventory ..."))
             print(
-                red("You can save this inventory to a file with the option -i")) # noqa
+                red(
+                    "You can save this inventory to a file with the option -i"))  # noqa
             cfg.write(sys.stdout)
 
     def destroy(self, config):
