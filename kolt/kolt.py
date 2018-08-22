@@ -87,6 +87,39 @@ def get_host_zones(hosts, zones):
 
 nova, cinder, neutron = None, None, None
 
+def create_nic_for_machines(nova, neutron, machine_names, netid, secgroups):
+    """
+    for each none existing node in machine_names create a network interfaces
+    """
+    nodes = []
+    ips = []
+    nics = []
+    
+    for name in machine_names:
+        try:
+            print(que("Checking if %s does not already exist" % name))
+            server = nova.servers.find(name=name)
+            ip = server.interface_list()[0].fixed_ips[0]['ip_address']
+            print(info("This machine already exists ... skipping"))
+
+            ips.append(ip)
+            port = server.interface_list()[0].to_dict()
+            port['id'] = port['port_id']
+            port['network_id'] = port['net_id']
+            port = {'port': port}
+        
+        except NovaNotFound:
+            print(info("Okay, launching %s" % name))
+            port = neutron.create_port(
+                {"port": {"admin_state_up": True,
+                 "network_id": netid,
+                 "security_groups": secgroups}})
+            ips.append(port["port"]["fixed_ips"][0]["ip_address"])
+
+        nics.append(port)
+        nodes.append(name)
+
+    return nodes, ips, nics
 
 async def create_volume(cinder, image, zone, klass):
 
@@ -256,16 +289,6 @@ def create_userdata(role, img_name, cluster_info=None,
         userdata = textwrap.dedent(userdata).strip()
     return userdata
 
-
-def create_nics(neutron, num, netid, security_groups):
-    for i in range(num):
-        port = neutron.create_port(
-            {"port": {"admin_state_up": True,
-                      "network_id": netid,
-                      "security_groups": security_groups}})
-        yield port
-
-
 class NodeBuilder:
 
     def __init__(self, nova, neutron, config):
@@ -278,37 +301,9 @@ class NodeBuilder:
         calculate node names and zone,
         build nics
         """
-
-        # for each none existing node create a network interfaces
-        nodes = []
-        ips = []
-        nics = []
-
-        for name in self._info.nodes_names:
-            try:
-                print(que("Checking if %s does not already exist" % name))
-                server = nova.servers.find(name=name)
-                ip = server.interface_list()[0].fixed_ips[0]['ip_address']
-                print(info("This machine already exists ... skipping"))
-
-                ips.append(ip)
-                port = server.interface_list()[0].to_dict()
-                port['id'] = port['port_id']
-                port['network_id'] = port['net_id']
-                port = {'port': port}
-                nics.append(port)
-
-            except NovaNotFound:
-                print(info("Okay, launching %s" % name))
-                port = neutron.create_port(
-                    {"port": {"admin_state_up": True,
-                     "network_id": netid,
-                     "security_groups": security_groups}})
-                nics.append([])
-
-            nodes.append(name)
-
-        return nodes, ips, nics
+        return create_nic_for_machines(nova, neutron, self._info.nodes_names,
+                                       self._info.net["id"], 
+                                       self._info.secgroups)
 
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
@@ -360,14 +355,10 @@ class ControlPlaneBuilder:
         self._info = OSClusterInfo(nova, neutron, config)
 
     def get_hosts_info(self):
-        nics = list(create_nics(neutron,
-                                self._info.n_masters,
-                                self._info.net['id'],
-                                self._info.secgroups))
-
-        ips = (nic['port']['fixed_ips'][0]['ip_address'] for nic in nics)
-
-        return self._info.management_names, ips, nics
+        return create_nic_for_machines(nova, neutron, 
+                                       self._info.management_names, 
+                                       self._info.net["id"], 
+                                       self._info.secgroups)
 
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
