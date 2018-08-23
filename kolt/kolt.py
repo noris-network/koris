@@ -10,6 +10,8 @@ import sys
 
 import yaml
 
+import novaclient.v2.servers
+
 from mach import mach1
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound,
@@ -300,12 +302,12 @@ class NodeBuilder:
 
     def get_nodes_info(self, nova, neutron, config):
         """
-        calculate node names and zone,
-        build nics
+        Find if hosts already exists, if they don't exist already create
+        a future task for creating a NIC for attaching it to a host.
+        calculate node names and zone, build nics
         """
-        return create_nic_for_machines(nova, neutron, self._info.nodes_names,
-                                       self._info.net["id"],
-                                       self._info.secgroups)
+
+        return self._info.nodes_status
 
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
@@ -331,9 +333,6 @@ class NodeBuilder:
 
         task_args_node = self._info.node_args_builder(user_data, hosts)
 
-        # nodes_zones = self._info.distribute_nodes()
-
-        # hosts = list(NodeZoneNic.hosts_distributor(nodes_zones))
         hosts = self._info.distribute_nodes()
 
         self._info.assign_nics_to_nodes(hosts, nics)
@@ -358,10 +357,7 @@ class ControlPlaneBuilder:
         self._info = OSClusterInfo(nova, neutron, config)
 
     def get_hosts_info(self):
-        return create_nic_for_machines(nova, neutron,
-                                       self._info.management_names,
-                                       self._info.net["id"],
-                                       self._info.secgroups)
+        return self._info.management_status
 
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
@@ -396,8 +392,8 @@ class ControlPlaneBuilder:
                                         **master_args)
         else:
             master_args.update({'cert_bundle':
-                                    (certs['ca'], certs['k8s'],
-                                     certs['service-account'])})
+                                (certs['ca'], certs['k8s'],
+                                 certs['service-account'])})
             user_data = create_userdata('master', self._info.image.name,
                                         **master_args)
 
@@ -430,47 +426,74 @@ class ClusterBuilder:
         nb = NodeBuilder(nova, neutron, config)
         cpb = ControlPlaneBuilder(nova, neutron, config)
         logger.debug(info("Done collecting infromation from OpenStack"))
-        hosts, ips, nics = nb.get_nodes_info(nova, neutron, config)
+        worker_nodes = nb.get_nodes_info(nova, neutron, config)
 
-        cp_hosts, cp_ips, cp_nics = cpb.get_hosts_info()
+        cp_hosts = cpb.get_hosts_info()
 
-        etcd_host_list = [EtcdHost(host, ip) for (host, ip) in
-                          zip(cpb._info.management_names,
-                              [nic['port']['fixed_ips'][0]['ip_address']
-                               for nic in cp_nics])]
+        etcd_host_list = []
+        for host in cp_hosts:
+            try:
+                etcd_host_list.append(EtcdHost(
+                    host.name, host.interface_list()[
+                        0]['port']['fixed_ips'][0]['ip_address']))
+            except TypeError:
+                etcd_host_list.append(EtcdHost(
+                    host.name, host.interface_list()[
+                        0].fixed_ips[0]['ip_address']))
 
-        ips = list(cp_ips) + list(ips) + ['127.0.0.1', "10.32.0.1"]
-        hosts = list(cp_hosts) + list(hosts) \
-                + ["kubernetes.default",
-                   "kubernetes.default.svc.cluster.local"]
-        certs = create_certs(config, hosts, ips)
+        try:
+            node_ips = [node.ip_address for node in worker_nodes]
+        except AttributeError:
+            node_ips = [str(host.interface_list()[0].fixed_ips[0]['ip_address'])
+                        for host in worker_nodes]
 
-        if no_cloud_init:
-            certs = None
-            calico_token = None
-            kubelet_token = None
-            admin_token = None
+        ips = [str(host.ip_address) for host in etcd_host_list
+               ] + list(node_ips) + ['127.0.0.1', "10.32.0.1"]
+
+        cluster_host_names = [host.name for host in etcd_host_list] + [
+            host.name for host in worker_nodes] + [
+            "kubernetes.default", "kubernetes.default.svc.cluster.local"]
+        nics = [host.interface_list()[0] for host in worker_nodes]
+        cp_nics = [host.interface_list()[0] for hosts in cp_hosts]
+        nics = [nic for nic in nics if
+                not isinstance(nic, novaclient.v2.servers.NetworkInterface)]
+        cp_nics = [nic for nic in cp_nics if
+                   not isinstance(nic, novaclient.v2.servers.NetworkInterface)]
+
+        # stupid check which needs to be improved!
+        if not (nics + cp_nics):
+            logger.info(info(red("Skipping certificate creations")))
+            tasks = []
+            logger.debug(info("Not creating any tasks"))
         else:
-            calico_token = uuid.uuid4().hex[:32]
-            kubelet_token = uuid.uuid4().hex[:32]
-            admin_token = uuid.uuid4().hex[:32]
+            certs = create_certs(config, cluster_host_names, ips)
+            logger.debug(info("Done creating nodes tasks"))
 
-        hosts = {}
-        tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
-                                      calico_token, etcd_host_list,
-                                      no_cloud_init=no_cloud_init)
+            if no_cloud_init:
+                certs = None
+                calico_token = None
+                kubelet_token = None
+                admin_token = None
+            else:
+                calico_token = uuid.uuid4().hex[:32]
+                kubelet_token = uuid.uuid4().hex[:32]
+                admin_token = uuid.uuid4().hex[:32]
 
-        logger.debug(info("Done creating nodes tasks"))
+            hosts = {}
 
-        cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
-                                          kubelet_token, calico_token,
-                                          admin_token,
-                                          etcd_host_list,
+            tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
+                                          calico_token, etcd_host_list,
                                           no_cloud_init=no_cloud_init)
 
-        logger.debug(info("Done creating control plane tasks"))
+            cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
+                                              kubelet_token, calico_token,
+                                              admin_token,
+                                              etcd_host_list,
+                                              no_cloud_init=no_cloud_init)
 
-        tasks = cp_tasks + tasks
+            logger.debug(info("Done creating control plane tasks"))
+
+            tasks = cp_tasks + tasks
 
         if tasks:
             loop = asyncio.get_event_loop()
@@ -493,7 +516,7 @@ class ClusterBuilder:
             with open(resource_filename(Requirement('kolt'),
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico', 'rbac',
-                                                     'cluster-role-controller.yml')),
+                                                     'cluster-role-controller.yml')),  # noqa
                       "r") as f:
                 client.create_cluster_role(yaml.load(f))
 
@@ -545,10 +568,11 @@ class ClusterBuilder:
                       "r") as f:
                 configmap = yaml.load(f)
 
-                # TODO: make clean, we want to have the etcd client port here, not the etcd peer port!
+                # TODO: make clean, we want to have the etcd client port here,
+                # not the etcd peer port!
                 # therefore -1
-                # Apart from this, we may want to specify more than one, separated by comma as
-                # delimiter
+                # Apart from this, we may want to specify more than one,
+                # separated by comma as delimiter
                 url = "https://" + str(
                     etcd_host_list[0].ip_address) + ":" + str(
                     etcd_host_list[0].port - 1)

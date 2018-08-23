@@ -8,6 +8,7 @@ from functools import lru_cache
 from ipaddress import IPv4Address
 
 import yaml
+from novaclient.exceptions import (NotFound as NovaNotFound)
 
 
 def get_logger(name):
@@ -78,6 +79,21 @@ def get_host_zones(hosts, zones):
         return NodeZoneNic.hosts_distributor(host_zones)
 
 
+class Server:
+
+    def __init__(self, name, nics):
+
+        self.name = name
+        self._interface_list = nics
+
+    def interface_list(self):
+        return self._interface_list
+
+    @property
+    def ip_address(self):
+        self._interface_list[0].fixed_ips[0]['ip_address']
+
+
 class OSClusterInfo:
 
     def __init__(self, nova, neutron, config):
@@ -94,6 +110,40 @@ class OSClusterInfo:
         self.n_masters = config['n-masters']
         self.azones = config['availibility-zones']
         self.storage_class = config['storage_class']
+
+        self._novaclient = nova
+        self._neutronclient = neutron
+
+    def _status(self, names):
+        """
+        Finds if all mahcines in the group exists
+        """
+        for name in names:
+            try:
+                server = self._novaclient.servers.find(name=name)
+                yield server
+
+            except NovaNotFound:
+                port = self._neutronclient.create_port(
+                    {"port": {"admin_state_up": True,
+                              "network_id": self.net['id'],
+                              "security_groups": self.secgroups}})
+
+                yield Server(name, [port])
+
+    @property
+    def nodes_status(self):
+        """
+        Finds if all work nodes exists
+        """
+        return list(self._status(self.nodes_names))
+
+    @property
+    def management_status(self):
+        """
+        Finds if all mangament nodes exists
+        """
+        return list(self._status(self.management_names))
 
     @property
     def nodes_names(self):
