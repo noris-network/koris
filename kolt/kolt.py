@@ -90,41 +90,6 @@ def get_host_zones(hosts, zones):
 nova, cinder, neutron = None, None, None
 
 
-def create_nic_for_machines(nova, neutron, machine_names, netid, secgroups):
-    """
-    for each none existing node in machine_names create a network interfaces
-    """
-    nodes = []
-    ips = []
-    nics = []
-
-    for name in machine_names:
-        try:
-            print(que("Checking if %s does not already exist" % name))
-            server = nova.servers.find(name=name)
-            ip = server.interface_list()[0].fixed_ips[0]['ip_address']
-            print(info("This machine already exists ... skipping"))
-
-            ips.append(ip)
-            port = server.interface_list()[0].to_dict()
-            port['id'] = port['port_id']
-            port['network_id'] = port['net_id']
-            port = {'port': port}
-
-        except NovaNotFound:
-            print(info("Okay, launching %s" % name))
-            port = neutron.create_port(
-                {"port": {"admin_state_up": True,
-                          "network_id": netid,
-                          "security_groups": secgroups}})
-            ips.append(port["port"]["fixed_ips"][0]["ip_address"])
-
-        nics.append(port)
-        nodes.append(name)
-
-    return nodes, ips, nics
-
-
 async def create_volume(cinder, image, zone, klass):
     bdm_v2 = {
         "boot_index": 0,
