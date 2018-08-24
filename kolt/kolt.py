@@ -3,10 +3,13 @@
 import asyncio
 import base64
 import copy
+import logging
 import os
+import urllib3
 import uuid
 import textwrap
 import sys
+import time
 
 import yaml
 
@@ -456,19 +459,21 @@ class ClusterBuilder:
             path = write_kubeconfig(config, etcd_host_list, admin_token,
                                     True)
 
+            logger.info("Waiting for K8S API server to launch")
             k8sconfig.load_kube_config(path)
 
             # TODO: polling until the kubernetes cluster is running
             # ,currently, this is done externally via:
             # watch -n 1 kubectl --kubeconfig="koltdev-admin.conf" get nodes
-            import pdb
-            pdb.set_trace()
 
             req = Requirement('kolt')
             manifest_path = os.path.join("kolt", "k8s-manifests")
 
             # crate rbac realted stuff
             client = k8sclient.RbacAuthorizationV1beta1Api()
+
+            logging.getLogger("urllib3").setLevel(logging.ERROR)
+
             for file_ in ["cluster-role-controller", "cluster-role-node"]:
 
                 with open(resource_filename(
@@ -476,8 +481,18 @@ class ClusterBuilder:
                     os.path.join(
                         manifest_path, 'calico', 'rbac',
                         '%s.yml' % file_))) as f:
+                    payload = yaml.load(f)
 
-                    client.create_cluster_role(yaml.load(f))
+                while True:
+                    try:
+                        client.create_cluster_role(payload)
+                        break
+                    except urllib3.exceptions.MaxRetryError:
+                        logger.debug(
+                            "Kubernetes API Server is still not ready ...")
+                        time.sleep(2)
+
+            logging.getLogger("urllib3").setLevel(logging.WARNING)
 
             for file_ in ["role-binding-node", "role-binding-controller"]:
 
@@ -504,11 +519,11 @@ class ClusterBuilder:
 
             # create calico deployment
             client = k8sclient.CoreV1Api()
-            with open(resource_filename(req,
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico',
-                                                     'config-map.yml')),
-                      "r") as f:
+            with open(
+                resource_filename(
+                    req,
+                    os.path.join(manifest_path, 'calico', 'config-map.yml'))) as f: # noqa
+
                 configmap = yaml.load(f)
 
                 # TODO: make clean, we want to have the etcd client port here,
@@ -520,7 +535,6 @@ class ClusterBuilder:
                     etcd_host_list[0].ip_address) + ":" + str(
                     etcd_host_list[0].port - 1)
                 print("etcd_host fuer calico: {}".format(url))
-                pdb.set_trace()
 
                 configmap["data"]["etcd_endpoints"] = url
 
@@ -542,16 +556,14 @@ class ClusterBuilder:
             with open(resource_filename(req,
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico',
-                                                     'daemonset.yml')),
-                      "r") as f:
-                client.create_namespaced_daemon_set("kube-system", yaml.load(f))
+                                                     'daemonset.yml'))) as f:
+                client.create_namespaced_daemon_set("kube-system", yaml.load(f))  # noqa
 
             with open(resource_filename(req,
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico',
-                                                     'deployment.yml')),
-                      "r") as f:
-                client.create_namespaced_deployment("kube-system", yaml.load(f))
+                                                     'deployment.yml'))) as f:
+                client.create_namespaced_deployment("kube-system", yaml.load(f))  # noqa
 
         if no_cloud_init:
             return create_inventory(hosts, config)
