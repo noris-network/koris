@@ -3,7 +3,6 @@
 import asyncio
 import base64
 import copy
-import logging
 import os
 import uuid
 import textwrap
@@ -23,9 +22,6 @@ from neutronclient.v2_0 import client as ntclient
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
-
-from kubernetes import (client as k8sclient, config as k8sconfig)
-from pkg_resources import resource_filename, Requirement
 
 from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
@@ -464,104 +460,31 @@ class ClusterBuilder:
             manifest_path = os.path.join("kolt", "k8s-manifests")
             k8s = K8S(path, manifest_path)
 
-            k8sconfig.load_kube_config(path)
-
             while not k8s.is_ready:
                 logger.debug("Kubernetes API Server is still not ready ...")
                 time.sleep(2)
 
             logger.debug("Kubernetes API Server is ready !!!")
-            req = Requirement('kolt')
             manifest_path = os.path.join("kolt", "k8s-manifests")
 
             # crate rbac realted stuff
-            client = k8sclient.RbacAuthorizationV1beta1Api()
-
-            logging.getLogger("urllib3").setLevel(logging.ERROR)
-
-            for file_ in ["cluster-role-controller", "cluster-role-node"]:
-
-                with open(resource_filename(
-                    req,
-                    os.path.join(
-                        manifest_path, 'calico', 'rbac',
-                        '%s.yml' % file_))) as f:
-                    payload = yaml.load(f)
-
-                    client.create_cluster_role(payload)
-
-            logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-            for file_ in ["role-binding-node", "role-binding-controller"]:
-
-                with open(resource_filename(
-                    req,
-                    os.path.join(
-                        manifest_path, 'calico', 'rbac',
-                        '%s.yml' % file_))) as f:
-
-                    client.create_cluster_role_binding(yaml.load(f))
-
+            k8s.apply_roles()
+            k8s.apply_role_bindings()
             # service accounts
-            client = k8sclient.CoreV1Api()
-            for file_ in ["serviceaccount-controller", "serviceaccount-node"]:
-                with open(
-                    resource_filename(
-                        req,
-                        os.path.join(
-                            manifest_path, 'calico',
-                            '%s.yml' % file_))) as f:
+            k8s.apply_service_accounts()
+            # create calico configuration
+            url = "https://" + str(etcd_host_list[0].ip_address) + \
+                  ":" + str(etcd_host_list[0].port - 1)
+            print("etcd_host fuer calico: {}".format(url))
+            k8s.apply_calico_config_map(url)
 
-                    client.create_namespaced_service_account("kube-system",
-                                                             yaml.load(f))
+            # create calico secrets
+            k8s.apply_calico_secrets(b64_key(certs["k8s"].key),
+                                     b64_cert(certs["k8s"].cert),
+                                     b64_cert(certs["ca"].cert))
 
-            # create calico deployment
-            client = k8sclient.CoreV1Api()
-            with open(
-                resource_filename(
-                    req,
-                    os.path.join(manifest_path, 'calico', 'config-map.yml'))) as f: # noqa
-
-                configmap = yaml.load(f)
-
-                # TODO: make clean, we want to have the etcd client port here,
-                # not the etcd peer port!
-                # therefore -1
-                # Apart from this, we may want to specify more than one,
-                # separated by comma as delimiter
-                url = "https://" + str(
-                    etcd_host_list[0].ip_address) + ":" + str(
-                    etcd_host_list[0].port - 1)
-                print("etcd_host fuer calico: {}".format(url))
-
-                configmap["data"]["etcd_endpoints"] = url
-
-                client.create_namespaced_config_map("kube-system", configmap)
-
-            with open(resource_filename(req,
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico',
-                                                     'secret.yml')),
-                      "r") as f:
-                secret = yaml.load(f)
-                secret["data"]["etcd-key"] = b64_key(certs["k8s"].key)
-                secret["data"]["etcd-cert"] = b64_cert(certs["k8s"].cert)
-                secret["data"]["etcd-ca"] = b64_cert(certs["ca"].cert)
-
-                client.create_namespaced_secret("kube-system", secret)
-
-            client = k8sclient.ExtensionsV1beta1Api()
-            with open(resource_filename(req,
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico',
-                                                     'daemonset.yml'))) as f:
-                client.create_namespaced_daemon_set("kube-system", yaml.load(f))  # noqa
-
-            with open(resource_filename(req,
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico',
-                                                     'deployment.yml'))) as f:
-                client.create_namespaced_deployment("kube-system", yaml.load(f))  # noqa
+            k8s.apply_daemon_sets()
+            k8s.apply_deployments()
 
         if no_cloud_init:
             return create_inventory(hosts, config)
