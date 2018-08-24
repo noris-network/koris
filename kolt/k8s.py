@@ -7,6 +7,9 @@ import yaml
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from pkg_resources import resource_filename, Requirement
 
+from .util import (get_logger)
+
+logger = get_logger(__name__)
 
 req = Requirement('kolt')
 
@@ -32,6 +35,7 @@ class K8S:
             return False
 
     def apply_roles(self):
+        logger.debug("Applying roles")
         client = k8sclient.RbacAuthorizationV1beta1Api()
 
         for file_ in ["cluster-role-controller", "cluster-role-node"]:
@@ -59,22 +63,34 @@ class K8S:
                 client.create_cluster_role_binding(yaml.load(f))
 
     def apply_service_accounts(self):
-        for file_ in ["serviceaccount-controller", "serviceaccount-node"]:
+        for file_ in ["calico/serviceaccount-controller",
+                      "calico/serviceaccount-node",
+                      "service_account_kube-dns"]:
             with open(
                 resource_filename(
                     req,
                     os.path.join(
-                        self.manifest_path, 'calico',
+                        self.manifest_path,
                         '%s.yml' % file_))) as f:
 
                 self.client.create_namespaced_service_account("kube-system",
                                                               yaml.load(f))
 
+    def apply_config_maps(self):
+        logger.debug("Applying configmaps")
+        with open(
+            resource_filename(
+                req,
+                os.path.join(manifest_path, 'config_map_kube-dns.yml'))) as f: # noqa
+
+            configmap = yaml.load(f)
+            self.client.create_namespaced_config_map("kube-system", configmap)
+
     def apply_calico_config_map(self, etcd_end_point):
         with open(
             resource_filename(
                 req,
-                os.path.join(manifest_path, 'calico', 'config-map.yml'))) as f: # noqa
+                os.path.join(self.manifest_path, 'calico', 'config-map.yml'))) as f: # noqa
 
             configmap = yaml.load(f)
 
@@ -95,6 +111,7 @@ class K8S:
         self.client.create_namespaced_secret("kube-system", secret)
 
     def apply_daemon_sets(self):
+        logger.debug("Applying daemonsets")
         client = k8sclient.ExtensionsV1beta1Api()
 
         with open(
@@ -106,14 +123,23 @@ class K8S:
             client.create_namespaced_daemon_set("kube-system", yaml.load(f))  # noqa
 
     def apply_deployments(self):
+        logger.debug("Applying deployments")
         client = k8sclient.ExtensionsV1beta1Api()
 
-        with open(
-            resource_filename(
-                req,
-                os.path.join(self.manifest_path,
-                             'calico',
-                             'deployment.yml'))) as f:
-            client.create_namespaced_daemon_set("kube-system", yaml.load(f))  # noqa
+        for file_ in ["calico/deployment.yml", "deployment_kube-dns.yml"]:
+            with open(
+                resource_filename(
+                    req,
+                    os.path.join(self.manifest_path,
+                                 file_))) as f:
+                client.create_namespaced_deployment("kube-system", yaml.load(f))  # noqa
 
-        pass
+    def apply_services(self):
+
+        for file_ in ["service_kube-dns.yml"]:
+            with open(
+                resource_filename(
+                    req,
+                    os.path.join(self.manifest_path,
+                                 file_))) as f:
+                self.client.create_namespaced_service("kube-system", yaml.load(f))  # noqa

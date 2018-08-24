@@ -485,6 +485,7 @@ class ClusterBuilder:
 
             k8s.apply_daemon_sets()
             k8s.apply_deployments()
+            k8s.apply_services()
 
         if no_cloud_init:
             return create_inventory(hosts, config)
