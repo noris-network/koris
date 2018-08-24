@@ -5,7 +5,6 @@ import base64
 import copy
 import logging
 import os
-import urllib3
 import uuid
 import textwrap
 import sys
@@ -32,6 +31,7 @@ from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
 from .cloud import MasterInit, NodeInit
 from .hue import red, info, que, lightcyan as cyan, yellow
+from .k8s import K8S
 from .ssl import CertBundle, b64_key, b64_cert
 from .util import (EtcdHost,
                    OSCloudConfig, OSClusterInfo,
@@ -460,12 +460,17 @@ class ClusterBuilder:
                                     True)
 
             logger.info("Waiting for K8S API server to launch")
+
+            manifest_path = os.path.join("kolt", "k8s-manifests")
+            k8s = K8S(path, manifest_path)
+
             k8sconfig.load_kube_config(path)
 
-            # TODO: polling until the kubernetes cluster is running
-            # ,currently, this is done externally via:
-            # watch -n 1 kubectl --kubeconfig="koltdev-admin.conf" get nodes
+            while not k8s.is_ready:
+                logger.debug("Kubernetes API Server is still not ready ...")
+                time.sleep(2)
 
+            logger.debug("Kubernetes API Server is ready !!!")
             req = Requirement('kolt')
             manifest_path = os.path.join("kolt", "k8s-manifests")
 
@@ -483,14 +488,7 @@ class ClusterBuilder:
                         '%s.yml' % file_))) as f:
                     payload = yaml.load(f)
 
-                while True:
-                    try:
-                        client.create_cluster_role(payload)
-                        break
-                    except urllib3.exceptions.MaxRetryError:
-                        logger.debug(
-                            "Kubernetes API Server is still not ready ...")
-                        time.sleep(2)
+                    client.create_cluster_role(payload)
 
             logging.getLogger("urllib3").setLevel(logging.WARNING)
 
