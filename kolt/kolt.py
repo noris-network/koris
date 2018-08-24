@@ -394,23 +394,12 @@ class ClusterBuilder:
         worker_nodes = nb.get_nodes_info(nova, neutron, config)
 
         cp_hosts = cpb.get_hosts_info()
-
         etcd_host_list = []
-        for host in cp_hosts:
-            try:
-                etcd_host_list.append(EtcdHost(
-                    host.name, host.interface_list()[
-                        0]['port']['fixed_ips'][0]['ip_address']))
-            except TypeError:
-                etcd_host_list.append(EtcdHost(
-                    host.name, host.interface_list()[
-                        0].fixed_ips[0]['ip_address']))
 
-        try:
-            node_ips = [node.ip_address for node in worker_nodes]
-        except AttributeError:
-            node_ips = [str(host.interface_list()[0].fixed_ips[0]['ip_address'])
-                        for host in worker_nodes]
+        for server in cp_hosts:
+            etcd_host_list.append(EtcdHost(server.name, server.ip_address))
+
+        node_ips = [node.ip_address for node in worker_nodes]
 
         ips = [str(host.ip_address) for host in etcd_host_list
                ] + list(node_ips) + ['127.0.0.1', "10.32.0.1"]
@@ -419,7 +408,7 @@ class ClusterBuilder:
             host.name for host in worker_nodes] + [
             "kubernetes.default", "kubernetes.default.svc.cluster.local"]
         nics = [host.interface_list()[0] for host in worker_nodes]
-        cp_nics = [host.interface_list()[0] for hosts in cp_hosts]
+        cp_nics = [host.interface_list()[0] for host in cp_hosts]
         nics = [nic for nic in nics if
                 not isinstance(nic, novaclient.v2.servers.NetworkInterface)]
         cp_nics = [nic for nic in cp_nics if
@@ -475,58 +464,47 @@ class ClusterBuilder:
             import pdb
             pdb.set_trace()
 
+            req = Requirement('kolt')
+            manifest_path = os.path.join("kolt", "k8s-manifests")
+
             # crate rbac realted stuff
             client = k8sclient.RbacAuthorizationV1beta1Api()
+            for file_ in ["cluster-role-controller", "cluster-role-node"]:
 
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico', 'rbac',
-                                                     'cluster-role-controller.yml')),  # noqa
-                      "r") as f:
-                client.create_cluster_role(yaml.load(f))
+                with open(resource_filename(
+                    req,
+                    os.path.join(
+                        manifest_path, 'calico', 'rbac',
+                        '%s.yml' % file_))) as f:
 
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico', 'rbac',
-                                                     'role-binding-controller.yml')),
-                      "r") as f:
-                client.create_cluster_role_binding(yaml.load(f))
+                    client.create_cluster_role(yaml.load(f))
 
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico', 'rbac',
-                                                     'cluster-role-node.yml')),
-                      "r") as f:
-                client.create_cluster_role(yaml.load(f))
+            for file_ in ["role-binding-node", "role-binding-controller"]:
 
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico', 'rbac',
-                                                     'role-binding-node.yml')),
-                      "r") as f:
-                client.create_cluster_role_binding(yaml.load(f))
+                with open(resource_filename(
+                    req,
+                    os.path.join(
+                        manifest_path, 'calico', 'rbac',
+                        '%s.yml' % file_))) as f:
+
+                    client.create_cluster_role_binding(yaml.load(f))
 
             # service accounts
             client = k8sclient.CoreV1Api()
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico',
-                                                     'serviceaccount-controller.yml')),
-                      "r") as f:
-                client.create_namespaced_service_account("kube-system",
-                                                         yaml.load(f))
+            for file_ in ["serviceaccount-controller", "serviceaccount-node"]:
+                with open(
+                    resource_filename(
+                        req,
+                        os.path.join(
+                            manifest_path, 'calico',
+                            '%s.yml' % file_))) as f:
 
-            with open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt', 'k8s-manifests',
-                                                     'calico',
-                                                     'serviceaccount-node.yml')),
-                      "r") as f:
-                client.create_namespaced_service_account("kube-system",
-                                                         yaml.load(f))
+                    client.create_namespaced_service_account("kube-system",
+                                                             yaml.load(f))
 
             # create calico deployment
             client = k8sclient.CoreV1Api()
-            with open(resource_filename(Requirement('kolt'),
+            with open(resource_filename(req,
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico',
                                                      'config-map.yml')),
@@ -548,7 +526,7 @@ class ClusterBuilder:
 
                 client.create_namespaced_config_map("kube-system", configmap)
 
-            with open(resource_filename(Requirement('kolt'),
+            with open(resource_filename(req,
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico',
                                                      'secret.yml')),
@@ -561,14 +539,14 @@ class ClusterBuilder:
                 client.create_namespaced_secret("kube-system", secret)
 
             client = k8sclient.ExtensionsV1beta1Api()
-            with open(resource_filename(Requirement('kolt'),
+            with open(resource_filename(req,
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico',
                                                      'daemonset.yml')),
                       "r") as f:
                 client.create_namespaced_daemon_set("kube-system", yaml.load(f))
 
-            with open(resource_filename(Requirement('kolt'),
+            with open(resource_filename(req,
                                         os.path.join('kolt', 'k8s-manifests',
                                                      'calico',
                                                      'deployment.yml')),

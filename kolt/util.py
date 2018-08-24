@@ -81,17 +81,24 @@ def get_host_zones(hosts, zones):
 
 class Server:
 
-    def __init__(self, name, nics):
+    def __init__(self, name, nics, server=None):
 
         self.name = name
         self._interface_list = nics
+        self._nova_server = server
 
     def interface_list(self):
         return self._interface_list
 
     @property
     def ip_address(self):
-        self._interface_list[0].fixed_ips[0]['ip_address']
+        try:
+            return self._interface_list[0].fixed_ips[0]['ip_address']
+        except AttributeError:
+            return self._interface_list[0]['port']['fixed_ips'][0]['ip_address'] # noqa
+
+    def connection_uri(self, port, protocol="https"):
+        return "%s://%s:%d" % (protocol, self.ip_address, port)
 
 
 class OSClusterInfo:
@@ -120,8 +127,9 @@ class OSClusterInfo:
         """
         for name in names:
             try:
-                server = self._novaclient.servers.find(name=name)
-                yield server
+                _server = self._novaclient.servers.find(name=name)
+                yield Server(_server.name, _server.interface_list(),
+                             server=_server)
 
             except NovaNotFound:
                 port = self._neutronclient.create_port(
