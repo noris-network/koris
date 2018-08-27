@@ -21,6 +21,7 @@ Demo:
 
 .. image:: https://gitlab.noris.net/PI/kolt/raw/dev/docs/static/_imgs/kolt-demo.gif
    :target: https://gitlab.noris.net/PI/kolt/raw/dev/docs/static/_imgs/kolt-demo.gif
+   :scale: 50 %
 
 Usage
 -----
