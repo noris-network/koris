@@ -17,6 +17,11 @@ Features
 
 * Get you kubernetes cluster on noris.cloud in about 5 minutes.
 
+Demo:
+
+.. image:: https://gitlab.noris.net/PI/kolt/raw/dev/docs/static/_imgs/kolt-demo.gif
+   :target: https://gitlab.noris.net/PI/kolt/raw/dev/docs/static/_imgs/kolt-demo.gif
+
 Usage
 -----
 
