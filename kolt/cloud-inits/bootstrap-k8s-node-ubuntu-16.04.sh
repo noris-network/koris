@@ -37,6 +37,17 @@ EOF
 
 sudo apt-get -y install socat conntrack ipset docker-ce
 
+# configure Docker
+# we may want to add "userns-remap": "default" here in future...
+cat << EOF > /etc/docker/daemon.json
+{
+  "insecure-registries" : [ "10.32.192.115:5000" ]
+}
+EOF
+
+systemctl restart docker
+
+# download k8s
 K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 CALICO_URL=https://github.com/projectcalico/cni-plugin/releases/download
 BIN_PATH=/usr/bin
@@ -47,7 +58,6 @@ for item in kubelet kube-proxy; do
 done
 
 # configure calico
-
 cd /tmp
 curl -L  https://github.com/containernetworking/plugins/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v${CNI_VERSION}.tgz -O
 mkdir -pv /opt/cni/bin
