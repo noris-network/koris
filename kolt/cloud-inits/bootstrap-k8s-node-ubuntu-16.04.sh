@@ -1,5 +1,5 @@
 text/x-shellscript
-#!/bin/sh
+#!/bin/bash
 # --------------------------------------------------------------------------------------------------------------
 # We are explicitly not using a templating language to inject the values as to encourage the user to limit their
 # set of templating logic in these files. By design all injected values should be able to be set at runtime,
@@ -42,7 +42,7 @@ eval set -- "$OPTS"
 while true; do
   case "$1" in
     -h|--help )    usage; shift ;;
-    -f|--fetch) FETCH_ONLY=1; shift;;
+    -f|--fetch ) FETCH_ONLY=1; shift;;
     --) shift; break ;;
   esac
 done
