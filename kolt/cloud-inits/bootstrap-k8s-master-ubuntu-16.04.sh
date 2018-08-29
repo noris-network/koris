@@ -84,7 +84,7 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
-sudo apt-get update && apt-get ugrade -y
+sudo apt-get update && apt-get upgrade -y
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
