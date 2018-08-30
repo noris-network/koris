@@ -14,7 +14,13 @@ n-etcds: 3
 keypair: 'otiram'
 security_group: 'k8s-nude-k8s-a0tp4t'
 user_data: 'cloud-init-parts/generic'
-image: "Ubuntu Xenial Server Cloudimg"
+# while any generic *ubuntu* image will work
+# you should currently use kolt-base
+# this image includes all k8s binaries and a special kernel
+# optimized for KVM (this image is built from
+# ubuntu-16.04-minimal-cloudimg-amd64-disk1.img
+image: "ubuntu-16.04-kolt-base"
+#image: "Ubuntu Xenial Server Cloudimg"
 certificates:
   expriry: 8760h
 #storage_class: "BSS-Performance-Storage"

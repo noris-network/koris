@@ -21,29 +21,70 @@ BIN_PATH=/usr/bin
 ###################### Do NOT edit anything below ##############################
 ################################################################################
 
-CURRENT_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+CURRENT_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 HOST_NAME=$(hostname)
 
 # download and setup daemons ###################################################
+# Option strings
+function usage(){
+	echo >&2 \
+	echo "usage: $0 [-f|--fetch]"
+	exit 1 ;
+}
 
+SHORT="fh"
+LONG="fetch,help"
+
+OPTS=`getopt -o $SHORT --long $LONG -n $0 -- "$@" 2>/dev/null`
+FETCH_ONLY=0
+
+eval set -- "$OPTS"
+
+while true; do
+  case "$1" in
+    -h|--help )    usage; shift ;;
+    -f|--fetch) FETCH_ONLY=1; shift;;
+    --) shift; break ;;
+  esac
+done
+
+# check if a binary version is found
+# version_check kube-scheduler --version v1.10.4 return 1 if binary is found
+# in that version
+function version_found() {  return $($1 $2 | grep -qi $3); }
+
+# download a file and set +x on a file
+function curlx() { curl $1 -o $2 && chmod -v +x $2 ; }
 
 for item in apiserver controller-manager scheduler; do
-    curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} -o ${BIN_PATH}/kube-${item} && \
-    chmod -v +x ${BIN_PATH}/kube-${item} &
+    version_found kube-${item} --version $K8S_VERSION || curlx ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} ${BIN_PATH}/kube-${item}
 done
 
 # etcd
+if [ "$(version_found etcd --version ${ETCD_VERSION:1}; echo $?)" -eq 1 ]; then
+    echo "etcd version did not match ..."
+    cd /tmp
+    curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
+    tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
+    cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
 
-cd /tmp
-curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
-tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
-cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
+    for item in "etcd etcdctl"; do
+        install -m 775 ${item} ${BIN_PATH}/
+    done
+fi
 
-for item in "etcd etcdctl"; do
-  install -m 775 ${item} ${BIN_PATH}/
-done
+version_found  kubectl "version --client --short" 1.10.4 || curlx ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl ${BIN_PATH}/kubectl
 
-sudo apt-get update && apt-get ugrade -y
+###
+# Finished downloading all binaries
+###
+
+if [ ${FETCH_ONLY} -eq 1 ]; then
+    echo "finished downloading all binaries"
+    exit 0
+fi
+
+sudo apt-get update && apt-get upgrade -y
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
@@ -78,20 +119,19 @@ LimitNOFILE=30000
 WantedBy=multi-user.target
 EOF
 
-curl ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kubectl -o ${BIN_PATH}/kubectl
-chmod +x ${BIN_PATH}/kubectl
-
 mkdir -pv /var/lib/kubernetes/
+
 ##
 # link certificates from /etc/ssl/kubernetes - these are injected with cloud-init
 ##
 
 for item in kubernetes-key.pem kubernetes.pem ca.pem ca-key.pem service-accounts.pem service-accounts-key.pem; do
-    cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
+    test -r /etc/ssl/kubernetes/$item && cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
 done
 
-cat /var/lib/kubernetes/kubernetes.pem >> /var/lib/kubernetes/api.cert
-cat  /var/lib/kubernetes/ca.pem >> /var/lib/kubernetes/api.cert
+for item in kubernetes.pem ca.pem; do
+    test -r /var/lib/kubernetes/$item && cat /var/lib/kubernetes/$item >> /var/lib/kubernetes/api.cert
+done
 
 cat << EOF > /etc/systemd/system/kube-apiserver-ha.service
 [Unit]
@@ -204,7 +244,7 @@ systemctl start etcd
 # let etcd start before all k8s components
 sleep 5;
 
-for item in etcd kube-apiserver-ha kube-controller-manager kube-scheduler; do
+for item in kube-apiserver-ha kube-controller-manager kube-scheduler; do
   systemctl enable ${item}
   systemctl start ${item}
 done
@@ -228,7 +268,7 @@ EOF
 sudo mv kubernetes.default.svc.cluster.local \
     /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
 
-  sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
 
 sudo systemctl enable nginx
 sudo systemctl restart nginx

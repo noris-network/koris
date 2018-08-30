@@ -89,15 +89,15 @@ def get_host_zones(hosts, zones):
 nova, cinder, neutron = None, None, None
 
 
-async def create_volume(cinder, image, zone, klass):
+async def create_volume(cinder, image, zone, klass, size=25):
     bdm_v2 = {
         "boot_index": 0,
         "source_type": "volume",
-        "volume_size": "25",
+        "volume_size": str(size),
         "destination_type": "volume",
         "delete_on_termination": True}
 
-    v = cinder.volumes.create(12, name=uuid.uuid4(), imageRef=image.id,
+    v = cinder.volumes.create(size, name=uuid.uuid4(), imageRef=image.id,
                               availability_zone=zone,
                               volume_type=klass)
 
