@@ -84,7 +84,7 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
-sudo apt-get update && apt-get upgrade -y
+sudo -E apt-get -qy update && sudo -E apt-get -qy -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade && sudo -E apt-get -qy autoclean
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
