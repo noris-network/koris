@@ -33,7 +33,7 @@ def test_kubeconfig():
     admin_token = uuid.uuid4().hex[:32]
     kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token,
                                      encode=False, skip_tls=True)
-    kcy = yaml.load(kubeconfig)
+    kcy = yaml.safe_load(kubeconfig)
     assert kcy["clusters"][0]["cluster"]["server"] == master_uri
     assert kcy["users"][0]["name"] == "admin"
     assert kcy["users"][0]["user"]["token"] == admin_token

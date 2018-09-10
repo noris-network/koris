@@ -65,25 +65,25 @@ def ci_node():
 def test_token_cvs(ci_master):
 
     token_csv = ci_master._get_token_csv()
-    assert yaml.load(token_csv)[0]['permissions'] == '0600'
+    assert yaml.safe_load(token_csv)[0]['permissions'] == '0600'
 
 
 def test_cloud_config(ci_master):
 
     _cloud_config = ci_master._get_cloud_provider()
-    assert yaml.load(_cloud_config)[0]['permissions'] == '0600'
+    assert yaml.safe_load(_cloud_config)[0]['permissions'] == '0600'
 
 
 def test_encryption_config(ci_master):
 
     _config = ci_master._get_encryption_config()
 
-    _config = yaml.load(_config)[0]
+    _config = yaml.safe_load(_config)[0]
 
     assert _config['path'] == '/var/lib/kubernetes/encryption-config.yaml'
 
     content = _config['content']
-    enc_ = yaml.load(base64.b64decode(content).decode())
+    enc_ = yaml.safe_load(base64.b64decode(content).decode())
     assert enc_['resources'][0]['providers'][0][
         'aescbc']['keys'][0]['secret'] == encryption_key
 
@@ -92,13 +92,13 @@ def test_certificate_info(ci_master):
 
     certs_config = ci_master._get_certificate_info()
 
-    assert 4 == len(yaml.load(certs_config))
+    assert 4 == len(yaml.safe_load(certs_config))
 
 
 def test_cloud_init(ci_master):
 
     config = ci_master.get_files_config()
-    config = yaml.load(config)
+    config = yaml.safe_load(config)
 
     assert len(config['write_files']) == 10
 
@@ -114,16 +114,16 @@ def test_cloud_init(ci_master):
 
 def test_node_init(ci_node):
     config = ci_node.get_files_config()
-    config = yaml.load(config)
+    config = yaml.safe_load(config)
 
     assert len(config['write_files']) == 8
 
 
 def test_get_kube_config():
 
-    kcy = get_kubeconfig_yaml("https://foo:2349", "kubelet", "12312aed321",
+    kcy = get_kubeconfig_yaml("https://bar:2349", "kubelet", "12312aed321",
                               skip_tls=True,
                               encode=False)
 
-    kcy_dict = yaml.load(kcy)
+    kcy_dict = yaml.safe_load(kcy)
     assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']

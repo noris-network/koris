@@ -45,7 +45,7 @@ class K8S:
                 os.path.join(
                     self.manifest_path, 'calico', 'rbac',
                     '%s.yml' % file_))) as f:
-                payload = yaml.load(f)
+                payload = yaml.safe_load(f)
 
                 client.create_cluster_role(payload)
 
@@ -60,7 +60,7 @@ class K8S:
                     self.manifest_path, 'calico', 'rbac',
                     '%s.yml' % file_))) as f:
 
-                client.create_cluster_role_binding(yaml.load(f))
+                client.create_cluster_role_binding(yaml.safe_load(f))
 
     def apply_service_accounts(self):
         for file_ in ["calico/serviceaccount-controller",
@@ -74,7 +74,7 @@ class K8S:
                         '%s.yml' % file_))) as f:
 
                 self.client.create_namespaced_service_account("kube-system",
-                                                              yaml.load(f))
+                                                              yaml.safe_load(f))
 
     def apply_config_maps(self):
         logger.debug("Applying configmaps")
@@ -83,7 +83,7 @@ class K8S:
                 req,
                 os.path.join(manifest_path, 'config_map_kube-dns.yml'))) as f: # noqa
 
-            configmap = yaml.load(f)
+            configmap = yaml.safe_load(f)
             self.client.create_namespaced_config_map("kube-system", configmap)
 
     def apply_calico_config_map(self, etcd_end_point):
@@ -92,7 +92,7 @@ class K8S:
                 req,
                 os.path.join(self.manifest_path, 'calico', 'config-map.yml'))) as f: # noqa
 
-            configmap = yaml.load(f)
+            configmap = yaml.safe_load(f)
 
             configmap["data"]["etcd_endpoints"] = etcd_end_point
 
@@ -103,7 +103,7 @@ class K8S:
                                     os.path.join(self.manifest_path,
                                                  'calico',
                                                  'secret.yml'))) as f:
-            secret = yaml.load(f)
+            secret = yaml.safe_load(f)
 
         secret["data"]["etcd-key"] = k8s_key
         secret["data"]["etcd-cert"] = k8s_cert
@@ -120,7 +120,7 @@ class K8S:
                 os.path.join(self.manifest_path,
                              'calico',
                              'daemonset.yml'))) as f:
-            client.create_namespaced_daemon_set("kube-system", yaml.load(f))  # noqa
+            client.create_namespaced_daemon_set("kube-system", yaml.safe_load(f))  # noqa
 
     def apply_deployments(self):
         logger.debug("Applying deployments")
@@ -132,7 +132,7 @@ class K8S:
                     req,
                     os.path.join(self.manifest_path,
                                  file_))) as f:
-                client.create_namespaced_deployment("kube-system", yaml.load(f))  # noqa
+                client.create_namespaced_deployment("kube-system", yaml.safe_load(f))  # noqa
 
     def apply_services(self):
 
@@ -142,4 +142,4 @@ class K8S:
                     req,
                     os.path.join(self.manifest_path,
                                  file_))) as f:
-                self.client.create_namespaced_service("kube-system", yaml.load(f))  # noqa
+                self.client.create_namespaced_service("kube-system", yaml.safe_load(f))  # noqa

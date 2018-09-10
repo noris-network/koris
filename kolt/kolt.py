@@ -519,7 +519,7 @@ class Kolt:
         inventory - invetory file to write
         """
         with open(config, 'r') as stream:
-            config = yaml.load(stream)
+            config = yaml.safe_load(stream)
 
         builder = ClusterBuilder()
         builder.run(config)
@@ -529,7 +529,7 @@ class Kolt:
         Launch machines on opentack and write a configuration for kubespray
         """
         with open(config, 'r') as stream:
-            config = yaml.load(stream)
+            config = yaml.safe_load(stream)
 
         builder = ClusterBuilder()
         cfg = builder.run(config, no_cloud_init=True)
@@ -549,7 +549,7 @@ class Kolt:
         Delete the complete cluster stack
         """
         with open(config, 'r') as stream:
-            config = yaml.load(stream)
+            config = yaml.safe_load(stream)
 
         delete_cluster(config, nova, neutron)
         sys.exit(0)
