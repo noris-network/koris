@@ -61,30 +61,11 @@ def distribute_hosts(hosts_zones):
         for host in hosts:
             yield [host, zone, None]
 
-
-def get_host_zones(hosts, zones):
-    # brain fuck warning
-    # this divides the lists of hosts into zones
-    # >>> hosts
-    # >>> ['host1', 'host2', 'host3', 'host4', 'host5']
-    # >>> zones
-    # >>> ['A', 'B']
-    # >>> list(zip([hosts[i:i + n] for i in range(0, len(hosts), n)], zones)) # noqa
-    # >>> [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]  # noqa
-    if len(zones) == len(hosts):
-        return list(zip(hosts, zones))
-    else:
-        end = len(zones) + 1 if len(zones) % 2 else len(zones)
-        host_zones = list(zip([hosts[i:i + end] for i in
-                               range(0, len(hosts), end)],
-                              zones))
-        return distribute_hosts(host_zones)
-
-
 # ugly global variables!
 # don't do this to much
 # only tolerated here because we don't define any classes for the sake of
 # readablitiy. this will be refactored in v0.2
+
 
 nova, cinder, neutron = None, None, None
 
