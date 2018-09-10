@@ -39,13 +39,6 @@ from .util import (EtcdHost,
 
 logger = get_logger(__name__)
 
-
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
-
-
 # ugly global variables!
 # don't do this to much
 # only tolerated here because we don't define any classes for the sake of
