@@ -46,21 +46,6 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
-def distribute_hosts(hosts_zones):
-    """
-    Given  [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]
-    return:
-    [(host1, zone),
-     (host2, zone),
-     (host3, zone),
-     (host4, zone),
-     (host5, zone)]
-    """
-    for item in hosts_zones:
-        hosts, zone = item[0], item[1]
-        for host in hosts:
-            yield [host, zone, None]
-
 # ugly global variables!
 # don't do this to much
 # only tolerated here because we don't define any classes for the sake of
