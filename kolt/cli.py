@@ -3,12 +3,12 @@ import logging
 import os
 import sys
 
-from .hue import red, yellow
+from kolt.util.hue import red, yellow
 
 from .ssl import (create_key,
                   create_ca,
                   write_key, write_cert, CertBundle)
-from .util import get_kubeconfig_yaml
+from .util.util import get_kubeconfig_yaml
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -19,7 +19,8 @@ logger.addHandler(ch)
 
 
 def delete_cluster(config, nova, neutron):
-    print(red("You are about to destroy your cluster '{}'!!!".format(config["cluster-name"])))
+    print(red("You are about to destroy your cluster '{}'!!!".format(
+          config["cluster-name"])))
     print(red("Are you really sure ? [y/N]"))
     ans = input(red("ARE YOU REALLY SURE???"))
 

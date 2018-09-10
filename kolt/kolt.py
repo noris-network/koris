@@ -2,10 +2,8 @@
 # http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
 import asyncio
 import base64
-import copy
 import os
 import uuid
-import textwrap
 import sys
 import time
 
@@ -14,28 +12,24 @@ import yaml
 import novaclient.v2.servers
 
 from mach import mach1
-from novaclient import client as nvclient
-from novaclient.exceptions import (NotFound as NovaNotFound,
-                                   ClientException as NovaClientException)
-from cinderclient import client as cclient
-from neutronclient.v2_0 import client as ntclient
-
-from keystoneauth1 import identity
-from keystoneauth1 import session
 
 from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
-from .cloud import MasterInit, NodeInit
-from .hue import red, info, que, lightcyan as cyan, yellow
-from .k8s import K8S
+from kolt.cloud.os import (get_clients,
+                           OSCloudConfig,
+                           create_instance_with_volume)
+
+from .cloud_init import MasterInit, NodeInit
+from .util.hue import red, info, lightcyan as cyan
+from .deploy.k8s import K8S
 from .ssl import CertBundle, b64_key, b64_cert
-from .util import (EtcdHost,
-                   OSCloudConfig, OSClusterInfo,
-                   create_inventory,
-                   get_logger,
-                   get_server_info_from_openstack,
-                   get_token_csv,
-                   )
+from .util.util import (EtcdHost,
+                        create_inventory,
+                        get_logger,
+                        get_server_info_from_openstack,
+                        get_token_csv,)
+
+from .cloud.os import OSClusterInfo
 
 logger = get_logger(__name__)
 
@@ -44,176 +38,7 @@ logger = get_logger(__name__)
 # only tolerated here because we don't define any classes for the sake of
 # readablitiy. this will be refactored in v0.2
 
-
-nova, cinder, neutron = None, None, None
-
-
-async def create_volume(cinder, image, zone, klass, size=25):
-    bdm_v2 = {
-        "boot_index": 0,
-        "source_type": "volume",
-        "volume_size": str(size),
-        "destination_type": "volume",
-        "delete_on_termination": True}
-
-    v = cinder.volumes.create(size, name=uuid.uuid4(), imageRef=image.id,
-                              availability_zone=zone,
-                              volume_type=klass)
-
-    while v.status != 'available':
-        await asyncio.sleep(1)
-        v = cinder.volumes.get(v.id)
-
-    logger.debug("created volume %s %s" % (v, v.volume_type))
-
-    if v.bootable != 'true':
-        v.update(bootable=True)
-        # wait for mark as bootable
-        await asyncio.sleep(2)
-
-    volume_data = copy.deepcopy(bdm_v2)
-    volume_data['uuid'] = v.id
-
-    return volume_data
-
-
-async def create_instance_with_volume(name, zone, flavor, image,
-                                      keypair, secgroups, userdata,
-                                      hosts,
-                                      nics=None,
-                                      volume_klass=""
-                                      ):
-    global nova, neutron, cinder
-
-    try:
-        print(que("Checking if %s does not already exist" % name))
-        server = nova.servers.find(name=name)
-        ip = server.interface_list()[0].fixed_ips[0]['ip_address']
-        print(info("This machine already exists ... skipping"))
-        hosts[name] = (ip)
-        return
-    except NovaNotFound:
-        print(info("Okay, launching %s" % name))
-    except IndexError:
-        logger.debug("Server found in weired state witout IP ... recreating")
-        server.delete()
-
-    volume_data = await create_volume(cinder, image, zone, volume_klass)
-
-    try:
-        print("Creating instance %s... " % name)
-        instance = nova.servers.create(name=name,
-                                       availability_zone=zone,
-                                       image=None,
-                                       key_name=keypair.name,
-                                       flavor=flavor,
-                                       nics=nics, security_groups=secgroups,
-                                       block_device_mapping_v2=[volume_data],
-                                       userdata=userdata,
-                                       )
-
-    except NovaClientException as E:
-        print(info(red("Something weired happend, I so I didn't create %s" %
-                       name)))
-        print(info(yellow(E.message)))
-        # TODO: clean volume and nic here
-    except KeyboardInterrupt:
-        print(info(red("Oky doky, stopping as you interrupted me ...")))
-        print(info(red("Cleaning after myself")))
-        # TODO: clean volume and nic here
-        # clean volume
-        cinder.volumes.delete(volume_data["id"])
-
-    inst_status = instance.status
-    print("waiting for 5 seconds for the machine to be launched ... ")
-    await asyncio.sleep(5)
-
-    while inst_status == 'BUILD':
-        print("Instance: " + instance.name + " is in " + inst_status +
-              " state, sleeping for 5 seconds more...")
-        await asyncio.sleep(5)
-        instance = nova.servers.get(instance.id)
-        inst_status = instance.status
-
-    print("Instance: " + instance.name + " is in " + inst_status + " state")
-
-    ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
-    print("Instance booted! Name: " + instance.name + " Status: " +
-          instance.status + ", IP: " + ip)
-
-    hosts[name] = (ip)
-
-
-def read_os_auth_variables(trim=True):
-    """
-    Automagically read all OS_* variables and
-    yield key: value pairs which can be used for
-    OS connection
-    """
-    d = {}
-    for k, v in os.environ.items():
-        if k.startswith("OS_"):
-            d[k[3:].lower()] = v
-    if trim:
-        not_in_default_rc = ('interface', 'region_name',
-                             'identity_api_version', 'endpoint_type',
-                             )
-
-        [d.pop(i) for i in not_in_default_rc if i in d]
-
-    return d
-
-
-def get_clients():
-    try:
-        auth = identity.Password(**read_os_auth_variables())
-        sess = session.Session(auth=auth)
-        nova = nvclient.Client('2.1', session=sess)
-        neutron = ntclient.Client(session=sess)
-        cinder = cclient.Client('3.0', session=sess)
-    except TypeError:
-        print(red("Did you source your OS rc file in v3?"))
-        print(red("If your file has the key OS_ENDPOINT_TYPE it's the"
-                  " wrong one!"))
-        sys.exit(1)
-    except KeyError:
-        print(red("Did you source your OS rc file?"))
-        sys.exit(1)
-
-    return nova, neutron, cinder
-
-
-def create_userdata(role, img_name, cluster_info=None,
-                    cloud_provider=None,
-                    cert_bundle=None, encryption_key=None,
-                    **kwargs):
-    """
-    Create multipart userdata for Ubuntu
-    """
-
-    if 'ubuntu' in img_name.lower() and role == 'master':
-
-        userdata = str(MasterInit(role, cluster_info, cert_bundle,
-                                  encryption_key,
-                                  cloud_provider, **kwargs))
-    elif 'ubuntu' in img_name.lower() and role == 'node':
-        kubelet_token = kwargs.get('kubelet_token')
-        ca_cert = kwargs.get('ca_cert')
-        calico_token = kwargs.get('calico_token')
-        service_account_bundle = kwargs.get('service_account_bundle')
-
-        userdata = str(NodeInit(role, kubelet_token, ca_cert,
-                                cert_bundle, service_account_bundle,
-                                cluster_info, calico_token))
-    else:
-        userdata = """
-                   #cloud-config
-                   manage_etc_hosts: true
-                   runcmd:
-                    - swapoff -a
-                   """
-        userdata = textwrap.dedent(userdata).strip()
-    return userdata
+nova, cinder, neutron = get_clients()
 
 
 class NodeBuilder:
@@ -222,6 +47,18 @@ class NodeBuilder:
         logger.info(info(cyan(
             "gathering node information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
+
+    def create_userdata(self, cluster_info=None, cloud_provider=None,
+                        cert_bundle=None, encryption_key=None, **kwargs):
+        kubelet_token = kwargs.get('kubelet_token')
+        ca_cert = kwargs.get('ca_cert')
+        calico_token = kwargs.get('calico_token')
+        service_account_bundle = kwargs.get('service_account_bundle')
+
+        userdata = str(NodeInit(kubelet_token, ca_cert,
+                                cert_bundle, service_account_bundle,
+                                cluster_info, calico_token))
+        return userdata
 
     def get_nodes_info(self, nova, neutron, config):
         """
@@ -243,17 +80,12 @@ class NodeBuilder:
                      'calico_token': calico_token,
                      }
 
-        if no_cloud_init:
-            user_data = create_userdata('no-role', self._info.image.name,
-                                        **node_args)
-        else:
-            node_args.update({'ca_cert': certs['ca'],
-                              'service_account_bundle': certs[
-                                  'service-account'],  # noqa
-                              'cert_bundle': certs['k8s']})
-            user_data = create_userdata('node', self._info.image.name,
-                                        **node_args)
+        node_args.update({'ca_cert': certs['ca'],
+                          'service_account_bundle': certs[
+                              'service-account'],  # noqa
+                          'cert_bundle': certs['k8s']})
 
+        user_data = self.create_userdata(**node_args)
         task_args_node = self._info.node_args_builder(user_data, hosts)
 
         hosts = self._info.distribute_nodes()
@@ -264,7 +96,8 @@ class NodeBuilder:
 
         tasks = [loop.create_task(create_instance_with_volume(
             host.name, host.zone,
-            nics=host.nic, volume_klass=volume_klass,
+            nics=host.nic, volume_klass=volume_klass, nova=nova, cinder=cinder,
+            neutron=neutron,
             *task_args_node))
             for host in hosts]
 
@@ -278,6 +111,13 @@ class ControlPlaneBuilder:
         logger.info(info(cyan(
             "gathering control plane information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
+
+    def create_userdata(self, cluster_info=None, cloud_provider=None,
+                        cert_bundle=None, encryption_key=None, **kwargs):
+        userdata = str(MasterInit(cluster_info, cert_bundle,
+                                  encryption_key,
+                                  cloud_provider, **kwargs))
+        return userdata
 
     def get_hosts_info(self):
         return self._info.management_status
@@ -296,8 +136,7 @@ class ControlPlaneBuilder:
         encryption_key = base64.b64encode(
             uuid.uuid4().hex[:32].encode()).decode()
 
-        cloud_provider_info = OSCloudConfig(
-            **read_os_auth_variables(trim=False))
+        cloud_provider_info = OSCloudConfig()
 
         token_csv_data = get_token_csv(admin_token,
                                        calico_token,
@@ -310,15 +149,11 @@ class ControlPlaneBuilder:
             cluster_info=etcd_host_list,
         )
 
-        if no_cloud_init:
-            user_data = create_userdata('no-role', self._info.image.name,
-                                        **master_args)
-        else:
-            master_args.update({'cert_bundle':
-                                (certs['ca'], certs['k8s'],
-                                 certs['service-account'])})
-            user_data = create_userdata('master', self._info.image.name,
-                                        **master_args)
+        master_args.update({'cert_bundle':
+                            (certs['ca'], certs['k8s'],
+                             certs['service-account'])})
+
+        user_data = self.create_userdata(**master_args)
 
         tasks_args_masters = self._info.node_args_builder(user_data, hosts)
 
@@ -329,11 +164,11 @@ class ControlPlaneBuilder:
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
-            masters_zones[i].name, masters_zones[i].zone,
-            nics=masters_zones[i].nic,
-            volume_klass=volume_klass,
-            *tasks_args_masters))
-            for i in range(0, self._info.n_masters)]
+                 masters_zones[i].name, masters_zones[i].zone,
+                 nics=masters_zones[i].nic,
+                 volume_klass=volume_klass,
+                 nova=nova, cinder=cinder, neutron=neutron,
+                 *tasks_args_masters)) for i in range(0, self._info.n_masters)]
 
         return tasks
 
@@ -411,40 +246,33 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            path = write_kubeconfig(config, etcd_host_list, admin_token,
-                                    True)
+            config = write_kubeconfig(config, etcd_host_list, admin_token,
+                                      True)
 
             logger.info("Waiting for K8S API server to launch")
 
-            manifest_path = os.path.join("kolt", "k8s-manifests")
-            k8s = K8S(path, manifest_path)
+            manifest_path = os.path.join("kolt", "deploy", "manifests")
+            k8s = K8S(config, manifest_path)
 
             while not k8s.is_ready:
                 logger.debug("Kubernetes API Server is still not ready ...")
                 time.sleep(2)
 
             logger.debug("Kubernetes API Server is ready !!!")
-            manifest_path = os.path.join("kolt", "k8s-manifests")
+            ####
+            #
+            # TODO: URGENTLY REPLACE THIS HACK BELOW WITH AN OPENSTACK LB
+            #
+            ####
+            lb_url = "https://%s:%d" % (
+                etcd_host_list[0].ip_address, etcd_host_list[0].port - 1)
+            k8s.apply_calico(b64_key(certs["k8s"].key),
+                             b64_cert(certs["k8s"].cert),
+                             b64_cert(certs["ca"].cert),
+                             lb_url)
+            k8s.apply_kube_dns()
 
-            # crate rbac realted stuff
-            k8s.apply_roles()
-            k8s.apply_role_bindings()
-            # service accounts
-            k8s.apply_service_accounts()
-            # create calico configuration
-            url = "https://" + str(etcd_host_list[0].ip_address) + \
-                  ":" + str(etcd_host_list[0].port - 1)
-            print("etcd_host fuer calico: {}".format(url))
-            k8s.apply_calico_config_map(url)
-
-            # create calico secrets
-            k8s.apply_calico_secrets(b64_key(certs["k8s"].key),
-                                     b64_cert(certs["k8s"].cert),
-                                     b64_cert(certs["ca"].cert))
-
-            k8s.apply_daemon_sets()
-            k8s.apply_deployments()
-            k8s.apply_services()
+            # more roles come here later ...
 
         if no_cloud_init:
             return create_inventory(hosts, config)

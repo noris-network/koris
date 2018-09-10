@@ -3,12 +3,14 @@ import re
 import uuid
 import yaml
 
+from unittest.mock import patch
 import pytest
 
-from kolt.cloud import MasterInit, NodeInit
+from kolt.cloud_init import MasterInit, NodeInit
 from kolt.kolt import create_certs
-from kolt.util import (EtcdHost, get_kubeconfig_yaml,
-                       OSCloudConfig, get_token_csv)
+from kolt.cloud.os import OSCloudConfig
+from kolt.util.util import (EtcdHost, get_kubeconfig_yaml,
+                            get_token_csv)
 
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,
@@ -20,13 +22,15 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in etcd_host_list]))
 
 
-cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
-                             auth_url="keystone.myopenstack.de",
-                             project_id="c869168a828847f39f7f06edd7305637",
-                             domain_id="2a73b8f597c04551a0fdc8e95544be8a",
-                             user_domain_name="noris.de",
-                             region_name="de-nbg6-1")
+with patch('kolt.cloud.os.read_os_auth_variables') as p:
+    p.return_value = dict(username="serviceuser", password="s9kr9t",
+                          auth_url="keystone.myopenstack.de",
+                          project_id="c869168a828847f39f7f06edd7305637",
+                          domain_id="2a73b8f597c04551a0fdc8e95544be8a",
+                          user_domain_name="noris.de",
+                          region_name="de-nbg6-1")
 
+    cloud_config = OSCloudConfig()
 
 certs = create_certs({}, hostnames, ips, write=False)
 
@@ -40,7 +44,7 @@ token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 @pytest.fixture
 def ci_master():
-    ci = MasterInit("master", test_cluster,
+    ci = MasterInit(test_cluster,
                     cert_bundle=(certs['ca'],
                                  certs['k8s'],
                                  certs['service-account']),
@@ -51,8 +55,7 @@ def ci_master():
 
 @pytest.fixture
 def ci_node():
-    ci = NodeInit("node",
-                  kubelet_token,
+    ci = NodeInit(kubelet_token,
                   certs['ca'],
                   certs['k8s'],
                   certs['service-account'],
