@@ -13,11 +13,9 @@ import novaclient.v2.servers
 
 from mach import mach1
 
-from .cli import (delete_cluster, create_certs,
-                  write_kubeconfig)  # noqa
-from kolt.cloud.openstack import (get_clients,
-                           OSCloudConfig,
-                           create_instance_with_volume)
+from .cli import delete_cluster
+from .ssl import create_certs
+from kolt.cloud.openstack import get_clients
 
 from .cloud_init import MasterInit, NodeInit
 from .util.hue import red, info, lightcyan as cyan
