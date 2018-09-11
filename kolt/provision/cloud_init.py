@@ -15,11 +15,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from kolt.ssl import (b64_key, b64_cert)
-from kolt.util import (encryption_config_tmpl,
-                       calicoconfig, get_kubeconfig_yaml,
-                       get_logger)
+from kolt.util.util import (encryption_config_tmpl,
+                            calicoconfig, get_kubeconfig_yaml,
+                            get_logger)
 
 logger = get_logger(__name__)
+
+
+BOOTSTRAP_SCRIPTS_DIR = "kolt/provision/userdata/"
 
 
 class BaseInit:
@@ -63,8 +66,7 @@ class BaseInit:
         # process bootstrap script and generic cloud-init file
         for item in ['generic', k8s_bootstrap]:
             fh = open(resource_filename(Requirement('kolt'),
-                                        os.path.join('kolt',
-                                                     'cloud-inits',
+                                        os.path.join(BOOTSTRAP_SCRIPTS_DIR,
                                                      item)))
             # we currently blindly assume the first line is a mimetype
             # or a shebang
@@ -85,7 +87,7 @@ class BaseInit:
 
 class MasterInit(BaseInit):
 
-    def __init__(self, role, cluster_info,
+    def __init__(self, cluster_info,
                  cert_bundle=None, encryption_key=None,
                  cloud_provider=None,
                  token_csv_data="",
@@ -96,10 +98,7 @@ class MasterInit(BaseInit):
         members
         """
         self.combined_message = MIMEMultipart()
-
-        if role not in ('master', 'node'):
-            raise ValueError("Incorrect os_role!")
-        self.role = role
+        self.role = 'master'
         self.cluster_info = cluster_info
         if cert_bundle:
             self.ca_cert_bundle = cert_bundle[0]
@@ -174,7 +173,6 @@ class MasterInit(BaseInit):
             encryption_config)
 
     def _get_cloud_provider(self):
-
         return self.format_file('cloud_config',
                                 '/etc/kubernetes/cloud.conf',
                                 self.cloud_provider,
@@ -215,14 +213,14 @@ class MasterInit(BaseInit):
 
 class NodeInit(BaseInit):
 
-    def __init__(self, role, token,
+    def __init__(self, token,
                  ca_cert_bundle,
                  etcd_cert_bundle,
                  svc_account_bundle,
                  etcd_cluster_info, calico_token,
                  os_type='ubuntu', os_version="16.04"):
 
-        self.role = role
+        self.role = 'node'
         self.token = token
         self.ca_cert_bundle = ca_cert_bundle
         self.os_type = os_type
@@ -299,14 +297,15 @@ class NodeInit(BaseInit):
            owner: root:root
            permissions: '0600'
         """.format(
-            base64.b64encode(("MASTER_IP=%s" % self.etcd_cluster_info[0].ip_address).encode()).decode()            
+            base64.b64encode(("MASTER_IP=%s" %
+                             self.etcd_cluster_info[0].ip_address).encode()).decode()  # noqa
             )
 
         return textwrap.dedent(kubeproxy_part).lstrip()
 
     def _get_calico_config(self):
         calicoconfig['etcd_endpoints'] = ",".join(
-            "https://%s:%d" % (etcd_host.ip_address, int(etcd_host.port)-1)
+            "https://%s:%d" % (etcd_host.ip_address, int(etcd_host.port) - 1)
             for etcd_host in self.etcd_cluster_info)
 
         cc = json.dumps(calicoconfig, indent=2).encode()

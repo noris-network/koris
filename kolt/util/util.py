@@ -8,7 +8,6 @@ from functools import lru_cache
 from ipaddress import IPv4Address
 
 import yaml
-from novaclient.exceptions import (NotFound as NovaNotFound)
 
 
 def get_logger(name):
@@ -99,116 +98,6 @@ class Server:
 
     def connection_uri(self, port, protocol="https"):
         return "%s://%s:%d" % (protocol, self.ip_address, port)
-
-
-class OSClusterInfo:
-
-    def __init__(self, nova, neutron, config):
-        self.keypair = nova.keypairs.get(config['keypair'])
-        self.image = nova.glance.find_image(config['image'])
-        self.node_flavor = nova.flavors.find(name=config['node_flavor'])
-        secgroup = neutron.find_resource('security_group',
-                                         config['security_group'])
-        self.secgroups = [secgroup['id']]
-
-        self.net = neutron.find_resource("network", config["private_net"])
-        self.name = config['cluster-name']
-        self.n_nodes = config['n-nodes']
-        self.n_masters = config['n-masters']
-        self.azones = config['availibility-zones']
-        self.storage_class = config['storage_class']
-
-        self._novaclient = nova
-        self._neutronclient = neutron
-
-    def _status(self, names):
-        """
-        Finds if all mahcines in the group exists
-        """
-        for name in names:
-            try:
-                _server = self._novaclient.servers.find(name=name)
-                yield Server(_server.name, _server.interface_list(),
-                             server=_server)
-
-            except NovaNotFound:
-                port = self._neutronclient.create_port(
-                    {"port": {"admin_state_up": True,
-                              "network_id": self.net['id'],
-                              "security_groups": self.secgroups}})
-
-                yield Server(name, [port])
-
-    @property
-    def nodes_status(self):
-        """
-        Finds if all work nodes exists
-        """
-        return list(self._status(self.nodes_names))
-
-    @property
-    def management_status(self):
-        """
-        Finds if all mangament nodes exists
-        """
-        return list(self._status(self.management_names))
-
-    @property
-    def nodes_names(self):
-        return host_names("node", self.n_nodes, self.name)
-
-    @property
-    def management_names(self):
-        return host_names("master", self.n_masters, self.name)
-
-    def node_args_builder(self, user_data, hosts):
-
-        return [self.node_flavor, self.image, self.keypair, self.secgroups,
-                user_data, hosts]
-
-    def distribute_management(self):
-        return list(get_host_zones(self.management_names, self.azones))
-
-    def distribute_nodes(self):
-        return list(get_host_zones(self.nodes_names, self.azones))
-
-    def assign_nics_to_management(self, management_zones, nics):
-        for idx, nic in enumerate(nics):
-            management_zones[idx].nic = [{'net-id': self.net['id'],
-                                         'port-id': nic['port']['id']}]
-
-    def assign_nics_to_nodes(self, nodes_zones, nics):
-        for idx, nic in enumerate(nics):
-            nodes_zones[idx].nic = [{'net-id': self.net['id'],
-                                     'port-id': nic['port']['id']}]
-
-
-class OSCloudConfig:
-
-    def __init__(self, username, password, auth_url,
-                 **kwargs):
-        self.username = username
-        self.password = password
-        self.auth_url = auth_url
-        self.__dict__.update(kwargs)
-        self.tenant_id = self.project_id
-        self.__dict__.pop('project_id')
-
-    def __str__(self):
-        return textwrap.dedent("""
-        [Global]
-        username=%s
-        password=%s
-        auth-url=%s
-        tenant-id=%s
-        domain-name=%s
-        region=%s
-        """ % (self.username, self.password, self.auth_url,
-               self.tenant_id, self.user_domain_name,
-               self.region_name)).lstrip()
-
-    def __bytes__(self):
-        return base64.b64encode(str(self).encode())
 
 
 class EtcdHost:
@@ -379,7 +268,7 @@ def get_token_csv(adminToken, calicoToken, kubeletToken):
     return base64.b64encode(textwrap.dedent(content).encode()).decode()
 
 
-@lru_cache(maxsize=10)
+@lru_cache(maxsize=16)
 def host_names(role, num, cluster_name):
     return ["%s-%s-%s" % (role, i, cluster_name) for i in
             range(1, num + 1)]

@@ -10,6 +10,10 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
+from kolt.util.util import get_logger
+
+logger = get_logger(__name__)
+
 
 def create_key(size=2048, public_exponent=65537):
     key = rsa.generate_private_key(
@@ -149,7 +153,7 @@ def create_certificate(ca_bundle, public_key, country,
         critical=False)
 
     cert = cert.add_extension(
-        x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_bundle.cert.public_key()),
+        x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_bundle.cert.public_key()),  # noqa
         critical=False)
 
     if alt_names:
@@ -265,3 +269,101 @@ def read_key(key):  # pragma: no coverage
             password=None,
             backend=default_backend())
     return private_key
+
+
+def create_certs(config, names, ips, write=True, ca_bundle=None):
+    """
+    create new certificates, useful for replacing certificates
+    and later for adding nodes ...
+    """
+    country = "DE"
+    state = "Bayern"
+    location = "NUE"
+
+    if not ca_bundle:
+        ca_key = create_key()
+        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                            state, location, "Kubernetes", "CDA-PI",
+                            "kubernetes")
+        ca_bundle = CertBundle(ca_key, ca_cert)
+
+    else:
+        ca_key = ca_bundle.key
+        ca_cert = ca_bundle.cert
+
+    k8s_bundle = CertBundle.create_signed(ca_bundle,
+                                          country,
+                                          state,
+                                          location,
+                                          "Kubernetes",
+                                          "CDA-PI",
+                                          "kubernetes",
+                                          names,
+                                          ips)
+
+    svc_accnt_bundle = CertBundle.create_signed(ca_bundle,
+                                                country,
+                                                state,
+                                                location,
+                                                "Kubernetes",
+                                                "CDA-PI",
+                                                name="service-accounts",
+                                                hosts="",
+                                                ips="")
+
+    admin_bundle = CertBundle.create_signed(ca_bundle,
+                                            country,
+                                            state,
+                                            location,
+                                            "system:masters",
+                                            "CDA-PI",
+                                            name="admin",
+                                            hosts="",
+                                            ips=""
+                                            )
+
+    kubelet_bundle = CertBundle.create_signed(ca_bundle,
+                                              country,
+                                              state,
+                                              location,
+                                              "system:masters",
+                                              "CDA-PI",
+                                              name="kubelet",
+                                              hosts=names,
+                                              ips=ips
+                                              )
+
+    nodes = []
+    node_bundles = []
+    node_ip = None
+    # todo: add node_ip
+    for node in nodes:
+        node_bundles.append(CertBundle.create_signed(ca_bundle,
+                                                     country,
+                                                     state,
+                                                     location,
+                                                     "system:nodes",
+                                                     "CDA-PI",
+                                                     name="system:node:%s" % node,  # noqa
+                                                     hosts=[node],
+                                                     ips=[node_ip]))
+
+    logger.debug("Done creating all certificates")
+    if write:  # pragma: no coverage
+        cert_dir = "-".join(("certs", config["cluster-name"]))
+
+        if not os.path.exists(cert_dir):
+            os.mkdir(cert_dir)
+
+        write_key(ca_key, filename=cert_dir + "/ca-key.pem")
+        write_cert(ca_cert, cert_dir + "/ca.pem")
+
+        k8s_bundle.save("kubernetes", cert_dir)
+        svc_accnt_bundle.save("service-account", cert_dir)
+        admin_bundle.save("admin", cert_dir)
+        kubelet_bundle.save("kubelet", cert_dir)
+
+    return {'ca': ca_bundle, 'k8s': k8s_bundle,
+            'service-account': svc_accnt_bundle,
+            'admin': admin_bundle,
+            'kubelet': kubelet_bundle}
