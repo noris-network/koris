@@ -160,14 +160,14 @@ def get_clients():
 class OSCloudConfig:
 
     def __init__(self):
-            os_vars = read_os_auth_variables(trim=False)
-            self.username = os_vars['username']
-            self.password = os_vars['password']
-            self.auth_url = os_vars['auth_url']
-            self.__dict__.update(os_vars)
-            self.tenant_id = self.project_id
-            self.__dict__.pop('project_id')
-            del os_vars
+        os_vars = read_os_auth_variables(trim=False)
+        self.username = os_vars['username']
+        self.password = os_vars['password']
+        self.auth_url = os_vars['auth_url']
+        self.__dict__.update(os_vars)
+        self.tenant_id = self.project_id
+        self.__dict__.pop('project_id')
+        del os_vars
 
     def __str__(self):
         return textwrap.dedent("""
@@ -188,23 +188,23 @@ class OSCloudConfig:
 
 class OSClusterInfo:
 
-    def __init__(self, nova, neutron, config):
+    def __init__(self, nova_client, neutron_client, config):
 
-        self.keypair = nova.keypairs.get(config['keypair'])
-        self.image = nova.glance.find_image(config['image'])
-        self.node_flavor = nova.flavors.find(name=config['node_flavor'])
-        secgroup = neutron.find_resource('security_group',
-                                         config['security_group'])
+        self.keypair = nova_client.keypairs.get(config['keypair'])
+        self.image = nova_client.glance.find_image(config['image'])
+        self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
+        secgroup = neutron_client.find_resource('security_group',
+                                                config['security_group'])
         self.secgroups = [secgroup['id']]
-        self.net = neutron.find_resource("network", config["private_net"])
+        self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
         self.azones = config['availibility-zones']
         self.storage_class = config['storage_class']
 
-        self._novaclient = nova
-        self._neutronclient = neutron
+        self._novaclient = nova_client
+        self._neutronclient = neutron_client
 
     def _status(self, names):
         """

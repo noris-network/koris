@@ -22,7 +22,7 @@ from kolt.util.util import (encryption_config_tmpl,
 logger = get_logger(__name__)
 
 
-BOOTSTRAP_SCRIPTS_DIR = "kolt/provision/userdata/"
+BOOTSTRAP_SCRIPTS_DIR = "/kolt/provision/userdata/"
 
 
 class BaseInit:

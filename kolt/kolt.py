@@ -21,13 +21,6 @@ from .cloud.builder import ClusterBuilder
 
 logger = get_logger(__name__)
 
-# ugly global variables!
-# don't do this to much
-# only tolerated here because we don't define any classes for the sake of
-# readablitiy. this will be refactored in v0.2
-
-nova, cinder, neutron = get_clients()
-
 
 @mach1()
 class Kolt:
