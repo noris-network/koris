@@ -15,7 +15,7 @@ from mach import mach1
 
 from .cli import (delete_cluster, create_certs,
                   write_kubeconfig)  # noqa
-from kolt.cloud.os import (get_clients,
+from kolt.cloud.openstack import (get_clients,
                            OSCloudConfig,
                            create_instance_with_volume)
 
@@ -29,7 +29,7 @@ from .util.util import (EtcdHost,
                         get_server_info_from_openstack,
                         get_token_csv,)
 
-from .cloud.os import OSClusterInfo
+from .cloud.openstack import OSClusterInfo
 
 logger = get_logger(__name__)
 

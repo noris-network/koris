@@ -1,5 +1,5 @@
 from unittest import mock
-from kolt.cloud.os import OSClusterInfo
+from kolt.cloud.openstack import OSClusterInfo
 
 nova = mock.Mock()
 neutron = mock.Mock()

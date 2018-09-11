@@ -8,7 +8,7 @@ import pytest
 
 from kolt.cloud_init import MasterInit, NodeInit
 from kolt.kolt import create_certs
-from kolt.cloud.os import OSCloudConfig
+from kolt.cloud.openstack import OSCloudConfig
 from kolt.util.util import (EtcdHost, get_kubeconfig_yaml,
                             get_token_csv)
 
@@ -22,7 +22,7 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in etcd_host_list]))
 
 
-with patch('kolt.cloud.os.read_os_auth_variables') as p:
+with patch('kolt.cloud.openstack.read_os_auth_variables') as p:
     p.return_value = dict(username="serviceuser", password="s9kr9t",
                           auth_url="keystone.myopenstack.de",
                           project_id="c869168a828847f39f7f06edd7305637",
