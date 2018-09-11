@@ -6,7 +6,7 @@ import yaml
 from unittest.mock import patch
 import pytest
 
-from kolt.cloud_init import MasterInit, NodeInit
+from kolt.provision.cloud_init import MasterInit, NodeInit
 from kolt.ssl import create_certs
 from kolt.cloud.openstack import OSCloudConfig
 from kolt.util.util import (EtcdHost, get_kubeconfig_yaml,

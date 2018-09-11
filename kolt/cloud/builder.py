@@ -10,7 +10,7 @@ import novaclient.v2.servers
 from kolt.deploy.k8s import K8S
 
 from kolt.cli import write_kubeconfig
-from kolt.cloud_init import MasterInit, NodeInit
+from kolt.provision.cloud_init import MasterInit, NodeInit
 from kolt.ssl import create_certs, b64_key, b64_cert
 from kolt.util.hue import red, info, lightcyan as cyan
 
