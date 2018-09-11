@@ -25,7 +25,7 @@ from .openstack import (get_clients,
 
 logger = get_logger(__name__)
 
-nova, cinder, neutron = get_clients()
+nova, neutron, cinder = get_clients()
 
 
 class NodeBuilder:
