@@ -24,6 +24,7 @@ from .openstack import (get_clients,
                         create_instance_with_volume)
 
 logger = get_logger(__name__)
+
 nova, neutron, cinder = get_clients()
 
 
