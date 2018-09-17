@@ -4,6 +4,8 @@
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
 private_net: 'k8s-nude'
+# optionally specify the subnet
+# subnet: foo
 cluster-name: 'nude'
 availibility-zones:
  - de-nbg6-1b
