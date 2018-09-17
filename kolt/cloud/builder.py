@@ -42,10 +42,10 @@ class NodeBuilder:
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
         service_account_bundle = kwargs.get('service_account_bundle')
-
+        lb_ip = kwargs.get("lb_ip")
         userdata = str(NodeInit(kubelet_token, ca_cert,
                                 cert_bundle, service_account_bundle,
-                                cluster_info, calico_token))
+                                cluster_info, calico_token, lb_ip))
         return userdata
 
     def get_nodes_info(self, nova, neutron, config):
@@ -61,6 +61,7 @@ class NodeBuilder:
                            kubelet_token,
                            calico_token,
                            etcd_host_list,
+                           lb_ip,
                            no_cloud_init=False
                            ):
         node_args = {'kubelet_token': kubelet_token,
@@ -71,7 +72,8 @@ class NodeBuilder:
         node_args.update({'ca_cert': certs['ca'],
                           'service_account_bundle': certs[
                               'service-account'],  # noqa
-                          'cert_bundle': certs['k8s']})
+                          'cert_bundle': certs['k8s'],
+                          'lb_ip': lb_ip})
 
         user_data = self.create_userdata(**node_args)
         task_args_node = self._info.node_args_builder(user_data, hosts)
@@ -204,7 +206,7 @@ class ClusterBuilder:
 
             lb = create_loadbalancer(neutron, config['private_net'],
                                      config['cluster-name'],
-                                     [str(host.ip_address) for host in etcd_host_list],
+                                     [str(host.ip_address) for host in etcd_host_list],  # noqa
                                      )
             ips.append(lb['vip_address'])
             certs = create_certs(config, cluster_host_names, ips)
@@ -224,7 +226,8 @@ class ClusterBuilder:
 
             tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
                                           calico_token, etcd_host_list,
-                                          no_cloud_init=no_cloud_init)
+                                          no_cloud_init=no_cloud_init,
+                                          lb_ip=lb['vip_address'])
 
             cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                               kubelet_token, calico_token,

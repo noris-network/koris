@@ -163,7 +163,7 @@ ExecStart=/usr/bin/kube-proxy \\
   --iptables-min-sync-period=2s \\
   --iptables-sync-period=5s \\
   --cluster-cidr=${PODS_SUBNET} \\
-  --master=https://\${MASTER_IP}:6443
+  --master=https://\${LB_IP}:6443
   --v=2
 
 Restart=on-failure

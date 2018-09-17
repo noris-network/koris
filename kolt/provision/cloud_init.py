@@ -218,6 +218,7 @@ class NodeInit(BaseInit):
                  etcd_cert_bundle,
                  svc_account_bundle,
                  etcd_cluster_info, calico_token,
+                 lb_ip,
                  os_type='ubuntu', os_version="16.04"):
 
         self.role = 'node'
@@ -227,6 +228,7 @@ class NodeInit(BaseInit):
         self.os_version = os_version
         self.etcd_cluster_info = etcd_cluster_info
         self.calico_token = calico_token
+        self.lb_ip_address = lb_ip
         self.combined_message = MIMEMultipart()
 
         self.etcd_cert_bundle = etcd_cert_bundle
@@ -297,8 +299,8 @@ class NodeInit(BaseInit):
            owner: root:root
            permissions: '0600'
         """.format(
-            base64.b64encode(("MASTER_IP=%s" %
-                             self.etcd_cluster_info[0].ip_address).encode()).decode()  # noqa
+            base64.b64encode(("LB_IP=%s" %
+                             self.lb_ip_address).encode()).decode()  # noqa
             )
 
         return textwrap.dedent(kubeproxy_part).lstrip()
