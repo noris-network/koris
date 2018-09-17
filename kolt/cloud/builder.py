@@ -203,8 +203,8 @@ class ClusterBuilder:
             tasks = []
             logger.debug(info("Not creating any tasks"))
         else:
-            subnet = config.get('subnent')
-            kwargs = {'subnent': subnet} if subnet else {}
+            subnet = config.get('subnet')
+            kwargs = {'subnet': subnet} if subnet else {}
             lb = create_loadbalancer(
                 neutron, config['private_net'],
                 config['cluster-name'],
