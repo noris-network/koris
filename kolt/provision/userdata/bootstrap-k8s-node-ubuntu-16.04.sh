@@ -128,6 +128,7 @@ Requires=docker.service
 ExecStart=/usr/bin/kubelet \\
   --allow-privileged=true \\
   --cluster-dns=10.32.0.10  \\
+  --cni-bin-dir=/opt/cni/bin \\
   --hostname-override=$(hostname -s) \\
   --container-runtime=docker \\
   --docker=unix:///var/run/docker.sock \\
