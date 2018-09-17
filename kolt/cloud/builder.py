@@ -203,11 +203,13 @@ class ClusterBuilder:
             tasks = []
             logger.debug(info("Not creating any tasks"))
         else:
-
-            lb = create_loadbalancer(neutron, config['private_net'],
-                                     config['cluster-name'],
-                                     [str(host.ip_address) for host in etcd_host_list],  # noqa
-                                     )
+            subnet = config.get('subnent')
+            kwargs = {'subnent': subnet} if subnet else {}
+            lb = create_loadbalancer(
+                neutron, config['private_net'],
+                config['cluster-name'],
+                [str(host.ip_address) for host in etcd_host_list],  # noqa
+                **kwargs)
             ips.append(lb['vip_address'])
             certs = create_certs(config, cluster_host_names, ips)
             logger.debug(info("Done creating nodes tasks"))
