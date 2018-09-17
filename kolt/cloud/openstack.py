@@ -4,6 +4,7 @@ import copy
 import os
 import sys
 import textwrap
+import time
 import uuid
 
 from novaclient import client as nvclient
@@ -116,6 +117,113 @@ async def create_instance_with_volume(name, zone, flavor, image,
           instance.status + ", IP: " + ip)
 
     hosts[name] = (ip)
+
+
+def create_loadbalancer(client, network, name, master_ips, provider='octavia',
+                        **kwargs):
+    """Create a load balancer for the kuberentes api server
+
+    The API is async, so we need to check `provisioning_status` of the LB
+    created.
+
+    Args:
+        client (neutronclient.v2_0.client.Client)
+        network (str): The network name for the load balancer
+        name (str): The loadbalancer name
+        master_ips (list): A list of the master IP addresses
+        provider (str): The Openstack provider for loadbalancing
+
+    Kwargs:
+        subnet (str): if given this subnet will be used, in any other case
+          the last one will be used.
+
+    Returns:
+        lb (dict): A dictionary containing the information about the lb created
+
+    """
+    # see examle of how to create an LB
+    # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
+    if 'subnet' in kwargs:
+        subnet_id = client.find_resource('subnet', kwargs['subnet'])['id']
+    else:
+        subnet_id = client.list_subnets()['subnets'][-1]['id']
+
+    lb = client.create_loadbalancer({'loadbalancer':
+                                     {'provider': provider,
+                                      'vip_subnet_id': subnet_id,
+                                      'name': "%s-lb" % name
+                                      }
+                                     })
+    lb = lb['loadbalancer']
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(2)
+    logger.debug("Created loadbalancer ...")
+    listener = client.create_listener({'listener':
+                                       {"loadbalancer_id":
+                                        lb['id'],
+                                        "protocol": "HTTPS",
+                                        "protocol_port": 6443,
+                                        'admin_state_up': True,
+                                        'name': '%s-listener' % name
+                                        }})
+
+    logger.debug("added listener ...")
+    lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(2)
+
+    pool = client.create_lbaas_pool(
+        {"pool": {"lb_algorithm": "SOURCE_IP",
+                  "listener_id": listener["listener"]['id'],
+                  "loadbalancer_id": lb["id"],
+                  "protocol": "HTTPS",
+                  "name": "%s-pool" % name},
+         })
+
+    logger.debug("added pool ...")
+    lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(0.5)
+
+    client.create_lbaas_healthmonitor(
+        {'healthmonitor':
+            {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
+             "pool_id": pool['pool']['id'],
+             "name": "%s-health" % name}})
+
+    logger.debug("added health monitor ...")
+
+    lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(0.5)
+
+    for ip in master_ips:
+        client.create_lbaas_member(pool['pool']['id'],
+                                   {'member': {'subnet_id': subnet_id,
+                                               'protocol_port': 6443,
+                                               'address': ip,
+                                               }})
+
+        lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+        while lb['provisioning_status'] != 'ACTIVE':
+            lb = client.list_loadbalancers(id=lb['id'])
+            lb = lb['loadbalancers'][0]
+            time.sleep(0.5)
+
+        logger.debug("added pool member %s ..." % ip)
+
+    return lb
 
 
 def read_os_auth_variables(trim=True):

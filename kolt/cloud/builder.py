@@ -21,7 +21,8 @@ from kolt.util.util import (EtcdHost,
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig,
-                        create_instance_with_volume)
+                        create_instance_with_volume,
+                        create_loadbalancer)
 
 logger = get_logger(__name__)
 
@@ -233,13 +234,13 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            config = write_kubeconfig(config, etcd_host_list, admin_token,
-                                      True)
+            kubeconfig = write_kubeconfig(config, etcd_host_list, admin_token,
+                                          True)
 
             logger.info("Waiting for K8S API server to launch")
 
             manifest_path = os.path.join("kolt", "deploy", "manifests")
-            k8s = K8S(config, manifest_path)
+            k8s = K8S(kubeconfig, manifest_path)
 
             while not k8s.is_ready:
                 logger.debug("Kubernetes API Server is still not ready ...")
@@ -251,6 +252,11 @@ class ClusterBuilder:
             # TODO: URGENTLY REPLACE THIS HACK BELOW WITH AN OPENSTACK LB
             #
             ####
+            lb = create_loadbalancer(neutron, config['private_net'],
+                                     config['cluster-name'],
+                                     [str(host.ip_address) for host in etcd_host_list],
+                                     )
+
             lb_url = "https://%s:%d" % (
                 etcd_host_list[0].ip_address, etcd_host_list[0].port - 1)
             k8s.apply_calico(b64_key(certs["k8s"].key),
