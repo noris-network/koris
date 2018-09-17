@@ -250,7 +250,7 @@ def delete_loadbalancer(client, network, name):
         time.sleep(0.5)
 
     client.delete_listener(
-        client.list_listeners({"name": "%s-listener" % name})['pools'][0]['id']
+        client.list_listeners({"name": "%s-listener" % name})['listeners'][0]['id']
     )
 
 
