@@ -154,7 +154,7 @@ ExecStart=/usr/bin/kube-apiserver \\
   --client-ca-file=/var/lib/kubernetes/ca.pem \\
   --cloud-config=/etc/kubernetes/cloud.conf \\
   --cloud-provider=openstack \\
-  --enable-admission-plugins=Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
+  --enable-admission-plugins=NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
   --enable-swagger-ui=true \\
   --enable-bootstrap-token-auth \\
   --etcd-cafile=/var/lib/kubernetes/ca.pem \\
