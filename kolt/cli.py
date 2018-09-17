@@ -42,11 +42,11 @@ def delete_cluster(config, nova, neutron):
         sys.exit(1)
 
 
-def write_kubeconfig(config, etcd_cluster_info, admin_token,
+def write_kubeconfig(config, lb_address, admin_token,
                      write=False):
 
     username = "admin"
-    master_uri = "https://%s:6443" % etcd_cluster_info[0].ip_address
+    master_uri = "https://%s:6443" % lb_address
     kubeconfig = get_kubeconfig_yaml(
         master_uri, username, admin_token, write,
         encode=False, ca='certs-%s/ca.pem' % config['cluster-name'])

@@ -201,6 +201,12 @@ class ClusterBuilder:
             tasks = []
             logger.debug(info("Not creating any tasks"))
         else:
+
+            lb = create_loadbalancer(neutron, config['private_net'],
+                                     config['cluster-name'],
+                                     [str(host.ip_address) for host in etcd_host_list],
+                                     )
+            ips.append(lb['vip_address'])
             certs = create_certs(config, cluster_host_names, ips)
             logger.debug(info("Done creating nodes tasks"))
 
@@ -234,7 +240,8 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            kubeconfig = write_kubeconfig(config, etcd_host_list, admin_token,
+            kubeconfig = write_kubeconfig(config, lb['vip_address'],
+                                          admin_token,
                                           True)
 
             logger.info("Waiting for K8S API server to launch")
@@ -252,10 +259,6 @@ class ClusterBuilder:
             # TODO: URGENTLY REPLACE THIS HACK BELOW WITH AN OPENSTACK LB
             #
             ####
-            lb = create_loadbalancer(neutron, config['private_net'],
-                                     config['cluster-name'],
-                                     [str(host.ip_address) for host in etcd_host_list],
-                                     )
 
             lb_url = "https://%s:%d" % (
                 etcd_host_list[0].ip_address, etcd_host_list[0].port - 1)
