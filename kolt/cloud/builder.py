@@ -145,7 +145,7 @@ class ControlPlaneBuilder:
 
         user_data = self.create_userdata(**master_args)
 
-        tasks_args_masters = self._info.node_args_builder(user_data, hosts)
+        tasks_args_masters = self._info.master_args_builder(user_data, hosts)
 
         masters_zones = self._info.distribute_management()
         self._info.assign_nics_to_management(masters_zones, nics)

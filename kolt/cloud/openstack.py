@@ -301,6 +301,8 @@ class OSClusterInfo:
         self.keypair = nova_client.keypairs.get(config['keypair'])
         self.image = nova_client.glance.find_image(config['image'])
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
+        self.master_flavor = nova_client.flavors.find(
+            name=config['master_flavor'])
         secgroup = neutron_client.find_resource('security_group',
                                                 config['security_group'])
         self.secgroups = [secgroup['id']]
@@ -353,6 +355,11 @@ class OSClusterInfo:
     @property
     def management_names(self):
         return host_names("master", self.n_masters, self.name)
+
+    def master_args_builder(self, user_data, hosts):
+
+        return [self.master_flavor, self.image, self.keypair, self.secgroups,
+                user_data, hosts]
 
     def node_args_builder(self, user_data, hosts):
 

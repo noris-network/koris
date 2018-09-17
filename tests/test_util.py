@@ -19,6 +19,7 @@ config = {
     "security_group": "test-group",
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.4-8",
+    "master_flavor": "ECS.C1.4-8",
     "storage_class": "Fast"
 }
 
