@@ -21,7 +21,8 @@ from kolt.util.util import (EtcdHost,
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig,
-                        create_instance_with_volume)
+                        create_instance_with_volume,
+                        create_loadbalancer)
 
 logger = get_logger(__name__)
 
@@ -41,10 +42,10 @@ class NodeBuilder:
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
         service_account_bundle = kwargs.get('service_account_bundle')
-
+        lb_ip = kwargs.get("lb_ip")
         userdata = str(NodeInit(kubelet_token, ca_cert,
                                 cert_bundle, service_account_bundle,
-                                cluster_info, calico_token))
+                                cluster_info, calico_token, lb_ip))
         return userdata
 
     def get_nodes_info(self, nova, neutron, config):
@@ -60,6 +61,7 @@ class NodeBuilder:
                            kubelet_token,
                            calico_token,
                            etcd_host_list,
+                           lb_ip,
                            no_cloud_init=False
                            ):
         node_args = {'kubelet_token': kubelet_token,
@@ -70,7 +72,8 @@ class NodeBuilder:
         node_args.update({'ca_cert': certs['ca'],
                           'service_account_bundle': certs[
                               'service-account'],  # noqa
-                          'cert_bundle': certs['k8s']})
+                          'cert_bundle': certs['k8s'],
+                          'lb_ip': lb_ip})
 
         user_data = self.create_userdata(**node_args)
         task_args_node = self._info.node_args_builder(user_data, hosts)
@@ -200,6 +203,12 @@ class ClusterBuilder:
             tasks = []
             logger.debug(info("Not creating any tasks"))
         else:
+
+            lb = create_loadbalancer(neutron, config['private_net'],
+                                     config['cluster-name'],
+                                     [str(host.ip_address) for host in etcd_host_list],  # noqa
+                                     )
+            ips.append(lb['vip_address'])
             certs = create_certs(config, cluster_host_names, ips)
             logger.debug(info("Done creating nodes tasks"))
 
@@ -217,7 +226,8 @@ class ClusterBuilder:
 
             tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
                                           calico_token, etcd_host_list,
-                                          no_cloud_init=no_cloud_init)
+                                          no_cloud_init=no_cloud_init,
+                                          lb_ip=lb['vip_address'])
 
             cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                               kubelet_token, calico_token,
@@ -233,13 +243,14 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
-            config = write_kubeconfig(config, etcd_host_list, admin_token,
-                                      True)
+            kubeconfig = write_kubeconfig(config, lb['vip_address'],
+                                          admin_token,
+                                          True)
 
             logger.info("Waiting for K8S API server to launch")
 
             manifest_path = os.path.join("kolt", "deploy", "manifests")
-            k8s = K8S(config, manifest_path)
+            k8s = K8S(kubeconfig, manifest_path)
 
             while not k8s.is_ready:
                 logger.debug("Kubernetes API Server is still not ready ...")
@@ -251,6 +262,7 @@ class ClusterBuilder:
             # TODO: URGENTLY REPLACE THIS HACK BELOW WITH AN OPENSTACK LB
             #
             ####
+
             lb_url = "https://%s:%d" % (
                 etcd_host_list[0].ip_address, etcd_host_list[0].port - 1)
             k8s.apply_calico(b64_key(certs["k8s"].key),
