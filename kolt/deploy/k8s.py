@@ -44,8 +44,9 @@ class K8S:
         self._calico_controller()
 
     def apply_kube_dns(self):
-        self._kube_dns_deployment()
+        self._kubedns_service_account()
         self._kube_dns_service()
+        self._kube_dns_deployment()
 
     def _calico_roles(self):
         logger.debug("Applying calico roles")
@@ -81,6 +82,7 @@ class K8S:
                     "kube-system", yaml.safe_load(f))
 
     def _kubedns_service_account(self):
+        logger.debug("Applying kube-dns serviceaccount")
         for file_ in ["service_account_kube-dns"]:
             with open(self.get_manifest(
                       os.path.join(self.manifest_path,
@@ -151,7 +153,7 @@ class K8S:
                                                     yaml.safe_load(f))
 
     def _kube_dns_service(self):
-
+        logger.debug("Applying kube-dns service")
         for file_ in ["service_kube-dns.yml"]:
             with open(self.get_manifest(
                     os.path.join(self.manifest_path, file_))) as f:
