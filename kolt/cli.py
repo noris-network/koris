@@ -3,7 +3,7 @@ import logging
 import sys
 
 from kolt.util.hue import red, yellow
-
+from kolt.cloud.openstack import delete_loadbalancer
 from .util.util import get_kubeconfig_yaml
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,8 @@ def delete_cluster(config, nova, neutron):
         if tasks:
             loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
+        delete_loadbalancer(neutron, config['private_net'],
+                            config['cluster-name'])
     else:
         sys.exit(1)
 
