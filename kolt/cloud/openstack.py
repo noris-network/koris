@@ -143,6 +143,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     """
     # see examle of how to create an LB
     # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
+
     if 'subnet' in kwargs:
         subnet_id = client.find_resource('subnet', kwargs['subnet'])['id']
     else:
@@ -224,6 +225,33 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
         logger.debug("added pool member %s ..." % ip)
 
     return lb
+
+
+def delete_loadbalancer(client, network, name):
+    client.delete_lbaas_healthmonitor(
+        client.list_lbaas_healthmonitors(
+            {"name": "%s-health" % name})['healthmonitors'][0]['id'])
+
+    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(0.5)
+
+    client.delete_lbaas_pool(
+        client.list_lbaas_pools({"name": "%s-pool" % name})['pools'][0]['id'])
+
+    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(0.5)
+
+    client.delete_listener(
+        client.list_listeners({"name": "%s-listener" % name})['pools'][0]['id']
+    )
 
 
 def read_os_auth_variables(trim=True):
