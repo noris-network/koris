@@ -273,7 +273,7 @@ class NodeInit(BaseInit):
     def _get_kubelet_config(self):
 
         kubeconfig = get_kubeconfig_yaml(
-            "https://%s:6443" % self.etcd_cluster_info[0].name,
+            "https://%s:6443" % self.lb_ip_address,
             "kubelet",
             self.token,
             skip_tls=True

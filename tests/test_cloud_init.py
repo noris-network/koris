@@ -60,7 +60,8 @@ def ci_node():
                   certs['k8s'],
                   certs['service-account'],
                   test_cluster,
-                  calico_token
+                  calico_token,
+                  "10.32.192.121"
                   )
     return ci
 
