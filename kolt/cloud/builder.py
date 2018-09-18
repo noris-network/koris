@@ -117,7 +117,7 @@ class ControlPlaneBuilder:
                            calico_token,
                            admin_token,
                            etcd_host_list,
-                           no_cloud_init=False):
+                           no_cloud_init=False, **kwargs):
 
         # generate a random string
         # this should be the equal of
@@ -126,7 +126,7 @@ class ControlPlaneBuilder:
         encryption_key = base64.b64encode(
             uuid.uuid4().hex[:32].encode()).decode()
 
-        cloud_provider_info = OSCloudConfig()
+        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
 
         token_csv_data = get_token_csv(admin_token,
                                        calico_token,

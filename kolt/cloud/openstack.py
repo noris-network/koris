@@ -228,9 +228,29 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
 
 
 def delete_loadbalancer(client, network, name):
-    client.delete_lbaas_healthmonitor(
-        client.list_lbaas_healthmonitors(
-            {"name": "%s-health" % name})['healthmonitors'][0]['id'])
+    try:
+        client.delete_lbaas_healthmonitor(
+            client.list_lbaas_healthmonitors(
+                {"name": "%s-health" % name})['healthmonitors'][0]['id'])
+    except IndexError:
+        pass
+    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+
+    while lb['provisioning_status'] != 'ACTIVE':
+        lb = client.list_loadbalancers(id=lb['id'])
+        lb = lb['loadbalancers'][0]
+        time.sleep(0.5)
+
+    while True:
+        try:
+            client.delete_lbaas_pool(
+                client.list_lbaas_pools(
+                    {"name": "%s-pool" % name})['pools'][0]['id'])
+        except IndexError:
+            break
+        except Exception as E:
+            print("Error while deleting pool: %s " % E)
+            continue
 
     lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
 
@@ -239,19 +259,19 @@ def delete_loadbalancer(client, network, name):
         lb = lb['loadbalancers'][0]
         time.sleep(0.5)
 
-    client.delete_lbaas_pool(
-        client.list_lbaas_pools({"name": "%s-pool" % name})['pools'][0]['id'])
+    while True:
+        try:
+            client.delete_listener(
+                client.list_listeners(
+                    {"name": "%s-listener" % name})['listeners'][0]['id']
+            )
+            break
+        except IndexError:
+            break
 
-    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
-
-    while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
-
-    client.delete_listener(
-        client.list_listeners({"name": "%s-listener" % name})['listeners'][0]['id']
-    )
+        except Exception as E:
+            print("Error while deleting listener: %s " % E)
+            continue
 
 
 def read_os_auth_variables(trim=True):
@@ -295,8 +315,9 @@ def get_clients():
 
 class OSCloudConfig:
 
-    def __init__(self):
+    def __init__(self, subnet_id=None):
         os_vars = read_os_auth_variables(trim=False)
+        self.subnet_id = subnet_id
         self.username = os_vars['username']
         self.password = os_vars['password']
         self.auth_url = os_vars['auth_url']
@@ -306,7 +327,7 @@ class OSCloudConfig:
         del os_vars
 
     def __str__(self):
-        return textwrap.dedent("""
+        global_ = textwrap.dedent("""
         [Global]
         username=%s
         password=%s
@@ -317,6 +338,15 @@ class OSCloudConfig:
         """ % (self.username, self.password, self.auth_url,
                self.tenant_id, self.user_domain_name,
                self.region_name)).lstrip()
+        lb = ""
+        if self.subnet_id:
+            lb = textwrap.dedent("""
+            [LoadBalancer]
+            subnet-id=%s
+            #use-octavia=true
+            """ % (self.subnet_id))
+
+        return global_ + lb
 
     def __bytes__(self):
         return base64.b64encode(str(self).encode())
@@ -335,6 +365,13 @@ class OSClusterInfo:
                                                 config['security_group'])
         self.secgroups = [secgroup['id']]
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
+
+        if 'subnet' in config:
+            self.subnet_id = neutron_client.find_resource('subnet',
+                                                          config['subnet'])['id']  # noqa
+        else:
+            self.subnet_id = neutron_client.list_subnets()['subnets'][-1]['id']
+
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
