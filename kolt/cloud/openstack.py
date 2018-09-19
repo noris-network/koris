@@ -119,7 +119,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     hosts[name] = (ip)
 
 
-def create_loadbalancer(client, network, name, master_ips, provider='octavia',
+def create_loadbalancer(client, network, name, provider='octavia',
                         **kwargs):
     """Create a load balancer for the kuberentes api server
 
@@ -130,7 +130,6 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
         client (neutronclient.v2_0.client.Client)
         network (str): The network name for the load balancer
         name (str): The loadbalancer name
-        master_ips (list): A list of the master IP addresses
         provider (str): The Openstack provider for loadbalancing
 
     Kwargs:
@@ -155,12 +154,25 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
                                       'name': "%s-lb" % name
                                       }
                                      })
+    logger.debug("created loadbalancer ...")
+    return lb
+
+
+async def configure_lb(client, lb, name, master_ips):
+    """
+    Configure a load balancer created in earlier step
+
+    Args:
+        master_ips (list): A list of the master IP addresses
+    """
     lb = lb['loadbalancer']
+    subnet_id = lb['vip_subnet_id']
+
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(2)
-    logger.debug("Created loadbalancer ...")
+        await asyncio.sleep(1)
+
     listener = client.create_listener({'listener':
                                        {"loadbalancer_id":
                                         lb['id'],
@@ -176,7 +188,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(2)
+        await asyncio.sleep(1)
 
     pool = client.create_lbaas_pool(
         {"pool": {"lb_algorithm": "SOURCE_IP",
@@ -192,7 +204,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
 
     client.create_lbaas_healthmonitor(
         {'healthmonitor':
@@ -207,7 +219,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
 
     for ip in master_ips:
         client.create_lbaas_member(pool['pool']['id'],
@@ -220,7 +232,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
         while lb['provisioning_status'] != 'ACTIVE':
             lb = client.list_loadbalancers(id=lb['id'])
             lb = lb['loadbalancers'][0]
-            time.sleep(0.5)
+            await asyncio.sleep(0.5)
 
         logger.debug("added pool member %s ..." % ip)
 
@@ -234,6 +246,7 @@ def delete_loadbalancer(client, network, name):
                 {"name": "%s-health" % name})['healthmonitors'][0]['id'])
     except IndexError:
         pass
+
     lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
 
     while lb['provisioning_status'] != 'ACTIVE':
@@ -249,8 +262,8 @@ def delete_loadbalancer(client, network, name):
         except IndexError:
             break
         except Exception as E:
-            print("Error while deleting pool: %s " % E)
-            continue
+            logger.debug("Error while deleting pool: %s " % E)
+            time.sleep(0.5)
 
     lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
 
@@ -270,7 +283,15 @@ def delete_loadbalancer(client, network, name):
             break
 
         except Exception as E:
-            print("Error while deleting listener: %s " % E)
+            logger.debug("Error while deleting listener: %s " % E)
+            continue
+
+    while True:
+        try:
+            client.delete_loadbalancer(lb['id'])
+            break
+        except Exception as E:
+            logger.debug("Error while deleting loadbalancer: %s " % E)
             continue
 
 
