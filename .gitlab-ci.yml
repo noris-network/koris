@@ -4,3 +4,11 @@ test:
   script:
     - pip3 install -e .
     - make coverage PY=python3
+
+integration:
+  script:
+    - kolt k8s tests/test_cluster.yml
+    - kubectl get nodes --kubeconfig=koris-test-admin.conf
+    - kubectl run nginx --image=nginx --kubeconfig=koris-test-admin.conf
+    - kubectl expose deploy nginx --type=LoadBalancer
+    - curl $(kubectl get --export -o jso ...)
