@@ -4,10 +4,9 @@ kolt
 
 .. image:: https://gitlab.noris.net/PI/kolt/badges/dev/pipeline.svg
   :target: https://gitlab.noris.net/PI/kolt/badges/dev/pipeline.svg
-  
-.. image:
-  :target: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
+
 .. image:: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
+  :target: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
 
 Launch kubernetes clusters on OpenStack.
 Kolt supports two work modes:
@@ -39,27 +38,90 @@ Pre-requisits
 1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
 2. A pre-created network, and security group.
 3. Basic understanding of OpenStack.
-4. Ansible installed on your system (only if using kubespray mode).
 
 Get started
 ~~~~~~~~~~~
-1. Create a local virtual environment for kolt:
+1. Create a local virtual environment for kolt (using your favorite tool),
+   for example the standard Python has a simple virtual environment tool:
 
 .. code:: shell
 
-   mkdir FooBar
-   cd FooBar && pipenv --python 3.6
-   pip install -e git+git@gitlab.noris.net:PI/kolt.git@v0.3#egg=kolt
+   $ mkdir FooBar
+   $ cd FooBar && python3 -m venv koris-env
 
-If you want to develop kolt, you can use the following install command in the
-virtual environment:
+2. Activate the environment with
 
 .. code:: shell
 
-    pipenv install --dev -r requirements.txt
-    pipenv install --dev -r requirements_dev.txt
+   $ source ./koris-env/bin/activate
 
-2. Create a security group in openstack which allows `ipip` and `BGP` protocol.
+3. you are now inside a virtual environment to leave it type `exit`
+
+4. To install koris, use a machine which has access to gitlab.noris.net
+   replace <LATEST_TAG> with latest tag, for example 0.4.1.
+
+.. code:: shell
+
+   $ pip install  -e git+git@gitlab.noris.net:PI/kolt.git@v<LATEST_TAG>#egg=kolt
+
+5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
+   If you exist the virtual environment, you need to activate it again as described
+   in step 2.
+
+6. Before you can run ``koris`` you need to source your openstack rc file::
+
+   $ source ~/path/to/your/openstack-openrc.sh
+   Please enter your OpenStack Password for project <PROJECT> as user <USEER>:
+
+6. To run ``koris`` issue koris <subcommand>. You can get a list of subcommands
+   with ``--help``
+
+   .. code:: shell
+
+      $ kolt -h
+      usage: kolt [-h] {certs,destroy,k8s,kubespray,oc} ...
+
+      positional arguments:
+        {certs,destroy,k8s,kubespray,oc}
+                              commands
+          certs               Create cluster certificates
+          destroy             Delete the complete cluster stack
+          k8s                 Bootstrap a Kubernetes cluster
+          ...
+      optional arguments:
+        -h, --help            show this help message and exit
+
+7. To view the help of each subcommand
+
+   .. code:: shell
+
+      $ kolt destroy -h
+      usage: kolt destroy [-h] config
+
+      positional arguments:
+      config
+
+      optional arguments:
+      -h, --help  show this help message and exit
+
+.. note::
+
+   If the machine you would like to install koris on does not have access to
+   gitlab.noris.net, download the source distribution and copy it over:
+
+   .. code:: shell
+
+      curl https://gitlab.noris.net/PI/kolt/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
+      scp kolt-v<LATEST_TAG>.zip remotehost:~/
+
+   repeat the steps to create and activate a virtual environment, and the install
+   the package with pip directly:
+
+   .. code:: shell
+
+      pip install kolt-v<LATEST_TAG>.zip
+
+8. Create a security group in openstack which allows `ipip` and `BGP` protocol.
 
 .. code:: shell
 
@@ -81,110 +143,6 @@ See the `source repository`_ `docs/k8s-machines-config.yml` for an example.
 
 .. _source repository: https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml
 
-3. clone kubespray:
-
-.. code:: shell
-
-   $ git clone -b 'v2.5.0' --single-branch --depth 1 git@github.com:kubernetes-incubator/kubespray.git
-
-4. You should now edit the file `kubespray/inventory/group_vars/all.yml`
-   and set the and set options as you like, for example:
-
-.. code::
-
-   bootstrap_os: ubuntu
-
-You must set the following option:
-
-.. code::
-
-   cloud_provider: openstack
-
-5. Edit the file `kubespray/inventory/group_vars/k8s-cluster.yml`
-   and set the following options:
-
-.. code::
-
-   kube_network_plugin: calico
-   cluster_name: your-cluster-name.local
-   dashboard_enabled: true
-
-6. Note for people with ansible pre-knowledge, **YOU DON'T** need to create your
-   own inventory file, it will be automatically created for you.
-
-7. Run colt with your cluster configuration, this will create your
-   inventory (the file ``k8s-machines-config.yml`` can be found in the directory
-   ``kolt/docs``, so change to this directory before issuing the next command)
-
-.. code:: shell
-
-   $ kolt kubespray k8s-machines-config.yml -i mycluster.ini
-
-This last step takes about one minute to complete.
-
-.. important::
-   
-   Copy the above inventory file ``mycluster.ini`` to ``kubespray/inventory/``
-   with the following command (you may need to adjust the path if you
-   cloned kubespray to some other location).
-
-.. code:: shell
-
-   $ cp mycluster.ini ../../kubespray/inventory/
-
-8. Run ansible kubespray on your newly created machines.
-
-.. note::
-   You **must** to call the `ansible-playbook` command from the `kubespray` directory.
-
-.. code:: shell
-
-   $ cd kubespray
-   $ ansible-playbook -i  inventory/mycluster.ini cluster.yml \
-     --ssh-extra-args="-o StrictHostKeyChecking=no" -u ubuntu \
-     -e ansible_python_interpreter="/usr/bin/python3" -b --flush-cache
-
-
-Known Issues
-------------
-
-Creating OS machines with floating IPS is still not implemented. You need
-to run colt and ansible on a machine which can access your kubernetes cluster
-via ssh or your should run ansible via a bastion host.
-
-If you encounter the following message before failure:
-
-.. code:: shell
-
-   RUNNING HANDLER [kubernetes/master : Master | wait for the apiserver to be running] **********
-   Wednesday 09 May 2018  10:04:27 +0000 (0:00:00.449)       0:13:00.785 *********
-   FAILED - RETRYING: Master | wait for the apiserver to be running (20 retries left).
-   FAILED - RETRYING: Master | wait for the apiserver to be running (20 retries left).
-   FAILED - RETRYING: Master | wait for the apiserver to be running (19 retries left).
-   FAILED - RETRYING: Master | wait for the apiserver to be running (19 retries left).
-
-Check on your masters that the kubelet service can start:
-
-.. code:: shell
-
-   ssh master1
-   sudo journalctl -u kubelet
-
-This should give you some hint how to fix the problem.
-
-You should also check that you have a properly created ``cloud_config`` file:
-
-.. code:: shell
-
-   root@master-2-nude:/home/ubuntu# cat /etc/kubernetes/cloud_config
-   [Global]
-   auth-url="https://de-nbg6-1.noris.cloud:5000/v3"
-   username="*********YOUR_USER**********"
-   password="*********YOUR_PASSWORD********"
-   region="de-nbg6-1"
-   tenant-id="********YOUR_TENNANT_ID*************"
-   domain-name="noris.de"
-
 
 Credits
 -------
@@ -193,8 +151,5 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
-
-A thanks to @jlehmannrichter, who made the work preceded this project, and answered
-my questions about ansible and kubespray.
 
 .. highlight:: shell
