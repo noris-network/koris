@@ -31,7 +31,15 @@ nova, neutron, cinder = get_clients()
 
 
 class NodeBuilder:
+    """
+    Interact with openstack and create a virtual machines with a volume,
+    and network interface. The machines are provisioned with cloud-init.
 
+    Args:
+        nova (nova client instance) - to create a volume and a machine
+        neutron (neutron client instance) - to create a network interface
+        config (dict) - the parsed configuration file
+    """
     def __init__(self, nova, neutron, config):
         logger.info(info(cyan(
             "gathering node information from openstack ...")))
@@ -96,6 +104,18 @@ class NodeBuilder:
 
 
 class ControlPlaneBuilder:
+    """
+    Interact with openstack and create a virtual machines with a volume,
+    and network interface. The machines are provisioned with cloud-init.
+    This class builds the control plane machine, and although it is similar
+    to NodeBuilder it uses a bit slightly different methods under the hood to
+    configure the control plane services.
+
+    Args:
+        nova (nova client instance) - to create a volume and a machine
+        neutron (neutron client instance) - to create a network interface
+        config (dict) - the parsed configuration file
+    """
 
     def __init__(self, nova, neutron, config):
 
