@@ -84,7 +84,7 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
-sudo -E apt-get -qy update && sudo -E apt-get -qy -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade && sudo -E apt-get -qy autoclean
+apt-get -y update && apt-get -y -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade && apt-get -y autoclean
 
 cat << EOF > /etc/systemd/system/etcd.service
 [Unit]
@@ -265,10 +265,10 @@ server {
 }
 EOF
 
-sudo mv kubernetes.default.svc.cluster.local \
+mv kubernetes.default.svc.cluster.local \
     /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
 
-sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
 
-sudo systemctl enable nginx
-sudo systemctl restart nginx
+systemctl enable nginx
+systemctl restart nginx

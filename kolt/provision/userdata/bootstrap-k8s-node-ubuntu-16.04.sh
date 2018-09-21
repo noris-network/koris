@@ -56,14 +56,14 @@ function version_found() {  return $($1 $2 | grep -qi $3); }
 function curlx() { curl $1 -o $2 && chmod -v +x $2 ; }
 
 
-sudo -E apt-get -qy update && sudo -E apt-get -qy -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade && sudo -E apt-get -qy autoclean
+apt-get -qy update && apt-get -qy -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade &&  apt-get -qy autoclean
 
 if [ "$(version_found docker --version ${DOCKER_VERSION}; echo $?)" -eq 1 ]; then
     echo "Docker version did not match"
     apt-get install -y apt-transport-https ca-certificates curl software-properties-common
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
     add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" -u
-    sudo -E apt-get -qy update
+    apt-get -qy update
 
     cat <<EOF > /etc/apt/preferences.d/docker
 Package: docker-ce
@@ -71,7 +71,7 @@ Pin: version ${DOCKER_VERSION}.*
 Pin-Priority: 1000
 EOF
 
-   sudo apt-get -y install socat conntrack ipset docker-ce
+    apt-get -y install socat conntrack ipset docker-ce
 
 fi
 
@@ -174,9 +174,9 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-sudo iptables -P FORWARD ACCEPT
+iptables -P FORWARD ACCEPT
 
-sudo systemctl enable kubelet
-sudo systemctl start kubelet
-sudo systemctl start kube-proxy
-sudo systemctl enable kube-proxy
+systemctl enable kubelet
+systemctl start kubelet
+systemctl start kube-proxy
+systemctl enable kube-proxy
