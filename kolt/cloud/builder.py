@@ -18,11 +18,14 @@ from kolt.util.util import (EtcdHost,
                             create_inventory,
                             get_logger,
                             get_token_csv)
+from . import OpenStackAPI
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig,
                         create_instance_with_volume,
                         create_loadbalancer,
+                        create_sec_group,
+                        config_sec_group,
                         configure_lb)
 
 logger = get_logger(__name__)
@@ -225,6 +228,11 @@ class ClusterBuilder:
             logger.debug(info("Not creating any tasks"))
         else:
             loop = asyncio.get_event_loop()
+            cluster_info = OSClusterInfo(nova, neutron, config)
+
+            loop.run_until_complete(config_sec_group(
+                cluster_info.conn, cluster_info.secgroup))
+
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
             subnet = config.get('subnet')

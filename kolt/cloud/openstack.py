@@ -17,6 +17,7 @@ from novaclient.exceptions import (NotFound as NovaNotFound,
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
+from . import OpenStackAPI
 from kolt.util.hue import red, info, que, yellow
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
@@ -239,6 +240,79 @@ async def configure_lb(client, lb, name, master_ips):
     return lb
 
 
+async def add_sec_rule(connection, name, **kwargs):
+    return connection.create_security_group_rule(name, **kwargs)
+
+
+async def del_sec_rule(connection, _id):
+    return connection.delete_security_group_rule(_id)
+
+
+def create_sec_group(connection, name):
+    """
+    Create a security group for all machines
+
+    Args:
+        connection (openstack.connection.Connection)
+        name (str) - the cluster name
+
+    Return:
+        a security group dict (munch)
+    """
+    try:
+        return connection.create_security_group("%s-sec-group" % name,
+                                                "sec. for %s" % name)
+    except Exception:
+        # in case the security group already exists
+        pass
+
+
+def config_sec_group(connection, sec_group, subnet=None):
+    """
+    Create futures for configuring the security group ``name``
+
+    Args:
+        connection (openstack.connection.Connection)
+        sec_group (dict) the sec. group info dict (Munch)
+        subnet (str): the subnet name
+    """
+
+    if not subnet:
+        cidr = connection.list_subnets()[-1].cidr
+    else:
+        cidr = connection.list_subnets({'name': subnet})[-1].cidr
+    return asyncio.gather(
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='egress', protocol=4,
+                     remote_ip_prefix=cidr),
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='ingress', protocol=4,
+                     remote_ip_prefix=cidr),
+        # allow accessing the API server
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='egress', protocol='TCP',
+                     port_range_max=6443, port_range_min=6443),
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='ingress', protocol='TCP',
+                     port_range_max=6443, port_range_min=6443),
+        # allow node ports
+        # OpenStack load balancer talks to these too
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='egress', protocol='TCP',
+                     port_range_max=32767, port_range_min=30000),
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='ingress', protocol='TCP',
+                     port_range_max=32767, port_range_min=30000),
+        # allow SSH
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='egress', protocol='TCP',
+                     port_range_max=22, port_range_min=22),
+        add_sec_rule(connection, name=sec_group.name,
+                     direction='ingress', protocol='TCP',
+                     port_range_max=22, port_range_min=22),
+    )
+
+
 def delete_loadbalancer(client, network, name):
     try:
         client.delete_lbaas_healthmonitor(
@@ -382,9 +456,18 @@ class OSClusterInfo:
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-        secgroup = neutron_client.find_resource('security_group',
-                                                config['security_group'])
-        self.secgroups = [secgroup['id']]
+
+        try:
+            self.conn = OpenStackAPI.connect()
+            secgroup = self.conn.search_security_groups(
+                "%s-sec-group" % config['cluster-name'])[0]
+        except IndexError:
+            secgroup = create_sec_group(self.conn, config['cluster-name'])
+
+        self.secgroup = secgroup
+        self.secgroups = [secgroup.id]
+        print(self.secgroups)
+
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
 
         if 'subnet' in config:
