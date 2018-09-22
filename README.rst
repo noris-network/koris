@@ -119,7 +119,7 @@ Get started
 
    .. code:: shell
 
-      pip install kolt-v<LATEST_TAG>.zip
+      $ pip install kolt-v<LATEST_TAG>.zip
 
 8. Koris creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
@@ -129,6 +129,14 @@ Get started
 
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
+
+9. To create a cluster create a cluster configuration file (see [example](https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml).
+   Pass this file on the shell to the k8s subcommand
+
+.. code:: shell
+
+   $ kolt k8s <your-cluster-config.yml>
+
 
 Credits
 -------
