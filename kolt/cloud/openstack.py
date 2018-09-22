@@ -240,15 +240,16 @@ async def configure_lb(client, lb, name, master_ips):
     return lb
 
 
-async def add_sec_rule(connection, name, **kwargs):
-    return connection.create_security_group_rule(name, **kwargs)
+def add_sec_rule(neutron, sec_gr_id, **kwargs):
+    kwargs.update({'security_group_id': sec_gr_id})
+    return neutron.create_security_group_rule({'security_group_rule': kwargs})
 
 
 async def del_sec_rule(connection, _id):
     return connection.delete_security_group_rule(_id)
 
 
-def create_sec_group(connection, name):
+def create_sec_group(neutron, name):
     """
     Create a security group for all machines
 
@@ -257,17 +258,14 @@ def create_sec_group(connection, name):
         name (str) - the cluster name
 
     Return:
-        a security group dict (munch)
+        a security group dict
     """
-    try:
-        return connection.create_security_group("%s-sec-group" % name,
-                                                "sec. for %s" % name)
-    except Exception:
-        # in case the security group already exists
-        pass
+
+    return neutron.create_security_group(
+        {'security_group': {'name': "%s-sec-group" % name}})['security_group']
 
 
-def config_sec_group(connection, sec_group, subnet=None):
+def config_sec_group(connection, neutron, sec_group_id, subnet=None):
     """
     Create futures for configuring the security group ``name``
 
@@ -281,36 +279,57 @@ def config_sec_group(connection, sec_group, subnet=None):
         cidr = connection.list_subnets()[-1].cidr
     else:
         cidr = connection.list_subnets({'name': subnet})[-1].cidr
-    return asyncio.gather(
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='egress', protocol=4,
-                     remote_ip_prefix=cidr),
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='ingress', protocol=4,
-                     remote_ip_prefix=cidr),
-        # allow accessing the API server
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='egress', protocol='TCP',
-                     port_range_max=6443, port_range_min=6443),
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='ingress', protocol='TCP',
-                     port_range_max=6443, port_range_min=6443),
-        # allow node ports
-        # OpenStack load balancer talks to these too
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='egress', protocol='TCP',
-                     port_range_max=32767, port_range_min=30000),
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='ingress', protocol='TCP',
-                     port_range_max=32767, port_range_min=30000),
-        # allow SSH
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='egress', protocol='TCP',
-                     port_range_max=22, port_range_min=22),
-        add_sec_rule(connection, name=sec_group.name,
-                     direction='ingress', protocol='TCP',
-                     port_range_max=22, port_range_min=22),
-    )
+
+    # without this cloud init can't communicate to openstack?
+    # ASK the OpenStack team about this. No communication to this port
+    # caused the machines to get stuck
+    # on spawning ?
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=80, port_range_min=80),
+
+    # Allow IPIP communication
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol=4,
+                 remote_ip_prefix=cidr),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol=4,
+                 remote_ip_prefix=cidr),
+    # Allow all TCP and UDP within the cluster
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 remote_ip_prefix=cidr),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 remote_ip_prefix=cidr),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='UDP',
+                 remote_ip_prefix=cidr),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='UDP',
+                 remote_ip_prefix=cidr),
+    # allow accessing the API server
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 port_range_max=6443, port_range_min=6443),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=6443, port_range_min=6443),
+    # allow node ports
+    # OpenStack load balancer talks to these too
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 port_range_max=32767, port_range_min=30000),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=32767, port_range_min=30000),
+    # allow SSH
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 port_range_max=22, port_range_min=22),
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=22, port_range_min=22),
 
 
 def delete_loadbalancer(client, network, name):
@@ -321,7 +340,10 @@ def delete_loadbalancer(client, network, name):
     except IndexError:
         pass
 
-    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+    try:
+        lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+    except IndexError:
+        return
 
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
@@ -461,11 +483,12 @@ class OSClusterInfo:
             self.conn = OpenStackAPI.connect()
             secgroup = self.conn.search_security_groups(
                 "%s-sec-group" % config['cluster-name'])[0]
+            secgroup = dict(secgroup)
         except IndexError:
-            secgroup = create_sec_group(self.conn, config['cluster-name'])
+            secgroup = create_sec_group(neutron_client, config['cluster-name'])
 
         self.secgroup = secgroup
-        self.secgroups = [secgroup.id]
+        self.secgroups = [secgroup['id']]
         print(self.secgroups)
 
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa

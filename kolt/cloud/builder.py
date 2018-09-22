@@ -5,6 +5,7 @@ import uuid
 import sys
 import time
 
+import kubernetes
 import novaclient.v2.servers
 
 from kolt.deploy.k8s import K8S
@@ -18,13 +19,11 @@ from kolt.util.util import (EtcdHost,
                             create_inventory,
                             get_logger,
                             get_token_csv)
-from . import OpenStackAPI
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig,
                         create_instance_with_volume,
                         create_loadbalancer,
-                        create_sec_group,
                         config_sec_group,
                         configure_lb)
 
@@ -230,8 +229,8 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             cluster_info = OSClusterInfo(nova, neutron, config)
 
-            loop.run_until_complete(config_sec_group(
-                cluster_info.conn, cluster_info.secgroup))
+            config_sec_group(cluster_info.conn, neutron,
+                             cluster_info.secgroup['id'])
 
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
@@ -304,12 +303,16 @@ class ClusterBuilder:
                 "https://%s:%d" % (
                     etcd_host.ip_address, etcd_host.port - 1)
                 for etcd_host in etcd_host_list)
-
-            k8s.apply_calico(b64_key(certs["k8s"].key),
-                             b64_cert(certs["k8s"].cert),
-                             b64_cert(certs["ca"].cert),
-                             etcd_endpoints)
-            k8s.apply_kube_dns()
+            while True:
+                try:
+                    k8s.apply_calico(b64_key(certs["k8s"].key),
+                                     b64_cert(certs["k8s"].cert),
+                                     b64_cert(certs["ca"].cert),
+                                     etcd_endpoints)
+                    k8s.apply_kube_dns()
+                    break
+                except kubernetes.client.rest.ApiException:
+                    continue
 
         if no_cloud_init:
             return create_inventory(hosts, config)
