@@ -3,8 +3,8 @@ import logging
 import sys
 
 from kolt.util.hue import red, yellow
-from kolt.cloud.openstack import delete_loadbalancer
 from kolt.cloud import OpenStackAPI
+from kolt.cloud.openstack import delete_loadbalancer
 from .util.util import get_kubeconfig_yaml
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,17 @@ def delete_cluster(config, nova, neutron):
         delete_loadbalancer(neutron, config['private_net'],
                             config['cluster-name'])
         connection = OpenStackAPI.connect()
+        secg = connection.list_security_groups(
+            {"name": '%s-sec-group' % config['cluster-name']})
+        if len(secg) > 0:
+            for g in secg:
+                for rule in g.security_group_rules:
+                    connection.delete_security_group_rule(rule['id'])
+
+                for port in connection.list_ports():
+                    if g.id in port.security_groups:
+                        connection.delete_port(port.id)
+
         connection.delete_security_group(
             '%s-sec-group' % config['cluster-name'])
 

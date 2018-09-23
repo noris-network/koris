@@ -229,8 +229,7 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             cluster_info = OSClusterInfo(nova, neutron, config)
 
-            config_sec_group(cluster_info.conn, neutron,
-                             cluster_info.secgroup['id'])
+            config_sec_group(neutron, cluster_info.secgroup['id'])
 
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 

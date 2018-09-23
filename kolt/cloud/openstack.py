@@ -10,14 +10,13 @@ import uuid
 from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
-
+from neutronclient.common.exceptions import NotFound as NeutronNotFound
 from novaclient.exceptions import (NotFound as NovaNotFound,
                                    ClientException as NovaClientException)
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from . import OpenStackAPI
 from kolt.util.hue import red, info, que, yellow
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
@@ -254,7 +253,7 @@ def create_sec_group(neutron, name):
     Create a security group for all machines
 
     Args:
-        connection (openstack.connection.Connection)
+        neutron (neutron client)
         name (str) - the cluster name
 
     Return:
@@ -265,29 +264,28 @@ def create_sec_group(neutron, name):
         {'security_group': {'name': "%s-sec-group" % name}})['security_group']
 
 
-def config_sec_group(connection, neutron, sec_group_id, subnet=None):
+def config_sec_group(neutron, sec_group_id, subnet=None):
     """
     Create futures for configuring the security group ``name``
 
     Args:
-        connection (openstack.connection.Connection)
+        neutron (neutron client)
         sec_group (dict) the sec. group info dict (Munch)
         subnet (str): the subnet name
     """
 
     if not subnet:
-        cidr = connection.list_subnets()[-1].cidr
+        cidr = neutron.list_subnets()['subnets'][-1]['cidr']
     else:
-        cidr = connection.list_subnets({'name': subnet})[-1].cidr
+        cidr = neutron.find_resource('subnet', subnet)['cidr']
 
-    # without this cloud init can't communicate to openstack?
-    # ASK the OpenStack team about this. No communication to this port
-    # caused the machines to get stuck
-    # on spawning ?
+    logger.debug("configuring security group ...")
+    # allow communication to the API server from within the cluster
+    # on port 80
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
-                 port_range_max=80, port_range_min=80),
-
+                 port_range_max=80, port_range_min=80,
+                 remote_ip_prefix=cidr),
     # Allow IPIP communication
     add_sec_rule(neutron, sec_group_id,
                  direction='egress', protocol=4,
@@ -480,11 +478,9 @@ class OSClusterInfo:
             name=config['master_flavor'])
 
         try:
-            self.conn = OpenStackAPI.connect()
-            secgroup = self.conn.search_security_groups(
-                "%s-sec-group" % config['cluster-name'])[0]
-            secgroup = dict(secgroup)
-        except IndexError:
+            secgroup = neutron_client.find_resource(
+                'security_group', "%s-sec-group" % config['cluster-name'])
+        except NeutronNotFound:
             secgroup = create_sec_group(neutron_client, config['cluster-name'])
 
         self.secgroup = secgroup
