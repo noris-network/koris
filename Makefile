@@ -51,8 +51,13 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
-lint: ## check style with flake8
-	flake8 colt tests
+lint: pylint flake8
+
+pylint: ## check style with flake8
+	pylint kolt || pylint-exit $$?
+
+flake8: ## check style with flake8
+	flake8 kolt tests
 
 test: ## run tests quickly with the default Python
 	py.test

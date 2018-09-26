@@ -1,6 +1,19 @@
-image: mleiner/kolt-base:0.2
+stages:
+  - static-analysis
+  - unittest
 
-test:
+
+static-analysis:
+  stage: static-analysis
+  image: mleiner/kolt-base:0.2
+  script:
+    - pip3 install flake8 pylint pylint-exit
+    - make lint
+
+
+unittest:
+  stage: unittest
+  image: mleiner/kolt-base:0.2
   script:
     - pip3 install -e .
     - make coverage PY=python3
