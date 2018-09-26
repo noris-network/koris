@@ -14,7 +14,7 @@ n-masters: 3
 n-nodes: 3
 n-etcds: 3
 keypair: 'kube'
-security_group: 'default'
+#security_group: 'default'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
 # you should currently use kolt-base
