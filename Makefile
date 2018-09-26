@@ -54,7 +54,7 @@ clean-test: ## remove test and coverage artifacts
 lint: pylint flake8
 
 pylint: ## check style with flake8
-	pylint kolt/kolt.py || pylint-exit $$?
+	pylint kolt || pylint-exit $$?
 
 flake8: ## check style with flake8
 	flake8 kolt tests
