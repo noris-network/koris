@@ -1,11 +1,11 @@
 image: mleiner/kolt-base:0.2
 
 stages:
-  - provision
+  - build
   - integration 
 
-provision:
-  stage: provison
+build:
+  stage: build
   image: python:3.6-stretch
   variables:
     LC_ALL: "C.UTF-8"
