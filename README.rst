@@ -119,29 +119,23 @@ Get started
 
    .. code:: shell
 
-      pip install kolt-v<LATEST_TAG>.zip
+      $ pip install kolt-v<LATEST_TAG>.zip
 
-8. Create a security group in openstack which allows `ipip` and `BGP` protocol.
-
-.. code:: shell
-
-   neutron security-group-create foo
-   neutron security-group-rule-create --protocol 0 --direction egress foo
-   neutron security-group-rule-create --protocol 0 --direction ingress foo
-   neutron security-group-rule-create  --protocol 4  --direction egress foo
-   neutron security-group-rule-create  --protocol 4  --direction igress foo
-   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction egress foo
-   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress foo
-
-2. edit your own configuration file:
+8. Koris creates the proper security groups needed for a working cluster. However,
+   if you are a building a cluster for a customer which has cloud-connect and needs
+   BGP communication add a correct security rule for that.
 
 .. code:: shell
 
-   $ editor k8s-machines-config.yml
+   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
+   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-See the `source repository`_ `docs/k8s-machines-config.yml` for an example.
+9. To create a cluster create a cluster configuration file (see [example](https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml).
+   Pass this file on the shell to the k8s subcommand
 
-.. _source repository: https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml
+.. code:: shell
+
+   $ kolt k8s <your-cluster-config.yml>
 
 
 Credits

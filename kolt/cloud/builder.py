@@ -5,6 +5,7 @@ import uuid
 import sys
 import time
 
+import kubernetes
 import novaclient.v2.servers
 
 from kolt.deploy.k8s import K8S
@@ -23,6 +24,7 @@ from .openstack import (get_clients,
                         OSCloudConfig,
                         create_instance_with_volume,
                         create_loadbalancer,
+                        config_sec_group,
                         configure_lb)
 
 logger = get_logger(__name__)
@@ -225,6 +227,10 @@ class ClusterBuilder:
             logger.debug(info("Not creating any tasks"))
         else:
             loop = asyncio.get_event_loop()
+            cluster_info = OSClusterInfo(nova, neutron, config)
+
+            config_sec_group(neutron, cluster_info.secgroup['id'])
+
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
             subnet = config.get('subnet')
@@ -296,12 +302,16 @@ class ClusterBuilder:
                 "https://%s:%d" % (
                     etcd_host.ip_address, etcd_host.port - 1)
                 for etcd_host in etcd_host_list)
-
-            k8s.apply_calico(b64_key(certs["k8s"].key),
-                             b64_cert(certs["k8s"].cert),
-                             b64_cert(certs["ca"].cert),
-                             etcd_endpoints)
-            k8s.apply_kube_dns()
+            while True:
+                try:
+                    k8s.apply_calico(b64_key(certs["k8s"].key),
+                                     b64_cert(certs["k8s"].cert),
+                                     b64_cert(certs["ca"].cert),
+                                     etcd_endpoints)
+                    k8s.apply_kube_dns()
+                    break
+                except kubernetes.client.rest.ApiException:
+                    continue
 
         if no_cloud_init:
             return create_inventory(hosts, config)

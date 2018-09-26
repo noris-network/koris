@@ -3,6 +3,7 @@ import logging
 import sys
 
 from kolt.util.hue import red, yellow
+from kolt.cloud import OpenStackAPI
 from kolt.cloud.openstack import delete_loadbalancer
 from .util.util import get_kubeconfig_yaml
 
@@ -15,8 +16,14 @@ logger.addHandler(ch)
 
 
 def delete_cluster(config, nova, neutron):
+    """
+    completly delete a cluster from openstack.
+
+    This function removes all compute instance, volume, loadbalancer,
+    security groups rules and security groups
+    """
     print(red("You are about to destroy your cluster '{}'!!!".format(
-          config["cluster-name"])))
+        config["cluster-name"])))
     print(red("Are you really sure ? [y/N]"))
     ans = input(red("ARE YOU REALLY SURE???"))
 
@@ -29,7 +36,7 @@ def delete_cluster(config, nova, neutron):
             await asyncio.sleep(1)
             nics = [nic for nic in server.interface_list()]
             server.delete()
-            [neutron.delete_port(nic.id) for nic in nics]
+            list(neutron.delete_port(nic.id) for nic in nics)
             print("deleted %s ..." % server.name)
 
         loop = asyncio.get_event_loop()
@@ -38,8 +45,22 @@ def delete_cluster(config, nova, neutron):
         if tasks:
             loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
-        delete_loadbalancer(neutron, config['private_net'],
-                            config['cluster-name'])
+        delete_loadbalancer(neutron, config['cluster-name'])
+        connection = OpenStackAPI.connect()
+        secg = connection.list_security_groups(
+            {"name": '%s-sec-group' % config['cluster-name']})
+        if secg:
+            for g in secg:
+                for rule in g.security_group_rules:
+                    connection.delete_security_group_rule(rule['id'])
+
+                for port in connection.list_ports():
+                    if g.id in port.security_groups:
+                        connection.delete_port(port.id)
+
+        connection.delete_security_group(
+            '%s-sec-group' % config['cluster-name'])
+
     else:
         sys.exit(1)
 
