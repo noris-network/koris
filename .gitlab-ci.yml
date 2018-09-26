@@ -12,7 +12,7 @@ build:
   script:
   - "apt-get update -y"
   - "apt-get install git -y"
-  - "mkdir  kolt && cd kolt && python3 -m venv koris-env"
+  - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
   - "source ./koris-env/bin/activate"
   - "pip3 install  -r ."
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')'/g" tests/koris_test.yml
