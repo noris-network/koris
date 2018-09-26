@@ -12,7 +12,6 @@ build:
   script:
   - "apt-get update -y"
   - "apt-get install git -y"
-  - "cd kolt && python3 -m venv koris-env"
   - "pip3 install -e"
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')'/g" tests/koris_test.yml
   - kolt k8s tests/koris_test.yml
