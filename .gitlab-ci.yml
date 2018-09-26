@@ -7,7 +7,7 @@ test:
 
 integration:
   script:
-    - kolt k8s tests/test_cluster.yml
+    - kolt k8s tests/koris_test.yml
     - kubectl get nodes --kubeconfig=koris-test-admin.conf
     - kubectl run nginx --image=nginx --kubeconfig=koris-test-admin.conf
     - kubectl expose deploy nginx --type=LoadBalancer

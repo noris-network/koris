@@ -23,9 +23,9 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
 
 
 with patch('kolt.cloud.openstack.read_os_auth_variables') as p:
-    p.return_value = dict(username="serviceuser", password="s9kr9t",
+    p.return_value = dict(username="kubepipeline", password="dvKf04L9Q0Ie",
                           auth_url="keystone.myopenstack.de",
-                          project_id="c869168a828847f39f7f06edd7305637",
+                          project_id="f4c0a6de561e487d8ba5d1cc3f1042e8",
                           domain_id="2a73b8f597c04551a0fdc8e95544be8a",
                           user_domain_name="noris.de",
                           region_name="de-nbg6-1")
