@@ -7,7 +7,7 @@ static-analysis:
   stage: static-analysis
   image: mleiner/kolt-base:0.2
   script:
-    - pip3 install flake8 pylint
+    - pip3 install flake8 pylint pylint-exit
     - make lint
 
 
