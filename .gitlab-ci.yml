@@ -1,5 +1,36 @@
 image: mleiner/kolt-base:0.2
 
+stages:
+  - build
+  - cleanup
+  - test
+  - integration 
+
+build:
+  stage: build
+  image: python:3.6-stretch
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "apt-get update -y"
+  - "pip3 install pipenv"
+  - "pipenv install"
+  - "pipenv run ./build.py"
+
+cleanup:
+  stage: cleanup
+  image: python:3.6-stretch
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "apt-get update -y"
+  - "pip3 install pipenv"
+  - "pipenv install"
+  - "pipenv run ./cleanup.py"
+
+
 test:
   script:
     - pip3 install -e .
