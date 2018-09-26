@@ -1,3 +1,7 @@
+"""
+functions and classes to interact with openstack
+"""
+
 import asyncio
 import base64
 import copy
@@ -17,7 +21,8 @@ from novaclient.exceptions import (NotFound as NovaNotFound,
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from kolt.util.hue import red, info, que, yellow
+from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
+                           yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
 logger = get_logger(__name__)
@@ -240,12 +245,18 @@ async def configure_lb(client, lb, name, master_ips):
 
 
 def add_sec_rule(neutron, sec_gr_id, **kwargs):
+    """
+    add a security group rule
+    """
     kwargs.update({'security_group_id': sec_gr_id})
-    return neutron.create_security_group_rule({'security_group_rule': kwargs})
+    neutron.create_security_group_rule({'security_group_rule': kwargs})
 
 
 async def del_sec_rule(connection, _id):
-    return connection.delete_security_group_rule(_id)
+    """
+    delete security rule
+    """
+    connection.delete_security_group_rule(_id)
 
 
 def create_sec_group(neutron, name):
@@ -285,52 +296,37 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
                  port_range_max=80, port_range_min=80,
-                 remote_ip_prefix=cidr),
+                 remote_ip_prefix=cidr)
     # Allow IPIP communication
     add_sec_rule(neutron, sec_group_id,
                  direction='egress', protocol=4,
-                 remote_ip_prefix=cidr),
+                 remote_ip_prefix=cidr)
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol=4,
-                 remote_ip_prefix=cidr),
-    # Allow all TCP and UDP within the cluster
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='TCP',
-                 remote_ip_prefix=cidr),
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='TCP',
-                 remote_ip_prefix=cidr),
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='UDP',
-                 remote_ip_prefix=cidr),
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='UDP',
-                 remote_ip_prefix=cidr),
+                 remote_ip_prefix=cidr)
     # allow accessing the API server
     add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='TCP',
-                 port_range_max=6443, port_range_min=6443),
-    add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
-                 port_range_max=6443, port_range_min=6443),
+                 port_range_max=6443, port_range_min=6443)
     # allow node ports
     # OpenStack load balancer talks to these too
     add_sec_rule(neutron, sec_group_id,
                  direction='egress', protocol='TCP',
-                 port_range_max=32767, port_range_min=30000),
+                 port_range_max=32767, port_range_min=30000)
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
-                 port_range_max=32767, port_range_min=30000),
+                 port_range_max=32767, port_range_min=30000)
     # allow SSH
     add_sec_rule(neutron, sec_group_id,
                  direction='egress', protocol='TCP',
-                 port_range_max=22, port_range_min=22),
+                 port_range_max=22, port_range_min=22,
+                 remote_ip_prefix=cidr)
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
-                 port_range_max=22, port_range_min=22),
+                 port_range_max=22, port_range_min=22)
 
 
-def delete_loadbalancer(client, network, name):
+def delete_loadbalancer(client, name):
     try:
         client.delete_lbaas_healthmonitor(
             client.list_lbaas_healthmonitors(
@@ -356,7 +352,7 @@ def delete_loadbalancer(client, network, name):
         except IndexError:
             break
         except Exception as E:
-            logger.debug("Error while deleting pool: %s " % E)
+            logger.debug("Error while deleting pool: %s", E)
             time.sleep(0.5)
 
     lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
