@@ -20,6 +20,7 @@ build:
   - "pip install  -e git+git@gitlab.noris.net:PI/kolt.git@v 0.4.1.#egg=kolt"
 
 integration:
+  stage: integration
   script:
     - sed -i "s/%%date%%/$(date '+%Y-%m-%d')'/g" tests/koris_test.yml
     - kolt k8s tests/koris_test.yml
