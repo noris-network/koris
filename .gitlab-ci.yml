@@ -1,38 +1,25 @@
 image: mleiner/kolt-base:0.2
 
 stages:
-  - build
+  - provision
   - cleanup
   - test
   - integration 
 
-build:
-  stage: build
+provsion:
+  stage: provison
   image: python:3.6-stretch
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
   - "apt-get update -y"
+  - "apt-get install git -y"
+  - "mkdir  kolt"
+  - "cd kolt && python3 -m venv koris-env"
   - "pip3 install pipenv"
   - "pipenv install"
-
-cleanup:
-  stage: cleanup
-  image: python:3.6-stretch
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "apt-get update -y"
-  - "pip3 install pipenv"
-  - "pipenv install"
-
-
-test:
-  script:
-    - pip3 install -e .
-    - make coverage PY=python3
+  - "pip install  -e git+git@gitlab.noris.net:PI/kolt.git@v 0.4.1.#egg=kolt"
 
 integration:
   script:
