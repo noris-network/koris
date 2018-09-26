@@ -16,7 +16,6 @@ build:
   - "apt-get update -y"
   - "pip3 install pipenv"
   - "pipenv install"
-  - "pipenv run ./build.py"
 
 cleanup:
   stage: cleanup
@@ -28,7 +27,6 @@ cleanup:
   - "apt-get update -y"
   - "pip3 install pipenv"
   - "pipenv install"
-  - "pipenv run ./cleanup.py"
 
 
 test:
