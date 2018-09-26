@@ -14,7 +14,6 @@ build:
   - "apt-get install git -y"
   - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
   - "source ./koris-env/bin/activate"
-  - "pip3 install -r"
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')'/g" tests/koris_test.yml
   - kolt k8s tests/koris_test.yml
   - kubectl get nodes --kubeconfig=koris-test-admin.conf
