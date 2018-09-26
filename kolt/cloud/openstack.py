@@ -1,3 +1,7 @@
+"""
+functions and classes to interact with openstack
+"""
+
 import asyncio
 import base64
 import copy
@@ -10,14 +14,15 @@ import uuid
 from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
-
+from neutronclient.common.exceptions import NotFound as NeutronNotFound
 from novaclient.exceptions import (NotFound as NovaNotFound,
                                    ClientException as NovaClientException)
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from kolt.util.hue import red, info, que, yellow
+from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
+                           yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
 logger = get_logger(__name__)
@@ -119,7 +124,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     hosts[name] = (ip)
 
 
-def create_loadbalancer(client, network, name, master_ips, provider='octavia',
+def create_loadbalancer(client, network, name, provider='octavia',
                         **kwargs):
     """Create a load balancer for the kuberentes api server
 
@@ -130,7 +135,6 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
         client (neutronclient.v2_0.client.Client)
         network (str): The network name for the load balancer
         name (str): The loadbalancer name
-        master_ips (list): A list of the master IP addresses
         provider (str): The Openstack provider for loadbalancing
 
     Kwargs:
@@ -155,12 +159,25 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
                                       'name': "%s-lb" % name
                                       }
                                      })
+    logger.debug("created loadbalancer ...")
+    return lb
+
+
+async def configure_lb(client, lb, name, master_ips):
+    """
+    Configure a load balancer created in earlier step
+
+    Args:
+        master_ips (list): A list of the master IP addresses
+    """
     lb = lb['loadbalancer']
+    subnet_id = lb['vip_subnet_id']
+
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(2)
-    logger.debug("Created loadbalancer ...")
+        await asyncio.sleep(1)
+
     listener = client.create_listener({'listener':
                                        {"loadbalancer_id":
                                         lb['id'],
@@ -176,7 +193,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(2)
+        await asyncio.sleep(1)
 
     pool = client.create_lbaas_pool(
         {"pool": {"lb_algorithm": "SOURCE_IP",
@@ -192,7 +209,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
 
     client.create_lbaas_healthmonitor(
         {'healthmonitor':
@@ -207,7 +224,7 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
         lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
 
     for ip in master_ips:
         client.create_lbaas_member(pool['pool']['id'],
@@ -220,21 +237,107 @@ def create_loadbalancer(client, network, name, master_ips, provider='octavia',
         while lb['provisioning_status'] != 'ACTIVE':
             lb = client.list_loadbalancers(id=lb['id'])
             lb = lb['loadbalancers'][0]
-            time.sleep(0.5)
+            await asyncio.sleep(0.5)
 
         logger.debug("added pool member %s ..." % ip)
 
     return lb
 
 
-def delete_loadbalancer(client, network, name):
+def add_sec_rule(neutron, sec_gr_id, **kwargs):
+    """
+    add a security group rule
+    """
+    kwargs.update({'security_group_id': sec_gr_id})
+    neutron.create_security_group_rule({'security_group_rule': kwargs})
+
+
+async def del_sec_rule(connection, _id):
+    """
+    delete security rule
+    """
+    connection.delete_security_group_rule(_id)
+
+
+def create_sec_group(neutron, name):
+    """
+    Create a security group for all machines
+
+    Args:
+        neutron (neutron client)
+        name (str) - the cluster name
+
+    Return:
+        a security group dict
+    """
+
+    return neutron.create_security_group(
+        {'security_group': {'name': "%s-sec-group" % name}})['security_group']
+
+
+def config_sec_group(neutron, sec_group_id, subnet=None):
+    """
+    Create futures for configuring the security group ``name``
+
+    Args:
+        neutron (neutron client)
+        sec_group (dict) the sec. group info dict (Munch)
+        subnet (str): the subnet name
+    """
+
+    if not subnet:
+        cidr = neutron.list_subnets()['subnets'][-1]['cidr']
+    else:
+        cidr = neutron.find_resource('subnet', subnet)['cidr']
+
+    logger.debug("configuring security group ...")
+    # allow communication to the API server from within the cluster
+    # on port 80
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=80, port_range_min=80,
+                 remote_ip_prefix=cidr)
+    # Allow IPIP communication
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol=4,
+                 remote_ip_prefix=cidr)
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol=4,
+                 remote_ip_prefix=cidr)
+    # allow accessing the API server
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=6443, port_range_min=6443)
+    # allow node ports
+    # OpenStack load balancer talks to these too
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 port_range_max=32767, port_range_min=30000)
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=32767, port_range_min=30000)
+    # allow SSH
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 port_range_max=22, port_range_min=22,
+                 remote_ip_prefix=cidr)
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 port_range_max=22, port_range_min=22)
+
+
+def delete_loadbalancer(client, name):
     try:
         client.delete_lbaas_healthmonitor(
             client.list_lbaas_healthmonitors(
                 {"name": "%s-health" % name})['healthmonitors'][0]['id'])
     except IndexError:
         pass
-    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+
+    try:
+        lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+    except IndexError:
+        return
 
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
@@ -249,8 +352,8 @@ def delete_loadbalancer(client, network, name):
         except IndexError:
             break
         except Exception as E:
-            print("Error while deleting pool: %s " % E)
-            continue
+            logger.debug("Error while deleting pool: %s", E)
+            time.sleep(0.5)
 
     lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
 
@@ -270,7 +373,15 @@ def delete_loadbalancer(client, network, name):
             break
 
         except Exception as E:
-            print("Error while deleting listener: %s " % E)
+            logger.debug("Error while deleting listener: %s " % E)
+            continue
+
+    while True:
+        try:
+            client.delete_loadbalancer(lb['id'])
+            break
+        except Exception as E:
+            logger.debug("Error while deleting loadbalancer: %s " % E)
             continue
 
 
@@ -361,9 +472,17 @@ class OSClusterInfo:
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-        secgroup = neutron_client.find_resource('security_group',
-                                                config['security_group'])
+
+        try:
+            secgroup = neutron_client.find_resource(
+                'security_group', "%s-sec-group" % config['cluster-name'])
+        except NeutronNotFound:
+            secgroup = create_sec_group(neutron_client, config['cluster-name'])
+
+        self.secgroup = secgroup
         self.secgroups = [secgroup['id']]
+        print(self.secgroups)
+
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
 
         if 'subnet' in config:

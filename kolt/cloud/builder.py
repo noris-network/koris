@@ -5,6 +5,7 @@ import uuid
 import sys
 import time
 
+import kubernetes
 import novaclient.v2.servers
 
 from kolt.deploy.k8s import K8S
@@ -22,7 +23,9 @@ from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig,
                         create_instance_with_volume,
-                        create_loadbalancer)
+                        create_loadbalancer,
+                        config_sec_group,
+                        configure_lb)
 
 logger = get_logger(__name__)
 
@@ -30,7 +33,15 @@ nova, neutron, cinder = get_clients()
 
 
 class NodeBuilder:
+    """
+    Interact with openstack and create a virtual machines with a volume,
+    and network interface. The machines are provisioned with cloud-init.
 
+    Args:
+        nova (nova client instance) - to create a volume and a machine
+        neutron (neutron client instance) - to create a network interface
+        config (dict) - the parsed configuration file
+    """
     def __init__(self, nova, neutron, config):
         logger.info(info(cyan(
             "gathering node information from openstack ...")))
@@ -95,6 +106,18 @@ class NodeBuilder:
 
 
 class ControlPlaneBuilder:
+    """
+    Interact with openstack and create a virtual machines with a volume,
+    and network interface. The machines are provisioned with cloud-init.
+    This class builds the control plane machine, and although it is similar
+    to NodeBuilder it uses a bit slightly different methods under the hood to
+    configure the control plane services.
+
+    Args:
+        nova (nova client instance) - to create a volume and a machine
+        neutron (neutron client instance) - to create a network interface
+        config (dict) - the parsed configuration file
+    """
 
     def __init__(self, nova, neutron, config):
 
@@ -203,13 +226,28 @@ class ClusterBuilder:
             tasks = []
             logger.debug(info("Not creating any tasks"))
         else:
+            loop = asyncio.get_event_loop()
+            cluster_info = OSClusterInfo(nova, neutron, config)
+
+            config_sec_group(neutron, cluster_info.secgroup['id'])
+
+            master_ips = [str(host.ip_address) for host in etcd_host_list]
+
             subnet = config.get('subnet')
             kwargs = {'subnet': subnet} if subnet else {}
             lb = create_loadbalancer(
                 neutron, config['private_net'],
                 config['cluster-name'],
-                [str(host.ip_address) for host in etcd_host_list],  # noqa
                 **kwargs)
+
+            configure_lb_task = loop.create_task(
+                configure_lb(neutron,
+                             lb,
+                             config['cluster-name'],
+                             master_ips,
+                             )
+            )
+            lb = lb['loadbalancer']
             ips.append(lb['vip_address'])
             certs = create_certs(config, cluster_host_names, ips)
             logger.debug(info("Done creating nodes tasks"))
@@ -240,9 +278,9 @@ class ClusterBuilder:
             logger.debug(info("Done creating control plane tasks"))
 
             tasks = cp_tasks + tasks
-
         if tasks:
             loop = asyncio.get_event_loop()
+            tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
             kubeconfig = write_kubeconfig(config, lb['vip_address'],
@@ -259,21 +297,21 @@ class ClusterBuilder:
                 time.sleep(2)
 
             logger.debug("Kubernetes API Server is ready !!!")
-            ####
-            #
-            # TODO: URGENTLY REPLACE THIS HACK BELOW WITH AN OPENSTACK LB
-            #
-            ####
 
-            lb_url = "https://%s:%d" % (
-                etcd_host_list[0].ip_address, etcd_host_list[0].port - 1)
-            k8s.apply_calico(b64_key(certs["k8s"].key),
-                             b64_cert(certs["k8s"].cert),
-                             b64_cert(certs["ca"].cert),
-                             lb_url)
-            k8s.apply_kube_dns()
-
-            # more roles come here later ...
+            etcd_endpoints = ",".join(
+                "https://%s:%d" % (
+                    etcd_host.ip_address, etcd_host.port - 1)
+                for etcd_host in etcd_host_list)
+            while True:
+                try:
+                    k8s.apply_calico(b64_key(certs["k8s"].key),
+                                     b64_cert(certs["k8s"].cert),
+                                     b64_cert(certs["ca"].cert),
+                                     etcd_endpoints)
+                    k8s.apply_kube_dns()
+                    break
+                except kubernetes.client.rest.ApiException:
+                    continue
 
         if no_cloud_init:
             return create_inventory(hosts, config)

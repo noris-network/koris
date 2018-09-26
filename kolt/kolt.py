@@ -85,15 +85,6 @@ class Kolt:
         delete_cluster(config, nova, neutron)
         sys.exit(0)
 
-    def oc(self, config, inventory=None):
-        """
-        Create OpenStack machines for Openshift installation with Ansible
-
-        config - configuration file
-        inventory - invetory file to write
-        """
-        print("Not implemented yet ...")
-
 
 def main():
     k = Kolt()
