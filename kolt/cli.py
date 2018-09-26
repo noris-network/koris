@@ -4,6 +4,7 @@ import sys
 
 from kolt.util.hue import red, yellow
 from kolt.cloud.openstack import delete_loadbalancer
+from kolt.cloud import OpenStackAPI
 from .util.util import get_kubeconfig_yaml
 
 logger = logging.getLogger(__name__)
