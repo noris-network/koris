@@ -2,7 +2,6 @@ image: mleiner/kolt-base:0.2
 
 stages:
   - build
-  - integration 
 
 build:
   stage: build
@@ -17,13 +16,8 @@ build:
   - "cd kolt && python3 -m venv koris-env"
   - "pip3 install pipenv"
   - "pipenv install"
-
-integration:
-  stage: integration
-  script:
-    - sed -i "s/%%date%%/$(date '+%Y-%m-%d')'/g" tests/koris_test.yml
-    - kolt k8s tests/koris_test.yml
-    - kubectl get nodes --kubeconfig=koris-test-admin.conf
-    - kubectl run nginx --image=nginx --kubeconfig=koris-test-admin.conf
-    - kubectl expose deploy nginx --type=LoadBalancer
-    - curl $(kubectl get --export -o jso ...)
+  - sed -i "s/%%date%%/$(date '+%Y-%m-%d')'/g" tests/koris_test.yml
+  - kolt k8s tests/koris_test.yml
+  - kubectl get nodes --kubeconfig=koris-test-admin.conf
+  - kubectl run nginx --image=nginx --kubeconfig=koris-test-admin.conf
+  - kubectl expose deploy nginx --type=LoadBalancer
