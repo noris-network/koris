@@ -6,7 +6,7 @@ stages:
   - test
   - integration 
 
-provsion:
+provision:
   stage: provison
   image: python:3.6-stretch
   variables:
