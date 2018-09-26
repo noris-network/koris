@@ -13,7 +13,6 @@ build:
   script:
   - "apt-get update -y"
   - "apt-get install git -y"
-  - "mkdir  kolt"
   - "cd kolt && python3 -m venv koris-env"
   - "pip3 install pipenv"
   - "pipenv install"
