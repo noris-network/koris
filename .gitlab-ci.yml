@@ -17,7 +17,8 @@ build:
   - "cd kolt && python3 -m venv koris-env"
   - "pip3 install pipenv"
   - "pipenv install"
-  - "pip3 install  -e ."
+  - "pip3 install -r requirements.txt"
+  - "pip3 install -e kolt/kolt.py"
 
 integration:
   stage: integration
