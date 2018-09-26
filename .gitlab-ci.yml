@@ -13,7 +13,7 @@ build:
   - "apt-get update -y"
   - "apt-get install git -y"
   - "pip3 install  -r requirements.txt"
-  - "pip3 install -e"
+  - "pip3 install -e ."
   - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
   - "source ./koris-env/bin/activate"
   - "cd -"
