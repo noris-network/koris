@@ -94,7 +94,7 @@ class Server:
         try:
             return self._interface_list[0].fixed_ips[0]['ip_address']
         except AttributeError:
-            return self._interface_list[0]['port']['fixed_ips'][0]['ip_address'] # noqa
+            return self._interface_list[0]['port']['fixed_ips'][0]['ip_address']  # noqa
 
     def connection_uri(self, port, protocol="https"):
         return "%s://%s:%d" % (protocol, self.ip_address, port)
