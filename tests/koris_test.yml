@@ -3,7 +3,7 @@
 ---
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-private_net: 'kubepipeline-int'
+private_net: 'korispipeline-office-net'
 # optionally specify the subnet
 # subnet: foo
 cluster-name: 'koris-pipeline'
