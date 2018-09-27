@@ -15,7 +15,7 @@ ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
 
-def delete_cluster(config, nova, neutron):
+def delete_cluster(config, nova, neutron, force=False):
     """
     completly delete a cluster from openstack.
 
@@ -24,8 +24,12 @@ def delete_cluster(config, nova, neutron):
     """
     print(red("You are about to destroy your cluster '{}'!!!".format(
         config["cluster-name"])))
-    print(red("Are you really sure ? [y/N]"))
-    ans = input(red("ARE YOU REALLY SURE???"))
+
+    if not force:
+        print(red("Are you really sure ? [y/N]"))
+        ans = input(red("ARE YOU REALLY SURE???"))
+    else:
+        ans = 'y'
 
     if ans.lower() == 'y':
         cluster_suffix = "-%s" % config['cluster-name']
@@ -44,6 +48,7 @@ def delete_cluster(config, nova, neutron):
 
         if tasks:
             loop.run_until_complete(asyncio.wait(tasks))
+
         loop.close()
         delete_loadbalancer(neutron, config['cluster-name'])
         connection = OpenStackAPI.connect()

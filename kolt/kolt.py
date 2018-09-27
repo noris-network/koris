@@ -75,14 +75,14 @@ class Kolt:
                     "You can save this inventory to a file with the option -i"))  # noqa
             cfg.write(sys.stdout)
 
-    def destroy(self, config):
+    def destroy(self, config: str, force: bool=False):
         """
         Delete the complete cluster stack
         """
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        delete_cluster(config, nova, neutron)
+        delete_cluster(config, nova, neutron, force)
         sys.exit(0)
 
 
