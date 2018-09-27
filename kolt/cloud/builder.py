@@ -242,7 +242,7 @@ class ClusterBuilder:
             subnet = config.get('subnet')
             kwargs = {'subnet': subnet} if subnet else {}
             lb = create_loadbalancer(
-                neutron, config['private_net'],
+                neutron,
                 config['cluster-name'],
                 **kwargs)
 

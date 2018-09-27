@@ -1,7 +1,13 @@
-# https://support.ultimum.io/support/solutions/articles/1000125460-python-novaclient-neutronclient-glanceclient-swiftclient-heatclient
-# http://docs.openstack.org/developer/python-novaclient/ref/v2/servers.html
-import sys
+"""
+kolt
+====
 
+The main entry point for the kubernetes cluster build.
+Don't use it directly, instead install the package with setup.py.
+It automatically creates an executable in your path.
+
+"""
+import sys
 import yaml
 
 
@@ -19,7 +25,7 @@ from .util.util import (get_logger,
 
 from .cloud.builder import ClusterBuilder
 
-logger = get_logger(__name__)
+LOGGER = get_logger(__name__)
 
 
 @mach1()

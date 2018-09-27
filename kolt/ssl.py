@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import hashes
 
 from kolt.util.util import get_logger
 
-logger = get_logger(__name__)
+LOGGER = get_logger(__name__)
 
 
 def create_key(size=2048, public_exponent=65537):
@@ -348,7 +348,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                                      hosts=[node],
                                                      ips=[node_ip]))
 
-    logger.debug("Done creating all certificates")
+    LOGGER.debug("Done creating all certificates")
     if write:  # pragma: no coverage
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
