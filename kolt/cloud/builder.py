@@ -281,7 +281,7 @@ class ClusterBuilder:
         if tasks:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
-            logger.debug("Tasks are ", tasks)
+            logger.debug("Tasks are %s", tasks)
             loop.run_until_complete(asyncio.wait(tasks))
             loop.close()
             kubeconfig = write_kubeconfig(config, lb['vip_address'],
