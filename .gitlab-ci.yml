@@ -36,7 +36,7 @@ integration-test:
   - kolt k8s tests/koris_test.yml
   - echo $KUBECONFIG
   - kubectl get nodes
-  - kubectl run nginx --image=nginx
-  - kubectl expose deploy nginx --type=LoadBalancer --labels=nginx
+  - kubectl run nginx --image=nginx --port=80
+  - kubectl expose deployment nginx --type=LoadBalancer --labels=nginx
   - kubectl describe svc -l nginx
 
