@@ -281,8 +281,7 @@ class ClusterBuilder:
         if tasks:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
-            logger.debug("Tasks are %s", tasks)
-            loop.run_until_complete(asyncio.wait(tasks))
+            loop.run_until_complete(asyncio.gather(*tasks))
             loop.close()
             kubeconfig = write_kubeconfig(config, lb['vip_address'],
                                           admin_token,
@@ -311,7 +310,8 @@ class ClusterBuilder:
                                      etcd_endpoints)
                     k8s.apply_kube_dns()
                     break
-                except kubernetes.client.rest.ApiException:
+                except kubernetes.client.rest.ApiException as E:
+                    logger.debug(E)
                     continue
 
         if no_cloud_init:
