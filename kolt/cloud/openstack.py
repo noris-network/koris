@@ -297,19 +297,21 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
                  direction='ingress', protocol='TCP',
                  port_range_max=80, port_range_min=80,
                  remote_ip_prefix=cidr)
-    # Allow all TCP/UDP inside the cluster range
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='UDP',
-                 remote_ip_prefix=cidr)
+    # Allow all incoming TCP/UDP inside the cluster range
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='UDP',
                  remote_ip_prefix=cidr)
     add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='TCP',
-                 remote_ip_prefix=cidr)
-    add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
                  remote_ip_prefix=cidr)
+    # allow all outgoing
+    # we are behind a physical firewall anyway
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='UDP',
+                 )
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 )
     # Allow IPIP communication
     add_sec_rule(neutron, sec_group_id,
                  direction='egress', protocol=4,
