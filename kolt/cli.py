@@ -73,7 +73,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     if not ca_bundle:
         ca_key = create_key()
         ca_cert = create_ca(ca_key, ca_key.public_key(), country,
-                            state, location, "Kubernetes", "CDA\PI",
+                            state, location, "Kubernetes", "CDA/PI",
                             "kubernetes")
         ca_bundle = CertBundle(ca_key, ca_cert)
 
@@ -86,7 +86,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                           state,
                                           location,
                                           "Kubernetes",
-                                          "CDA\PI",
+                                          "CDA/PI",
                                           "kubernetes",
                                           names,
                                           ips)
@@ -96,7 +96,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                                 state,
                                                 location,
                                                 "Kubernetes",
-                                                "CDA\PI",
+                                                "CDA/PI",
                                                 name="service-accounts",
                                                 hosts="",
                                                 ips="")
@@ -106,7 +106,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                             state,
                                             location,
                                             "system:masters",
-                                            "CDA\PI",
+                                            "CDA/PI",
                                             name="admin",
                                             hosts="",
                                             ips=""
@@ -117,7 +117,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                               state,
                                               location,
                                               "system:masters",
-                                              "CDA\PI",
+                                              "CDA/PI",
                                               name="kubelet",
                                               hosts=names,
                                               ips=ips
@@ -133,7 +133,7 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
                                                      state,
                                                      location,
                                                      "system:nodes",
-                                                     "CDA\PI",
+                                                     "CDA/PI",
                                                      name="system:node:%s" % node,  # noqa
                                                      hosts=[node],
                                                      ips=[node_ip]))
