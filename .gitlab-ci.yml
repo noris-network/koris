@@ -38,7 +38,7 @@ integration-test:
   - kubectl get nodes  || kolt destroy tests/koris_test.yml --force 
   - kubectl run nginx --image=nginx --port=80 || kolt destroy tests/koris_test.yml --force
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx || kolt destroy tests/koris_test.yml --force
-  - sleep 120
+  - sleep 90
   - kubectl get services || kolt destroy tests/koris_test.yml --force
   - curl  http://$(kubectl describe svc nginx | grep IP | cut  -d":" -f2 | tr -d " ")
   - kolt destroy tests/koris_test.yml --force
