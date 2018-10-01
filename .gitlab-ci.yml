@@ -37,7 +37,7 @@ integration-test:
   - echo $KUBECONFIG
   - kubectl get nodes  || kolt destroy tests/koris_test.yml --force 
   - kubectl run nginx --image=nginx --port=80 || kolt destroy tests/koris_test.yml --force
-  - kubectl -n kube-system patch deployment nginx -p '{spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer:": "true"}}}}}'
+  - kubectl -n kube-system patch deployment nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer:": "true"}}}}}' || kolt destroy tests/koris_test.yml --force
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx || kolt destroy tests/koris_test.yml --force
   - sleep 90
   - kubectl get services || kolt destroy tests/koris_test.yml --force
