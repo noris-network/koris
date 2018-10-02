@@ -37,7 +37,7 @@ integration-test:
   - kolt k8s tests/koris_test.yml
   - echo $KUBECONFIG
   - kubectl get nodes  || kolt destroy tests/koris_test.yml --force 
-  - kubectl -n kube-system patch deployment nginx -p $(echo OS_LAB)
+  - kubectl -n kube-system patch deployment nginx -p $(echo $OS_LAB)
   - kubectl run nginx --image=nginx --port=80 || kolt destroy tests/koris_test.yml --force
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx || kolt destroy tests/koris_test.yml --force
   - sleep 90
