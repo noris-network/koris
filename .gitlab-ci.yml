@@ -30,12 +30,14 @@ integration-test:
   - "pip3 install -e ."
   - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
   - "source ./koris-env/bin/activate"
+  - "source ./openstack-lb-var.sh"
   - "cd -"
   - "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && mv kubectl /usr/local/bin/kubectl  && chmod  777  /usr/local/bin/kubectl"
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
   - kolt k8s tests/koris_test.yml
   - echo $KUBECONFIG
   - kubectl get nodes  || kolt destroy tests/koris_test.yml --force 
+  - - kubectl -n kube-system patch deployment nginx -p $(echo OS_LAB)
   - kubectl run nginx --image=nginx --port=80 || kolt destroy tests/koris_test.yml --force
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx || kolt destroy tests/koris_test.yml --force
   - sleep 90
