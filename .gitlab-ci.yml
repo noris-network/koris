@@ -44,9 +44,12 @@ integration-test:
   - echo $KUBECONFIG
   - kubectl get nodes
   - kubectl run nginx --image=nginx --port=80
+  - while [ $(kubectl --kubeconfig=koltdev-admin.conf describe pod nginx | grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; do echo "Waiting for container...." ;sleep 2; done;
+
   - kubectl patch deployment.apps nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}'
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
-  - sleep 200
+  - while [ $(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ") == "Pending" ]; do echo "Waiting for floating IP...." ; sleep 2; done;
+
   - kubectl get services
   - kubectl get pods
   - curl http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
