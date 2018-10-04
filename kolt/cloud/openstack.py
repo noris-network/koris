@@ -15,8 +15,7 @@ from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import NotFound as NeutronNotFound
-from novaclient.exceptions import (NotFound as NovaNotFound,
-                                   ClientException as NovaClientException)
+from novaclient.exceptions import (NotFound as NovaNotFound, ClientException as NovaClientException)  # noqa
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -25,10 +24,13 @@ from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
-logger = get_logger(__name__)
+LOGGER = get_logger(__name__)
 
 
 async def create_volume(cinder, image, zone, klass, size=25):
+    """
+    create a cinder volume for use with a compute instance
+    """
     bdm_v2 = {
         "boot_index": 0,
         "source_type": "volume",
@@ -36,23 +38,23 @@ async def create_volume(cinder, image, zone, klass, size=25):
         "destination_type": "volume",
         "delete_on_termination": True}
 
-    v = cinder.volumes.create(size, name=uuid.uuid4(), imageRef=image.id,
-                              availability_zone=zone,
-                              volume_type=klass)
+    vol = cinder.volumes.create(size, name=uuid.uuid4(), imageRef=image.id,
+                                availability_zone=zone,
+                                volume_type=klass)
 
-    while v.status != 'available':
+    while vol.status != 'available':
         await asyncio.sleep(1)
-        v = cinder.volumes.get(v.id)
+        vol = cinder.volumes.get(vol.id)
 
-    logger.debug("created volume %s %s" % (v, v.volume_type))
+    LOGGER.debug("created volume %s %s", vol, vol.volume_type)
 
-    if v.bootable != 'true':
-        v.update(bootable=True)
+    if vol.bootable != 'true':
+        vol.update(bootable=True)
         # wait for mark as bootable
         await asyncio.sleep(2)
 
     volume_data = copy.deepcopy(bdm_v2)
-    volume_data['uuid'] = v.id
+    volume_data['uuid'] = vol.id
 
     return volume_data
 
@@ -65,6 +67,10 @@ async def create_instance_with_volume(name, zone, flavor, image,
                                       nics=None,
                                       volume_klass=""
                                       ):
+    """
+    Create a compute instance with cloud-init and volume and port for use
+    in a kubernetes cluster
+    """
     try:
         print(que("Checking if %s does not already exist" % name))
         server = nova.servers.find(name=name)
@@ -75,7 +81,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     except NovaNotFound:
         print(info("Okay, launching %s" % name))
     except IndexError:
-        logger.debug("Server found in weired state witout IP ... recreating")
+        LOGGER.debug("Server found in weired state witout IP ... recreating")
         server.delete()
 
     volume_data = await create_volume(cinder, image, zone, volume_klass)
@@ -92,10 +98,10 @@ async def create_instance_with_volume(name, zone, flavor, image,
                                        userdata=userdata,
                                        )
 
-    except NovaClientException as E:
+    except NovaClientException as nce:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
-        print(info(yellow(E.message)))
+        print(info(yellow(nce.message)))
         # TODO: clean volume and nic here
     except KeyboardInterrupt:
         print(info(red("Oky doky, stopping as you interrupted me ...")))
@@ -124,7 +130,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     hosts[name] = (ip)
 
 
-def create_loadbalancer(client, network, name, provider='octavia',
+def create_loadbalancer(client, name, provider='octavia',
                         **kwargs):
     """Create a load balancer for the kuberentes api server
 
@@ -133,7 +139,6 @@ def create_loadbalancer(client, network, name, provider='octavia',
 
     Args:
         client (neutronclient.v2_0.client.Client)
-        network (str): The network name for the load balancer
         name (str): The loadbalancer name
         provider (str): The Openstack provider for loadbalancing
 
@@ -159,7 +164,7 @@ def create_loadbalancer(client, network, name, provider='octavia',
                                       'name': "%s-lb" % name
                                       }
                                      })
-    logger.debug("created loadbalancer ...")
+    LOGGER.debug("created loadbalancer ...")
     return lb
 
 
@@ -187,7 +192,7 @@ async def configure_lb(client, lb, name, master_ips):
                                         'name': '%s-listener' % name
                                         }})
 
-    logger.debug("added listener ...")
+    LOGGER.debug("added listener ...")
     lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
 
     while lb['provisioning_status'] != 'ACTIVE':
@@ -203,7 +208,7 @@ async def configure_lb(client, lb, name, master_ips):
                   "name": "%s-pool" % name},
          })
 
-    logger.debug("added pool ...")
+    LOGGER.debug("added pool ...")
     lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
 
     while lb['provisioning_status'] != 'ACTIVE':
@@ -217,7 +222,7 @@ async def configure_lb(client, lb, name, master_ips):
              "pool_id": pool['pool']['id'],
              "name": "%s-health" % name}})
 
-    logger.debug("added health monitor ...")
+    LOGGER.debug("added health monitor ...")
 
     lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
 
@@ -239,7 +244,7 @@ async def configure_lb(client, lb, name, master_ips):
             lb = lb['loadbalancers'][0]
             await asyncio.sleep(0.5)
 
-        logger.debug("added pool member %s ..." % ip)
+        LOGGER.debug("added pool member %s ...", ip)
 
     return lb
 
@@ -290,13 +295,28 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
     else:
         cidr = neutron.find_resource('subnet', subnet)['cidr']
 
-    logger.debug("configuring security group ...")
+    LOGGER.debug("configuring security group ...")
     # allow communication to the API server from within the cluster
     # on port 80
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
                  port_range_max=80, port_range_min=80,
                  remote_ip_prefix=cidr)
+    # Allow all incoming TCP/UDP inside the cluster range
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='UDP',
+                 remote_ip_prefix=cidr)
+    add_sec_rule(neutron, sec_group_id,
+                 direction='ingress', protocol='TCP',
+                 remote_ip_prefix=cidr)
+    # allow all outgoing
+    # we are behind a physical firewall anyway
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='UDP',
+                 )
+    add_sec_rule(neutron, sec_group_id,
+                 direction='egress', protocol='TCP',
+                 )
     # Allow IPIP communication
     add_sec_rule(neutron, sec_group_id,
                  direction='egress', protocol=4,
@@ -352,7 +372,7 @@ def delete_loadbalancer(client, name):
         except IndexError:
             break
         except Exception as E:
-            logger.debug("Error while deleting pool: %s", E)
+            LOGGER.debug("Error while deleting pool: %s", E)
             time.sleep(0.5)
 
     lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
@@ -373,15 +393,15 @@ def delete_loadbalancer(client, name):
             break
 
         except Exception as E:
-            logger.debug("Error while deleting listener: %s " % E)
+            LOGGER.debug("Error while deleting listener: %s " % E)
             continue
 
     while True:
         try:
             client.delete_loadbalancer(lb['id'])
             break
-        except Exception as E:
-            logger.debug("Error while deleting loadbalancer: %s " % E)
+        except Exception as exp:
+            LOGGER.debug("Error while deleting loadbalancer: %s ", exp)
             continue
 
 
@@ -391,21 +411,27 @@ def read_os_auth_variables(trim=True):
     yield key: value pairs which can be used for
     OS connection
     """
-    d = {}
-    for k, v in os.environ.items():
-        if k.startswith("OS_"):
-            d[k[3:].lower()] = v
+    env = {}
+    for key, val in os.environ.items():
+        if key.startswith("OS_"):
+            env[key[3:].lower()] = val
     if trim:
         not_in_default_rc = ('interface', 'region_name',
                              'identity_api_version', 'endpoint_type',
                              )
 
-        [d.pop(i) for i in not_in_default_rc if i in d]
+        list(env.pop(i) for i in not_in_default_rc if i in env)
 
-    return d
+    return env
 
 
 def get_clients():
+    """
+    get openstack low level clients
+
+    This should be replaced in the future with ``openstack.connect``
+    """
+
     try:
         auth = identity.Password(**read_os_auth_variables())
         sess = session.Session(auth=auth)
@@ -425,6 +451,9 @@ def get_clients():
 
 
 class OSCloudConfig:
+    """
+    Data class to hold the configuration file for kubernetes cloud provider
+    """
 
     def __init__(self, subnet_id=None):
         os_vars = read_os_auth_variables(trim=False)
@@ -433,7 +462,8 @@ class OSCloudConfig:
         self.password = os_vars['password']
         self.auth_url = os_vars['auth_url']
         self.__dict__.update(os_vars)
-        self.tenant_id = self.project_id
+        # pylint does not catch the additions of member we add above
+        self.tenant_id = self.project_id  # pylint: disable=no-member
         self.__dict__.pop('project_id')
         del os_vars
 
@@ -446,9 +476,12 @@ class OSCloudConfig:
         tenant-id=%s
         domain-name=%s
         region=%s
-        """ % (self.username, self.password, self.auth_url,
-               self.tenant_id, self.user_domain_name,
-               self.region_name)).lstrip()
+        """ % (self.username,
+               self.password,
+               self.auth_url,  # pylint: disable=no-member
+               self.tenant_id,
+               self.user_domain_name,  # pylint: disable=no-member
+               self.region_name)).lstrip()  # pylint: disable=no-member
         lb = ""
         if self.subnet_id:
             lb = textwrap.dedent("""
@@ -464,7 +497,10 @@ class OSCloudConfig:
 
 
 class OSClusterInfo:
+    """
+    collect various information on the cluster
 
+    """
     def __init__(self, nova_client, neutron_client, config):
 
         self.keypair = nova_client.keypairs.get(config['keypair'])
@@ -502,7 +538,8 @@ class OSClusterInfo:
 
     def _status(self, names):
         """
-        Finds if all mahcines in the group exists
+        Finds if all mahcines in the group exists, if the don't exist create
+        a network port for the machine
         """
         for name in names:
             try:

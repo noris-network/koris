@@ -1,3 +1,9 @@
+"""
+Builder
+=======
+
+Build a kubernetes cluster on a cloud
+"""
 import asyncio
 import base64
 import os
@@ -27,7 +33,7 @@ from .openstack import (get_clients,
                         config_sec_group,
                         configure_lb)
 
-logger = get_logger(__name__)
+LOGGER = get_logger(__name__)
 
 nova, neutron, cinder = get_clients()
 
@@ -43,7 +49,7 @@ class NodeBuilder:
         config (dict) - the parsed configuration file
     """
     def __init__(self, nova, neutron, config):
-        logger.info(info(cyan(
+        LOGGER.info(info(cyan(
             "gathering node information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
 
@@ -121,7 +127,7 @@ class ControlPlaneBuilder:
 
     def __init__(self, nova, neutron, config):
 
-        logger.info(info(cyan(
+        LOGGER.info(info(cyan(
             "gathering control plane information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
 
@@ -196,7 +202,7 @@ class ClusterBuilder:
 
         nb = NodeBuilder(nova, neutron, config)
         cpb = ControlPlaneBuilder(nova, neutron, config)
-        logger.debug(info("Done collecting infromation from OpenStack"))
+        LOGGER.debug(info("Done collecting infromation from OpenStack"))
         worker_nodes = nb.get_nodes_info(nova, neutron, config)
 
         cp_hosts = cpb.get_hosts_info()
@@ -222,9 +228,9 @@ class ClusterBuilder:
 
         # stupid check which needs to be improved!
         if not (nics + cp_nics):
-            logger.info(info(red("Skipping certificate creations")))
+            LOGGER.info(info(red("Skipping certificate creations")))
             tasks = []
-            logger.debug(info("Not creating any tasks"))
+            LOGGER.debug(info("Not creating any tasks"))
         else:
             loop = asyncio.get_event_loop()
             cluster_info = OSClusterInfo(nova, neutron, config)
@@ -236,7 +242,7 @@ class ClusterBuilder:
             subnet = config.get('subnet')
             kwargs = {'subnet': subnet} if subnet else {}
             lb = create_loadbalancer(
-                neutron, config['private_net'],
+                neutron,
                 config['cluster-name'],
                 **kwargs)
 
@@ -250,7 +256,7 @@ class ClusterBuilder:
             lb = lb['loadbalancer']
             ips.append(lb['vip_address'])
             certs = create_certs(config, cluster_host_names, ips)
-            logger.debug(info("Done creating nodes tasks"))
+            LOGGER.debug(info("Done creating nodes tasks"))
 
             if no_cloud_init:
                 certs = None
@@ -275,34 +281,38 @@ class ClusterBuilder:
                                               etcd_host_list,
                                               no_cloud_init=no_cloud_init)
 
-            logger.debug(info("Done creating control plane tasks"))
+            LOGGER.debug(info("Done creating control plane tasks"))
 
             tasks = cp_tasks + tasks
         if tasks:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
-            loop.run_until_complete(asyncio.wait(tasks))
+            loop.run_until_complete(asyncio.gather(*tasks))
             loop.close()
             kubeconfig = write_kubeconfig(config, lb['vip_address'],
                                           admin_token,
                                           True)
 
-            logger.info("Waiting for K8S API server to launch")
+            LOGGER.info("Waiting for K8S API server to launch")
 
             manifest_path = os.path.join("kolt", "deploy", "manifests")
             k8s = K8S(kubeconfig, manifest_path)
 
             while not k8s.is_ready:
-                logger.debug("Kubernetes API Server is still not ready ...")
+                LOGGER.debug("Kubernetes API Server is still not ready ...")
                 time.sleep(2)
 
-            logger.debug("Kubernetes API Server is ready !!!")
+            LOGGER.debug("Kubernetes API Server is ready !!!")
 
             etcd_endpoints = ",".join(
                 "https://%s:%d" % (
                     etcd_host.ip_address, etcd_host.port - 1)
                 for etcd_host in etcd_host_list)
+            tries = 0
             while True:
+                tries += 1
+                if tries > 60:
+                    break
                 try:
                     k8s.apply_calico(b64_key(certs["k8s"].key),
                                      b64_cert(certs["k8s"].cert),
@@ -310,7 +320,9 @@ class ClusterBuilder:
                                      etcd_endpoints)
                     k8s.apply_kube_dns()
                     break
-                except kubernetes.client.rest.ApiException:
+                except kubernetes.client.rest.ApiException as E:
+                    LOGGER.debug(E)
+                    LOGGER.debug(dir(E))
                     continue
 
         if no_cloud_init:
