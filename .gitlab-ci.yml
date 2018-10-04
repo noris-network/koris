@@ -3,6 +3,7 @@ stages:
  - unittest
  - integration-test
  - cleanup
+ - documentation
 
 static-analysis:
   stage: static-analysis
@@ -64,3 +65,16 @@ cleanup:
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
   - kolt destroy tests/koris_test.yml --force
   when: always
+
+documentation:
+  stage: documentation
+  image: oz123/sphinx-server
+  script:
+  - which sphinx-build
+  - make html
+  - mv _build/html/ public/
+  artifacts:
+    paths:
+    - public
+  only:
+  - master
