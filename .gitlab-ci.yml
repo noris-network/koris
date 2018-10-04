@@ -2,6 +2,7 @@ stages:
  - static-analysis
  - unittest
  - integration-test
+ - master-security-checks
  - cleanup
 
 static-analysis:
