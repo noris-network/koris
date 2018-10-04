@@ -10,7 +10,6 @@ Welcome to colt's documentation!
    usage
    modules
    contributing
-   history
 
 Indices and tables
 ==================
