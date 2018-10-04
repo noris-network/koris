@@ -20,6 +20,7 @@ integration-test:
   - cat tests/koris_test.yml
   - kolt k8s tests/koris_test.yml
   - echo $KUBECONFIG
+  - cat $KUBECONFIG
   - kubectl get nodes  || kolt destroy tests/koris_test.yml --force
   - kubectl run nginx --image=nginx --port=80 || kolt destroy tests/koris_test.yml --force
   - kubectl -n kube-system patch deployment nginx -p $LB_CONFIG
