@@ -9,7 +9,6 @@ integration-test:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
-  - "source ./openstack-lb-var.sh"
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
@@ -28,6 +27,11 @@ integration-test:
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
   - sleep 90
   - kubectl get services
+  - kubectl get pods
+  - sleep 90
+  - kubectl get services
+  - kubectl get pods
+  - ping -c 10 $(kubectl describe svc nginx | grep IP | cut  -d":" -f2 | tr -d " ")
   - curl  http://$(kubectl describe svc nginx | grep IP | cut  -d":" -f2 | tr -d " ")
   
 cleanup:
