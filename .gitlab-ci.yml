@@ -33,6 +33,7 @@ integration-test:
   - "source ./koris-env/bin/activate"
   - "cd -"
   - "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && mv kubectl /usr/local/bin/kubectl  && chmod  777  /usr/local/bin/kubectl"
+  - sed -i "s/%%cluste-name%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
   - kolt k8s tests/koris_test.yml
   - echo $KUBECONFIG
