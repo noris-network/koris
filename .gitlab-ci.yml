@@ -24,7 +24,7 @@ integration-test:
   - echo $KUBECONFIG
   - kubectl get nodes
   - kubectl run nginx --image=nginx --port=80
-  - kubectl patch deployment nginx -n kube-system -p $LB_CONFIG
+  - kubectl patch deployment.apps nginx -n kube-system -p $LB_CONFIG
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
   - sleep 90
   - kubectl get services
