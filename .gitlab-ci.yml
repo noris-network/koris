@@ -25,15 +25,11 @@ integration-test:
   - kubectl run nginx --image=nginx --port=80
   - kubectl patch deployment.apps nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}'
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
-  - sleep 90
+  - sleep 200
   - kubectl get services
   - kubectl get pods
-  - sleep 90
-  - kubectl get services
-  - kubectl get pods
-  - ping -c 10 $(kubectl describe svc nginx | grep IP | cut  -d":" -f2 | tr -d " ")
-  - curl  http://$(kubectl describe svc nginx | grep IP | cut  -d":" -f2 | tr -d " ")
-  
+  - curl http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
+
 cleanup:
   stage: cleanup
   image: mleiner/kolt-base:0.2
