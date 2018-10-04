@@ -68,10 +68,12 @@ Get started
    If you exist the virtual environment, you need to activate it again as described
    in step 2.
 
-6. Before you can run ``koris`` you need to source your openstack rc file::
+6. Before you can run ``koris`` you need to source your openstack rc file:
+
+.. code:: shell
 
    $ source ~/path/to/your/openstack-openrc.sh
-   Please enter your OpenStack Password for project <PROJECT> as user <USEER>:
+   Please enter your OpenStack Password for project <PROJECT> as user <USEER>\:
 
 6. To run ``koris`` issue koris <subcommand>. You can get a list of subcommands
    with ``--help``

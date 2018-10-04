@@ -45,13 +45,17 @@ class NodeZoneNic:
 
 def distribute_hosts(hosts_zones):
     """
-    Given  [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]
-    return:
-    [(host1, zone),
-     (host2, zone),
-     (host3, zone),
-     (host4, zone),
-     (host5, zone)]
+    Distribute hosts through availability zones
+
+    Args:
+        hosts_zones (list) - a list of tuples with hosts names and zones
+
+        [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]
+
+    Return:
+        list in the form
+
+        [(host1, zone), (host2, zone), ... (host4, zone), (host5, zone)]
     """
     for item in hosts_zones:
         hosts, zone = item[0], item[1]

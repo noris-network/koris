@@ -1,5 +1,5 @@
-kolt
-====
+Developer docs
+==============
 
 .. toctree::
    :maxdepth: 4

@@ -1,4 +1,4 @@
-Welcome to colt's documentation!
+Welcome to kolt's documentation!
 ======================================
 
 .. toctree::
