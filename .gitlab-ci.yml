@@ -1,7 +1,5 @@
 stages:
-#- static-analysis
-#- unittest
-  - integration-test
+ - integration-test
 
 static-analysis:
   stage: static-analysis
