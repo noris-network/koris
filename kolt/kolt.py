@@ -13,11 +13,11 @@ import yaml
 
 from mach import mach1
 
+from kolt.cloud.openstack import get_clients
 from .cli import delete_cluster
 from .ssl import create_certs
-from kolt.cloud.openstack import get_clients
 
-from .util.hue import red, info
+from .util.hue import red, info  # pylint: disable=no-name-in-module
 from .ssl import CertBundle
 from .util.util import (get_logger,
                         get_server_info_from_openstack,
@@ -30,13 +30,18 @@ LOGGER = get_logger(__name__)
 
 @mach1()
 class Kolt:
-
+    """
+    The main entry point for the program. This class does the CLI parsing
+    and descides which action shoud be taken
+    """
     def __init__(self):
 
-        global nova, neutron, cinder
         nova, neutron, cinder = get_clients()
+        self.nova = nova
+        self.neutron = neutron
+        self.cinder = cinder
 
-    def certs(self, config, key=None, ca=None):
+    def certs(self, config, key=None, ca=None):  # pylint: disable=invalid-name
         """
         Create cluster certificates
         """
@@ -45,10 +50,10 @@ class Kolt:
         else:
             ca_bundle = None
 
-        names, ips = get_server_info_from_openstack(config, nova)
+        names, ips = get_server_info_from_openstack(config, self.nova)
         create_certs(config, names, ips, ca_bundle=ca_bundle)
 
-    def k8s(self, config):
+    def k8s(self, config):  # pylint: disable=no-self-use
         """
         Bootstrap a Kubernetes cluster
 
@@ -61,7 +66,7 @@ class Kolt:
         builder = ClusterBuilder()
         builder.run(config)
 
-    def kubespray(self, config, inventory=None):
+    def kubespray(self, config, inventory=None):  # pylint: disable=no-self-use
         """
         Launch machines on opentack and write a configuration for kubespray
         """
@@ -72,8 +77,8 @@ class Kolt:
         cfg = builder.run(config, no_cloud_init=True)
 
         if inventory:
-            with open(inventory, 'w') as f:
-                cfg.write(f)
+            with open(inventory, 'w') as fh:
+                cfg.write(fh)
         else:
             print(info("Here is your inventory ..."))
             print(
@@ -81,17 +86,23 @@ class Kolt:
                     "You can save this inventory to a file with the option -i"))  # noqa
             cfg.write(sys.stdout)
 
-    def destroy(self, config: str, force: bool=False):
+    def destroy(self, config: str, force: bool = False):
         """
         Delete the complete cluster stack
         """
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        delete_cluster(config, nova, neutron, force)
+        delete_cluster(config, self.nova, self.neutron, force)
         sys.exit(0)
 
 
 def main():
+    """
+    run and execute kolt
+    """
     k = Kolt()
-    k.run()
+    # pylint misses the fact that Kolt is decorater with mach.
+    # the mach decortaor analyzes the methods in the class and dynamically
+    # creates the CLI parser. It also adds the method run to the class.
+    k.run()  # pylint: disable=no-member
