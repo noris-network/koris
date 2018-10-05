@@ -347,8 +347,15 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
 
 
 def delete_loadbalancer(client, name):
+    """
+    Delete the cluster API loadbalancer
+
+    Args:
+        client (neutron client)
+        name (str) - the name of the load balancer to delete
+    """
     try:
-        client.delete_lbaas_healthmonitor(
+        client.delete_lbaas_healthmonit or(
             client.list_lbaas_healthmonitors(
                 {"name": "%s-health" % name})['healthmonitors'][0]['id'])
     except IndexError:
@@ -392,15 +399,15 @@ def delete_loadbalancer(client, name):
         except IndexError:
             break
 
-        except Exception as E:
-            LOGGER.debug("Error while deleting listener: %s " % E)
+        except Exception as err:
+            LOGGER.debug("Error while deleting listener: %s " % err)
             continue
 
     while True:
         try:
             client.delete_loadbalancer(lb['id'])
             break
-        except Exception as exp:
+        except Exception as exp:  # pylint: disable=broad-except
             LOGGER.debug("Error while deleting loadbalancer: %s ", exp)
             continue
 
@@ -571,34 +578,49 @@ class OSClusterInfo:
 
     @property
     def nodes_names(self):
+        """get the host names of all worker nodes"""
         return host_names("node", self.n_nodes, self.name)
 
     @property
     def management_names(self):
+        """get the host names of all control plane nodes"""
         return host_names("master", self.n_masters, self.name)
 
     def master_args_builder(self, user_data, hosts):
-
+        """return a list containing all args for building a master task"""
         return [self.master_flavor, self.image, self.keypair, self.secgroups,
                 user_data, hosts]
 
     def node_args_builder(self, user_data, hosts):
+        """return a list containing all args for building a worker node task"""
 
         return [self.node_flavor, self.image, self.keypair, self.secgroups,
                 user_data, hosts]
 
     def distribute_management(self):
+        """
+        distribute control plane nodes in the different availability zones
+        """
         return list(get_host_zones(self.management_names, self.azones))
 
     def distribute_nodes(self):
+        """
+        distribute worker nodes in the different availability zones
+        """
         return list(get_host_zones(self.nodes_names, self.azones))
 
     def assign_nics_to_management(self, management_zones, nics):
+        """
+        assign network interfaces to control plane nodes
+        """
         for idx, nic in enumerate(nics):
             management_zones[idx].nic = [{'net-id': self.net['id'],
-                                         'port-id': nic['port']['id']}]
+                                          'port-id': nic['port']['id']}]
 
     def assign_nics_to_nodes(self, nodes_zones, nics):
+        """
+        assign network interfaces to worker nodes
+        """
         for idx, nic in enumerate(nics):
             nodes_zones[idx].nic = [{'net-id': self.net['id'],
                                      'port-id': nic['port']['id']}]
