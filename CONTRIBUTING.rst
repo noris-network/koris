@@ -15,18 +15,13 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://gitlab.noris.de/PI/colt/issues.
+Report bugs at https://gitlab.noris.de/PI/kolt/issues.
 
 If you are reporting a bug, please include:
 
 * Your operating system name and version.
 * Any details about your local setup that might be helpful in troubleshooting.
 * Detailed steps to reproduce the bug.
-
-Test different ansible kubespray configurations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
- TODO: document here how to test ansible configurations
 
 Implement Features
 ~~~~~~~~~~~~~~~~~~
@@ -37,14 +32,14 @@ and "help wanted" is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-colt could always use more documentation, whether as part of the
-official colt docs, in docstrings, or even on the web in blog posts,
+kolt could always use more documentation, whether as part of the
+official kolt docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to talk to us in `Docker Gilde`_.
+The best way to send feedback is to talk to us in `Kolt Channel`_.
 
 
 If you are proposing a feature:
@@ -59,16 +54,23 @@ Get Started!
 
 Ready to contribute? Here's how to set up `colt` for local development.
 
-1. Fork the `colt` repo on GitHub.
+1. Fork the `kolt` repo on gitlab.
 2. Clone your fork locally::
 
-    $ git clone git@gitlab.noris.net:PI/colt.git
+    $ git clone git@gitlab.noris.net:PI/kolt.git
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
+3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper
+   installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv colt
-    $ cd colt/
+    $ cd kolt/
+    $ python3 -m venv myenv
+    $ source myenv/bin/activate
     $ python setup.py develop
+    $ pip install -r requirements_dev.txt
+
+.. note::
+   if you are familiar with more modern python development tools like
+   ``pipenv``, you can also use pipenv (we have a ``Pipenv`` file in the repository).
 
 4. Create a branch for local development::
 
@@ -79,9 +81,8 @@ Ready to contribute? Here's how to set up `colt` for local development.
 5. When you're done making changes, check that your changes pass flake8 and the
    tests, including testing other Python versions with tox::
 
-    $ flake8 colt tests
-    $ python setup.py test or py.test
-    $ tox
+    $ make lint
+    $ make test
 
    To get flake8 and tox, just pip install them into your virtualenv.
 
@@ -91,7 +92,7 @@ Ready to contribute? Here's how to set up `colt` for local development.
     $ git commit -m "Your detailed description of your changes."
     $ git push origin name-of-your-bugfix-or-feature
 
-7. Submit a pull request through the GitHub website.
+7. Submit a merge request through the Gitlab website.
 
 Pull Request Guidelines
 -----------------------
@@ -110,7 +111,6 @@ Tips
 
 To run a subset of tests::
 
-$ py.test tests.test_colt
+$ py.test tests.test_kolt
 
-
-.. _Docker Gilde: https://hipchat.noris.de/chat/room/544
+.. _Kolt Channel: https://hipchat.noris.de/chat/room/664

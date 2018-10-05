@@ -51,9 +51,9 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
-lint: pylint flake8
+lint: pylint flake8  ## check style with pylint and flake8
 
-pylint: ## check style with flake8
+pylint: ## check style with pylint
 	pylint --rcfile=.pylintrc kolt || pylint-exit $$?
 
 flake8: ## check style with flake8
