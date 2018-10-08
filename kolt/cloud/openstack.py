@@ -355,7 +355,7 @@ def delete_loadbalancer(client, name):
         name (str) - the name of the load balancer to delete
     """
     try:
-        client.delete_lbaas_healthmonit or(
+        client.delete_lbaas_healthmonitor(
             client.list_lbaas_healthmonitors(
                 {"name": "%s-health" % name})['healthmonitors'][0]['id'])
     except IndexError:
