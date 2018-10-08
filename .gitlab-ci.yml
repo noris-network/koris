@@ -40,7 +40,7 @@ integration-test:
   - echo $KUBECONFIG
   - kubectl get nodes
   - kubectl run nginx --image=nginx --port=80
-  - while [ $(kubectl --kubeconfig=koltdev-admin.conf describe pod nginx | grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; do echo "Waiting for container...." ;sleep 2; done;
+  - while [ $(kubectl describe pod nginx | grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; do echo "Waiting for container...." ;sleep 2; done;
   - kubectl patch deployment.apps nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}'
   - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
   - sleep 200
