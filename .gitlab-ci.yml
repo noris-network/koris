@@ -9,7 +9,7 @@ static-analysis:
   stage: static-analysis
   image: mleiner/kolt-base:0.2
   script:
-    - sudo apk add --update py-cryptography python-dev
+    - sudo apk add --update py3-cryptography python3-dev libffi-dev
     - pip3 install -U pip
     - pip3 install flake8 pylint pylint-exit
     - make lint
@@ -18,7 +18,7 @@ unittest:
   stage: unittest
   image: mleiner/kolt-base:0.2
   script:
-    - sudo apk add --update py-cryptography python-dev
+    - sudo apk add --update py3-cryptography python3-dev libffi-dev
     - pip3 install -U pip
     - pip3 install -e .
     - make coverage PY=python3
@@ -30,7 +30,7 @@ integration-test:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
-  - sudo apk add py-cryptography
+  - sudo apk add --update py3-cryptography python3-dev libffi-dev
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
