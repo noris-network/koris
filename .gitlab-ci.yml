@@ -52,6 +52,7 @@ integration-test:
 
   - kubectl get services
   - kubectl get pods
+  - echo http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
   - curl http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
 
 master-security-checks:
