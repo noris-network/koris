@@ -53,6 +53,7 @@ integration-test:
   - kubectl get pods
   - echo $(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
   - curl http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
+  - kubectl delete svc nginx
 
 cleanup:
   stage: cleanup
