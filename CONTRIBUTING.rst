@@ -178,7 +178,7 @@ With every minor release of ``kolt`` (X.Y, but not X.Y.Z) we will check that
 all the dependencies are the latest, such that we won't have software rot, or
 older packages with CVEs in our dependencies. This is done with::
 
-   $ pipenv lock -r > requirements.txt
+   $ pipenv lock -r | cut -d" " -f 1 > requirements.txt
    $ make test
 
 If all tests pass (including integration tests) we update ``requirements.txt``
