@@ -7,7 +7,7 @@ stages:
 
 static-analysis:
   stage: static-analysis
-  image: oz123/koris:0.1
+  image: oz123/koris-alpine:0.1.1
   script:
     - sudo apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
     - pip3 install -U pip
@@ -16,7 +16,7 @@ static-analysis:
 
 unittest:
   stage: unittest
-  image: oz123/koris:0.1
+  image: oz123/koris-alpine:0.1
   script:
     - sudo apk add --update py3-cryptography python3-dev libffi-dev
     - pip3 install -U pip
@@ -25,7 +25,7 @@ unittest:
 
 integration-test:
   stage: integration-test
-  image: oz123/koris:0.1.1
+  image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -53,7 +53,7 @@ integration-test:
 
 cleanup:
   stage: cleanup
-  image: oz123/koris:0.1
+  image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -70,7 +70,7 @@ cleanup:
 
 documentation:
   stage: documentation
-  image: oz123/koris:0.1
+  image: oz123/koris-alpine:0.1.1
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
