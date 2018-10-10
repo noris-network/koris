@@ -25,7 +25,7 @@ unittest:
 
 integration-test:
   stage: integration-test
-  image: oz123/koris:0.1
+  image: oz123/koris:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -33,10 +33,6 @@ integration-test:
   - sudo apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
-  - "source ./koris-env/bin/activate"
-  - "cd -"
-  - "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && mv kubectl /usr/local/bin/kubectl  && chmod  777  /usr/local/bin/kubectl"
   - sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
   - cat tests/koris_test.yml

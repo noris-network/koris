@@ -84,9 +84,9 @@ docker-ubuntu:
 	docker build -t $(ORG)/koris:$(TAG) -f docker/Dockerfile.ubuntu .
 
 docker-push-alpine:
-	docker push -t $(ORG)/koris-alpine:$(TAG)
+	docker push $(ORG)/koris-alpine:$(TAG)
 docker-push:
-	docker push -t $(ORG)/koris:$(TAG)
+	docker push $(ORG)/koris:$(TAG)
 
 
 servedocs: docs ## compile the docs watching for changes
