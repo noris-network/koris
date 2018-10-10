@@ -15,7 +15,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://gitlab.noris.de/PI/kolt/issues.
+Report bugs at our `JIRA Kolt`_ project.
 
 If you are reporting a bug, please include:
 
@@ -192,3 +192,4 @@ To run a subset of tests::
 $ py.test tests.test_kolt
 
 .. _Kolt Channel: https://hipchat.noris.de/chat/room/664
+.. _JIRA Kolt: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KOLT
