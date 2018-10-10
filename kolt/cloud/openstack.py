@@ -36,6 +36,10 @@ def remove_cluster(name, nova, neutron):
     cluster_suffix = "-%s" % name
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
+    if not servers:
+        print(red("No servers were found ..."))
+        print(red("Could not remove cluster ..."))
+        sys.exit(1)
 
     print("Scheduling the deletion of ", servers)
 
