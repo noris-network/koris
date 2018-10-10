@@ -37,6 +37,8 @@ def remove_cluster(name, nova, neutron):
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
 
+    print("Scheduling the deletion of ", servers)
+
     async def del_server(server):
         await asyncio.sleep(1)
         nics = [nic for nic in server.interface_list()]

@@ -75,7 +75,7 @@ documentation:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
   - make -C docs html
-  - mv _build/html/ public/
+  - mv docs/_build/html/ public/
   artifacts:
     paths:
     - public
