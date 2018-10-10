@@ -15,7 +15,8 @@ from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import NotFound as NeutronNotFound
-from novaclient.exceptions import (NotFound as NovaNotFound, ClientException as NovaClientException)  # noqa
+from novaclient.exceptions import (NotFound as NovaNotFound,
+                                   ClientException as NovaClientException)  # noqa
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -218,9 +219,9 @@ async def configure_lb(client, lb, name, master_ips):
 
     client.create_lbaas_healthmonitor(
         {'healthmonitor':
-            {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
-             "pool_id": pool['pool']['id'],
-             "name": "%s-health" % name}})
+         {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
+          "pool_id": pool['pool']['id'],
+          "name": "%s-health" % name}})
 
     LOGGER.debug("added health monitor ...")
 
@@ -362,14 +363,17 @@ def delete_loadbalancer(client, name):
         pass
 
     try:
-        lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+        lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
     except IndexError:
         return
 
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
+        try:
+            lb = lb['loadbalancers'][0]
+            time.sleep(0.5)
+        except IndexError:
+            return
 
     while True:
         try:
@@ -378,11 +382,11 @@ def delete_loadbalancer(client, name):
                     {"name": "%s-pool" % name})['pools'][0]['id'])
         except IndexError:
             break
-        except Exception as E:
-            LOGGER.debug("Error while deleting pool: %s", E)
+        except Exception as err:
+            LOGGER.debug("Error while deleting pool: %s", err)
             time.sleep(0.5)
 
-    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+    lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
 
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
