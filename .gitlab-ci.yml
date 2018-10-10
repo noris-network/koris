@@ -3,7 +3,7 @@ stages:
  - unittest
  - integration-test
  - cleanup
- - documentation
+ - pages
 
 static-analysis:
   stage: static-analysis
@@ -69,8 +69,8 @@ cleanup:
   - kolt destroy tests/koris_test.yml --force
   when: always
 
-documentation:
-  stage: documentation
+pages:
+  stage: pages
   image: oz123/koris-alpine:0.1.1
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
