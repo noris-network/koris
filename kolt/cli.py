@@ -16,16 +16,13 @@ from .util.util import get_kubeconfig_yaml, get_logger
 LOGGER = get_logger(__name__)
 
 
-def delete_cluster(config, nova, neutron, force=False):
+def delete_cluster(cluster_name, nova, neutron, force=False):
     """
     completly delete a cluster from openstack.
 
     This function removes all compute instance, volume, loadbalancer,
     security groups rules and security groups
     """
-    print(red("You are about to destroy your cluster '{}'!!!".format(
-        config["cluster-name"])))
-
     if not force:
         print(red("Are you really sure ? [y/N]"))
         ans = input(red("ARE YOU REALLY SURE???"))
@@ -33,7 +30,7 @@ def delete_cluster(config, nova, neutron, force=False):
         ans = 'y'
 
     if ans.lower() == 'y':
-        remove_cluster(config["cluster_name"], nova, neutron)
+        remove_cluster(cluster_name, nova, neutron)
     else:
         sys.exit(1)
 

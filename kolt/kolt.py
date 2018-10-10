@@ -64,7 +64,12 @@ class Kolt:
             config = yaml.safe_load(stream)
 
         builder = ClusterBuilder()
-        builder.run(config)
+        try:
+            builder.run(config)
+        except Exception as err:
+            print(red("Error encoutered ... ", err))
+            delete_cluster(config['cluster-name'], self.nova, self.neutron,
+                           True)
 
     def kubespray(self, config, inventory=None):  # pylint: disable=no-self-use
         """
@@ -92,6 +97,9 @@ class Kolt:
         """
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
+
+        print(red("You are about to destroy your cluster '{}'!!!".format(
+              config['cluster-name'])))
 
         delete_cluster(config, self.nova, self.neutron, force)
         sys.exit(0)
