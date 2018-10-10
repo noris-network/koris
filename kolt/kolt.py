@@ -98,10 +98,11 @@ class Kolt:
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        print(red("You are about to destroy your cluster '{}'!!!".format(
-              config['cluster-name'])))
+        print(red(
+            "You are about to destroy your cluster '{}'!!!".format(
+                config['cluster-name'])))
 
-        delete_cluster(config, self.nova, self.neutron, force)
+        delete_cluster(config["cluster-name"], self.nova, self.neutron, force)
         sys.exit(0)
 
 
