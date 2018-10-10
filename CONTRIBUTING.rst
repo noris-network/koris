@@ -109,7 +109,6 @@ Before you submit a pull request, check that it meets these guidelines:
 3. The pull request should work for Python 3.4, 3.5 and 3.6.  Check
    and make sure that the tests pass for all supported Python versions.
 
-
 .. _dependencies:
 
 How we manage kolt's dependencies
@@ -210,6 +209,12 @@ Tips
 To run a subset of tests::
 
 $ py.test tests.test_kolt
+
+Developer helper utils - Makefile
++++++++++++++++++++++++++++++++++
+
+The repository contains an extensive ``Makefile`` which is mainly for helping you
+develop faster. Issue ``make help`` to see all th available functions.
 
 .. _Kolt Channel: https://hipchat.noris.de/chat/room/664
 .. _JIRA Kolt: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KOLT

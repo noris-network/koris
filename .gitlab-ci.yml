@@ -3,7 +3,7 @@ stages:
  - unittest
  - integration-test
  - cleanup
- - documentation
+ - pages
 
 static-analysis:
   stage: static-analysis
@@ -65,17 +65,18 @@ cleanup:
   - "cd -"
   - sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
   - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
+  - cat tests/koris_test.yml
   - kolt destroy tests/koris_test.yml --force
   when: always
 
-documentation:
-  stage: documentation
+pages:
+  stage: pages
   image: oz123/koris-alpine:0.1.1
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
   - make -C docs html
-  - mv _build/html/ public/
+  - mv docs/_build/html/ public/
   artifacts:
     paths:
     - public

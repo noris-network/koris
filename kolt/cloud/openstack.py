@@ -21,11 +21,53 @@ from novaclient.exceptions import (NotFound as NovaNotFound,
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
+from kolt.cloud import OpenStackAPI
 from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
 LOGGER = get_logger(__name__)
+
+
+def remove_cluster(name, nova, neutron):
+    """
+    Delete a cluster from OpenStack
+    """
+    cluster_suffix = "-%s" % name
+    servers = [server for server in nova.servers.list() if
+               server.name.endswith(cluster_suffix)]
+
+    print("Scheduling the deletion of ", servers)
+
+    async def del_server(server):
+        await asyncio.sleep(1)
+        nics = [nic for nic in server.interface_list()]
+        server.delete()
+        list(neutron.delete_port(nic.id) for nic in nics)
+        print("deleted %s ..." % server.name)
+
+    loop = asyncio.get_event_loop()
+    tasks = [loop.create_task(del_server(server)) for server in servers]
+
+    if tasks:
+        loop.run_until_complete(asyncio.wait(tasks))
+
+    loop.close()
+    delete_loadbalancer(neutron, cluster_suffix)
+    connection = OpenStackAPI.connect()
+    secg = connection.list_security_groups(
+        {"name": '%s-sec-group' % cluster_suffix})
+    if secg:
+        for sg in secg:
+            for rule in sg.security_group_rules:
+                connection.delete_security_group_rule(rule['id'])
+
+            for port in connection.list_ports():
+                if sg.id in port.security_groups:
+                    connection.delete_port(port.id)
+
+    connection.delete_security_group(
+        '%s-sec-group' % cluster_suffix)
 
 
 async def create_volume(cinder, image, zone, klass, size=25):
@@ -98,18 +140,22 @@ async def create_instance_with_volume(name, zone, flavor, image,
                                        block_device_mapping_v2=[volume_data],
                                        userdata=userdata,
                                        )
-
-    except NovaClientException as nce:
+    except (Exception) as err:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
-        print(info(yellow(nce.message)))
-        # TODO: clean volume and nic here
+        print(info(red("Removing cluser ...")))
+        remove_cluster(name.split("-")[-1], nova, neutron)
+        print(info(yellow("The exception is", str((err)))))
+
+    except (NovaClientException) as err:
+        print(info(red("Something weired happend, I so I didn't create %s" %
+                       name)))
+        print(info(yellow(err.message)))
+        remove_cluster(name.split("-")[-1], nova, neutron)
     except KeyboardInterrupt:
         print(info(red("Oky doky, stopping as you interrupted me ...")))
         print(info(red("Cleaning after myself")))
-        # TODO: clean volume and nic here
-        # clean volume
-        cinder.volumes.delete(volume_data["id"])
+        remove_cluster(name.split("-")[-1], nova. neutron)
 
     inst_status = instance.status
     print("waiting for 5 seconds for the machine to be launched ... ")
