@@ -184,6 +184,26 @@ older packages with CVEs in our dependencies. This is done with::
 If all tests pass (including integration tests) we update ``requirements.txt``
 by committing the changes.
 
+Git collaborations guide lines
+++++++++++++++++++++++++++
+
+1. Never `(ever ever ever)**10` use::
+
+   $ git commit -a
+
+Instead make small commits that are easy to reason about and to understand.
+
+1. Never `(ever ever ever)**10` use::
+
+   $ git commit -m "I made some change"
+
+Instead write a `nice commit message`_ with a short title and informative body.
+Make sure the body contains a reference to the ticket you are working on.
+Make sure your titles are meaningful, they will appear in the ChangeLog!
+
+
+.. _nice commit message: https://code.likeagirl.io/useful-tips-for-writing-better-git-commit-messages-808770609503
+
 Tips
 ----
 
