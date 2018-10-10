@@ -28,11 +28,11 @@ Get started
 3. you are now inside a virtual environment to leave it type `exit`
 
 4. To install koris, use a machine which has access to gitlab.noris.net
-   replace <LATEST_TAG> with latest tag, for example 0.4.1.
+   replace <LATEST_TAG> with latest tag, for example 0.5
 
 .. code:: shell
 
-   $ pip install  -e git+git@gitlab.noris.net:PI/kolt.git@v<LATEST_TAG>#egg=kolt
+   $ pip install https://gitlab.noris.net/PI/kolt/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
 
 5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
    If you exist the virtual environment, you need to activate it again as described
