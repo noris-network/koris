@@ -7,12 +7,10 @@ misc functions to interact with the cluster, usually called from
 
 Don't use directly
 """
-import asyncio
 import sys
 
 from kolt.util.hue import red, yellow  # pylint: disable=no-name-in-module
-from kolt.cloud.openstack import delete_loadbalancer
-from kolt.cloud import OpenStackAPI
+from kolt.cloud.openstack import remove_cluster
 from .util.util import get_kubeconfig_yaml, get_logger
 
 LOGGER = get_logger(__name__)
@@ -35,40 +33,7 @@ def delete_cluster(config, nova, neutron, force=False):
         ans = 'y'
 
     if ans.lower() == 'y':
-        cluster_suffix = "-%s" % config['cluster-name']
-        servers = [server for server in nova.servers.list() if
-                   server.name.endswith(cluster_suffix)]
-
-        async def del_server(server):
-            await asyncio.sleep(1)
-            nics = [nic for nic in server.interface_list()]
-            server.delete()
-            list(neutron.delete_port(nic.id) for nic in nics)
-            print("deleted %s ..." % server.name)
-
-        loop = asyncio.get_event_loop()
-        tasks = [loop.create_task(del_server(server)) for server in servers]
-
-        if tasks:
-            loop.run_until_complete(asyncio.wait(tasks))
-
-        loop.close()
-        delete_loadbalancer(neutron, config['cluster-name'])
-        connection = OpenStackAPI.connect()
-        secg = connection.list_security_groups(
-            {"name": '%s-sec-group' % config['cluster-name']})
-        if secg:
-            for sg in secg:
-                for rule in sg.security_group_rules:
-                    connection.delete_security_group_rule(rule['id'])
-
-                for port in connection.list_ports():
-                    if sg.id in port.security_groups:
-                        connection.delete_port(port.id)
-
-        connection.delete_security_group(
-            '%s-sec-group' % config['cluster-name'])
-
+        remove_cluster(config["cluster_name"], nova, neutron)
     else:
         sys.exit(1)
 
