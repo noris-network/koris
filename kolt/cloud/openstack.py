@@ -142,14 +142,14 @@ async def create_instance_with_volume(name, zone, flavor, image,
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
         print(info(red("Removing cluser ...")))
-        remove_cluster(name.split("-")[-1], nova. neutron)
+        remove_cluster(name.split("-")[-1], nova, neutron)
         print(info(yellow("The exception is", str((err)))))
 
     except (NovaClientException) as err:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
         print(info(yellow(err.message)))
-        remove_cluster(name.split("-")[-1], nova. neutron)
+        remove_cluster(name.split("-")[-1], nova, neutron)
     except KeyboardInterrupt:
         print(info(red("Oky doky, stopping as you interrupted me ...")))
         print(info(red("Cleaning after myself")))
