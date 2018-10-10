@@ -77,6 +77,18 @@ docs: ## generate Sphinx HTML documentation, including API docs
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
 
+docker-alpine:
+	docker build -t $(ORG)/koris-alpine:$(TAG) -f docker/Dockerfile.alpine .
+
+docker-ubuntu:
+	docker build -t $(ORG)/koris:$(TAG) -f docker/Dockerfile.ubuntu .
+
+docker-push-alpine:
+	docker push -t $(ORG)/koris-alpine:$(TAG)
+docker-push:
+	docker push -t $(ORG)/koris:$(TAG)
+
+
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
 
