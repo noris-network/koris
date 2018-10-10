@@ -106,23 +106,28 @@ install: clean ## install the package to the active Python's site-packages
 
 integration-test: launch-cluster integration-run integration-expose expose-wait curl-run clean-after-integration-test
 
-
+launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster:
 	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short HEAD)/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
+	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
 	kolt k8s tests/koris_test.yml
 
 
 integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
-integration-run:
-	kubectl run nginx --image=nginx --port=80
-	$(shell while [ $(kubectl describe pod nginx | grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; do echo "Waiting for container...." ;sleep 2; done;)
-	kubectl patch deployment.apps nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}'
+integration-run:  ## run the complete integration test from you local machine
+	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
+	$(shell while [ $(kubectl describe pod nginx --kubeconfig=${KUBECONFIG} | \
+		grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; \
+		do echo "Waiting for container...." ;sleep 2; done;)
+	kubectl patch deployment.apps nginx -p \
+		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
+		--kubeconfig=${KUBECONFIG}
 
 
 integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 integration-expose:
-	kubectl expose deployment nginx --type=LoadBalancer --name=nginx
+	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
 
 expose-wait:
@@ -131,12 +136,12 @@ expose-wait:
 
 curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 curl-run:
-	curl http://$(shell kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
+	curl http://$(shell kubectl describe service nginx --kubeconfig=${KUBECONFIG} | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
 
 
 clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 clean-after-integration-test:
-	kubectl delete svc nginx
+	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
