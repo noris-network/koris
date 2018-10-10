@@ -5,6 +5,8 @@ master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
 private_net: 'k8s-nude'
 # optionally specify the subnet
+# IF YOU INTENED TO create LoadBalancer with Kubernetes you __MUST__
+# specify the subnet ID.
 # subnet: foo
 cluster-name: 'nude'
 availibility-zones:
