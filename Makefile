@@ -184,10 +184,13 @@ reset-config:
 curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 curl-run:
 	while true; do \
-		curl http://$$(kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'):80;\
+		HOST=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'` \
+		echo ${HOST}; \
+		curl http://${HOST}:80;\
 		if [ $$? -eq 0 ]; then \
 			break; \
 		fi; \
+		sleep 2; \
 	done
 
 
