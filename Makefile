@@ -106,6 +106,7 @@ install: clean ## install the package to the active Python's site-packages
 
 integration-test: ## run the complete integration test from you local machine
 integration-test: \
+	reset-config \
 	launch-cluster \
 	integration-run \
 	integration-wait \
@@ -118,20 +119,20 @@ integration-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster:
-	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short HEAD)/g" tests/koris_test.yml
+	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
 	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
 	kolt k8s tests/koris_test.yml
 
 
-integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-run:
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
 	# what for the pod to be available
 	@echo "started"
 
 
-integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-wait:
 	$(shell until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
 		do \
@@ -141,7 +142,7 @@ integration-wait:
 	@echo "The pod is scheduled"
 
 
-integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-patch-wait:
 	STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 	while true; do \
@@ -161,7 +162,7 @@ integration-patch:
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
 
-integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-expose:
 	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
@@ -178,7 +179,11 @@ expose-wait:
 		echo "Waiting for loadBalancer to get an IP\n";\
 	done
 
-curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD~1)-admin.conf
+reset-config:
+	git checkout tests/koris_test.yml
+
+
+curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 curl-run:
 	curl http://$$(kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'):80
 
