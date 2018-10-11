@@ -1,5 +1,13 @@
+"""
+Hue
+===
+
+fancy colors
 
 # magic! taken from https://github.com/UltimateHackers/hue/blob/master/hue.py
+"""
+# flake8: noqa
+
 
 COMMANDS = {
     # Lables
@@ -35,7 +43,8 @@ COMMANDS = {
 }
 
 
-def _gen(string, prefix, key):
+def _gen(string, prefix, key):  # pylint: disable=redefined-outer-name
+
     colored = prefix if prefix else string
     not_colored = string if prefix else ''
     return '\033[{}m{}\033[0m{}'.format(key, colored, not_colored)
@@ -43,7 +52,7 @@ def _gen(string, prefix, key):
 
 for key, val in COMMANDS.items():
     value = val[0] if isinstance(val, tuple) else val
-    prefix = val[1] if isinstance(val, tuple) else ''
+    prefix = val[1] if isinstance(val, tuple) else ''  # pylint: disable=redefined-outer-name
     locals()[key] = lambda s, prefix=prefix, key=value: _gen(s, prefix, key)
 
 __all__ = list(COMMANDS.keys())
