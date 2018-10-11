@@ -39,7 +39,7 @@ integration-test:
   - make integration-wait
   - make integration-patch-wait
   - make integration-expose
-  - make integration-wait
+  - make expose-wait
   - make curl-run
   - make clean-lb
 
