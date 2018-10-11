@@ -37,6 +37,7 @@ build-cluster:
   artifacts:
     paths:
       - "certs-koris-pipe-*/"
+      - "koris-pipe-line-*-admin.conf"
 
 integration-test:
   stage: integration-test
