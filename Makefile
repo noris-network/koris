@@ -128,18 +128,19 @@ launch-cluster:
 integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-run:
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
-	# what for the pod to be available
+	# wait for the pod to be available
 	@echo "started"
 
 
 integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-wait:
-	$(shell until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
+	until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
 		do \
 	        echo "Waiting for container...." ;\
 		sleep 2; \
-		done;)
-	@echo "The pod is scheduled"
+		done
+
+	echo "The pod is scheduled"
 
 
 integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
@@ -149,7 +150,7 @@ integration-patch-wait:
 		if [ "Running" == "$${STATUS}" ]; then \
 			break; \
 		fi; \
-		echo "waiting for pod to run"; \
+		echo "pod is not running"; \
 		STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 		echo ${STATUS}; \
 		sleep 1; \
@@ -178,19 +179,31 @@ expose-wait:
 		sleep 1; \
 		echo "Waiting for loadBalancer to get an IP\n";\
 	done
-
+	echo "Got an IP!"
 reset-config:
 	git checkout tests/koris_test.yml
 
 
 curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 curl-run:
-	curl http://$$(kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'):80
-
+	while true; do \
+		curl http://$$(kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'):80;\
+		if [ $$? -eq 0 ]; then \
+			break; \
+		fi; \
+	done
 
 clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 clean-after-integration-test:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
+	# fuck yeah, wait for the service to die before deleting the cluster
+	while true; do \
+		kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG}; \
+		if [ $$? -eq 0 ]; then \
+			break; \
+		fi; \
+	done;
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
+	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
