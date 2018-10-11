@@ -312,7 +312,6 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.gather(*tasks))
-            loop.close()
             kubeconfig = write_kubeconfig(config, lb['vip_address'],
                                           admin_token,
                                           True)
@@ -348,6 +347,8 @@ class ClusterBuilder:
                     LOGGER.debug(E)
                     LOGGER.debug(dir(E))
                     continue
+
+            loop.close()
 
         if no_cloud_init:
             return create_inventory(hosts, config)
