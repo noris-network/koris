@@ -74,6 +74,11 @@ def remove_cluster(name, nova, neutron):
     loop.close()
 
 
+class BuilderError(Exception):
+    """Raise a custom error if the build fails"""
+    pass
+
+
 async def create_volume(cinder, image, zone, klass, size=25):
     """
     create a cinder volume for use with a compute instance
@@ -118,6 +123,7 @@ async def create_instance_with_volume(name, zone, flavor, image,
     Create a compute instance with cloud-init and volume and port for use
     in a kubernetes cluster
     """
+    raise BuilderError("mmm")
     try:
         print(que("Checking if %s does not already exist" % name))
         server = nova.servers.find(name=name)
@@ -148,18 +154,8 @@ async def create_instance_with_volume(name, zone, flavor, image,
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
         print(info(red("Removing cluser ...")))
-        remove_cluster(name.split("-")[-1], nova, neutron)
         print(info(yellow("The exception is", str((err)))))
-
-    except (NovaClientException) as err:
-        print(info(red("Something weired happend, I so I didn't create %s" %
-                       name)))
-        print(info(yellow(err.message)))
-        remove_cluster(name.split("-")[-1], nova, neutron)
-    except KeyboardInterrupt:
-        print(info(red("Oky doky, stopping as you interrupted me ...")))
-        print(info(red("Cleaning after myself")))
-        remove_cluster(name.split("-")[-1], nova. neutron)
+        raise BuilderError(str(err))
 
     inst_status = instance.status
     print("waiting for 5 seconds for the machine to be launched ... ")

@@ -15,6 +15,7 @@ import pkg_resources
 from mach import mach1
 
 from kolt.cloud.openstack import get_clients
+from kolt.cloud.openstack import BuilderError
 from .cli import delete_cluster
 from .ssl import create_certs
 
@@ -75,8 +76,9 @@ class Kolt:
         builder = ClusterBuilder()
         try:
             builder.run(config)
-        except Exception as err:
-            print(red("Error encoutered ... ", err))
+        except BuilderError as err:
+            print(red("Error encoutered ... "))
+            print(red(err))
             delete_cluster(config['cluster-name'], self.nova, self.neutron,
                            True)
 
