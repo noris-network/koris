@@ -334,7 +334,7 @@ class ClusterBuilder:
             tries = 0
             while True:
                 tries += 1
-                if tries > 60:
+                if tries > 120:
                     break
                 try:
                     k8s.apply_calico(b64_key(certs["k8s"].key),

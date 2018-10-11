@@ -11,7 +11,7 @@ import yaml
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from pkg_resources import resource_filename, Requirement
 
-from kolt.util.util import (get_logger)
+from kolt.util.util import (get_logger, retry)
 
 LOGGER = get_logger(__name__)
 
@@ -46,6 +46,7 @@ class K8S:
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
+    @retry(exceptions=OSError)
     def apply_calico(self, etcd_key, etcd_cert, k8s_ca, lb_url):
         """
         start a daemon set for CNI
@@ -58,6 +59,7 @@ class K8S:
         self._calico_daemon_set()
         self._calico_controller()
 
+    @retry(exceptions=OSError)
     def apply_kube_dns(self):
         """
         apply all resources for kube-dns
