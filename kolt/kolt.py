@@ -10,6 +10,7 @@ It automatically creates an executable in your path.
 import sys
 import yaml
 
+import pkg_resources
 
 from mach import mach1
 
@@ -28,6 +29,9 @@ from .cloud.builder import ClusterBuilder
 LOGGER = get_logger(__name__)
 
 
+__version__ = pkg_resources.get_distribution('kolt').version
+
+
 @mach1()
 class Kolt:
     """
@@ -40,6 +44,11 @@ class Kolt:
         self.nova = nova
         self.neutron = neutron
         self.cinder = cinder
+        self.parser.add_argument("--version", action="store_true",
+                                 help="show version and exit")
+
+    def _get_version(self):
+        print("Kolt version:", __version__)
 
     def certs(self, config, key=None, ca=None):  # pylint: disable=invalid-name
         """
