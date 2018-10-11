@@ -65,8 +65,13 @@ Ready to contribute? Here's how to set up `kolt` for local development.
     $ cd kolt/
     $ python3 -m venv myenv
     $ source myenv/bin/activate
-    $ python setup.py develop
     $ pip install -r requirements_dev.txt
+
+If you prefer to use `Pipenv` you can let Pipenv manage the virtual environment::
+
+    $ cd kolt
+    $ pipenv --python 3.6
+    $ pipenv install --dev
 
 .. note::
 
