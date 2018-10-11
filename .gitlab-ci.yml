@@ -1,8 +1,8 @@
 stages:
  - static-analysis
  - unittest
- - integration-test
  - build-cluster
+ - integration-test
  - cleanup
  - manual-cleanup
  - pages
