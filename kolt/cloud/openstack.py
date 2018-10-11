@@ -122,7 +122,6 @@ async def create_instance_with_volume(name, zone, flavor, image,
     Create a compute instance with cloud-init and volume and port for use
     in a kubernetes cluster
     """
-    raise BuilderError("mmm")
     try:
         print(que("Checking if %s does not already exist" % name))
         server = nova.servers.find(name=name)
