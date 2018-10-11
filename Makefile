@@ -118,10 +118,7 @@ integration-test: \
 	clean-after-integration-test
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
-launch-cluster:
-	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})/g" tests/koris_test.yml
-	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
-	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
+launch-cluster: update-config
 	kolt k8s tests/koris_test.yml
 
 
@@ -207,8 +204,18 @@ clean-lb:
 	sleep 90
 
 
-clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
-clean-after-integration-test: clean-lb
+update-config:
+	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})/g" tests/koris_test.yml
+	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
+	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
+
+
+clean-cluster: update-config
+	kolt destroy tests/koris_test.yml --force
+
+
+clean-all-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+clean-all-after-integration-test: clean-lb
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}

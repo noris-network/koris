@@ -34,7 +34,7 @@ integration-test:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - make launch-cluster
-  - kubectl get nodes
+  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
   - make integration-run
   - make integration-wait
   - make integration-patch-wait
@@ -53,7 +53,8 @@ cleanup:
   - apk add make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make clean-after-integration-test
+  - make update-config
+  - make clean-cluster
   when: always
 
 pages:
