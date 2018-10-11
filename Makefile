@@ -63,9 +63,6 @@ flake8: ## check style with flake8
 test: ## run tests quickly with the default Python
 	py.test
 
-test-all: ## run tests on every Python version with tox
-	tox
-
 coverage: ## check code coverage quickly with the default Python
 	$(PY) -m pytest -vv --cov .
 	#coverage report -m
