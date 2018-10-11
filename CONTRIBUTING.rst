@@ -216,6 +216,10 @@ Developer helper utils - Makefile
 The repository contains an extensive ``Makefile`` which is mainly for helping you
 develop faster. Issue ``make help`` to see all th available functions.
 
+To run the complete integration test from your local machine issue::
+
+   $ make integration-test KEY=otiram
+
 You can run make tragets with::
 
    $ make clean-after-integration-test REV=HEAD~1

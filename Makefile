@@ -1,4 +1,4 @@
-.PHONY: clean clean-test clean-pyc clean-build docs help
+.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -104,14 +104,17 @@ dist: clean ## builds source and wheel package
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
-
-integration-test: launch-cluster \
-		integration-run \
-		integration-wait \
-		integration-patch-wait \
-		integration-patch \
-		integration-expose \
-
+integration-test: ## run the complete integration test from you local machine
+integration-test: \
+	launch-cluster \
+	integration-run \
+	integration-wait \
+	integration-patch-wait \
+	integration-patch \
+	integration-expose \
+	expose-wait \
+	curl-run \
+	clean-after-integration-test
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster:
@@ -122,7 +125,7 @@ launch-cluster:
 
 
 integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
-integration-run: ## run the complete integration test from you local machine
+integration-run:
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
 	# what for the pod to be available
 	@echo "started"
@@ -137,7 +140,6 @@ integration-wait:
 		done;)
 	@echo "The pod is scheduled"
 
-.PHONY: integration-patch-wait
 
 integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 integration-patch-wait:
