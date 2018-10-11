@@ -36,8 +36,7 @@ Pre-requisits
 ~~~~~~~~~~~~~
 
 1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
-2. A pre-created network, and security group.
-3. Basic understanding of OpenStack.
+2. Basic understanding of OpenStack.
 
 Get started
 ~~~~~~~~~~~
@@ -132,13 +131,15 @@ Get started
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-9. To create a cluster create a cluster configuration file (see [example](https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml).
+9. To create a cluster create a cluster configuration file (see `example <https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml>`_.
    Pass this file on the shell to the k8s subcommand
 
 .. code:: shell
 
    $ kolt k8s <your-cluster-config.yml>
 
+
+The complete compiled `documentation of kolt can be found here <https://pi.docs.noris.net/kolt/>`_
 
 Credits
 -------
