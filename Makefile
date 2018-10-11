@@ -104,7 +104,13 @@ install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
 
-integration-test: launch-cluster integration-run integration-expose expose-wait curl-run clean-after-integration-test
+integration-test: launch-cluster \
+		integration-run \
+		integration-wait \
+		integration-patch-wait \
+		integration-patch \
+		integration-expose \
+
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster:
@@ -115,24 +121,59 @@ launch-cluster:
 
 
 integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
-integration-run:  ## run the complete integration test from you local machine
+integration-run: ## run the complete integration test from you local machine
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
-	$(shell while [ $(kubectl describe pod nginx --kubeconfig=${KUBECONFIG} | \
-		grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; \
-		do echo "Waiting for container...." ;sleep 2; done;)
+	# what for the pod to be available
+	@echo "started"
+
+
+integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-wait:
+	$(shell until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
+		do \
+	        echo "Waiting for container...." ;\
+		sleep 2; \
+		done;)
+	@echo "The pod is scheduled"
+
+.PHONY: integration-patch-wait
+
+integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-patch-wait:
+	STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+	while true; do \
+		if [ "Running" == "$${STATUS}" ]; then \
+			break; \
+		fi; \
+		echo "waiting for pod to run"; \
+		STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+		echo ${STATUS}; \
+		sleep 1; \
+	done ; \
+
+
+integration-patch: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-patch:
 	kubectl patch deployment.apps nginx -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
-
 
 integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 integration-expose:
 	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
 
+expose-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 expose-wait:
-	sleep 200
-
+	while true; do \
+		IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+		if [ ! -z $${IP} ]; then \
+			echo "breaking "; \
+			break; \
+		fi; \
+		sleep 1; \
+		echo "Waiting for loadBalancer to get an IP\n";\
+	done
 
 curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
 curl-run:
