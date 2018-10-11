@@ -184,7 +184,7 @@ If all tests pass (including integration tests) we update ``requirements.txt``
 by committing the changes.
 
 Git collaborations guide lines
-++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++
 
 1. Never `(ever ever ever)**10` use::
 
@@ -192,7 +192,7 @@ Git collaborations guide lines
 
 Instead make small commits that are easy to reason about and to understand.
 
-1. Never `(ever ever ever)**10` use::
+2. Never `(ever ever ever)**10` use::
 
    $ git commit -m "I made some change"
 
@@ -203,8 +203,8 @@ Make sure your titles are meaningful, they will appear in the ChangeLog!
 
 .. _nice commit message: https://code.likeagirl.io/useful-tips-for-writing-better-git-commit-messages-808770609503
 
-Tips
-----
+Run a single test
++++++++++++++++++
 
 To run a subset of tests::
 
@@ -218,3 +218,4 @@ develop faster. Issue ``make help`` to see all th available functions.
 
 .. _Kolt Channel: https://hipchat.noris.de/chat/room/664
 .. _JIRA Kolt: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KOLT
+.. _PBR: https://docs.openstack.org/pbr/latest/
