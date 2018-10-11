@@ -35,10 +35,9 @@ build-cluster:
   - make launch-cluster
   - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
   - ls -l
-  - tar czvf certs.tar.gz koris-pipe*
   artifacts:
     paths:
-      - "koris-pip*.tar.gz"
+      - "certs-koris-pipe-line-*"
       - "koris-pipe-line-*-admin.conf"
 
 integration-test:
