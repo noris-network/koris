@@ -216,6 +216,11 @@ Developer helper utils - Makefile
 The repository contains an extensive ``Makefile`` which is mainly for helping you
 develop faster. Issue ``make help`` to see all th available functions.
 
+You can run make tragets with::
+
+   $ make clean-after-integration-test REV=HEAD~1
+
+
 .. _Kolt Channel: https://hipchat.noris.de/chat/room/664
 .. _JIRA Kolt: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KOLT
 .. _PBR: https://docs.openstack.org/pbr/latest/

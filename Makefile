@@ -26,6 +26,7 @@ export PRINT_HELP_PYSCRIPT
 
 PY ?= python
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
+REV ?= HEAD
 
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -152,7 +153,7 @@ integration-patch-wait:
 	done ; \
 
 
-integration-patch: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+integration-patch: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 integration-patch:
 	kubectl patch deployment.apps nginx -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
@@ -163,7 +164,7 @@ integration-expose:
 	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
 
-expose-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+expose-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 expose-wait:
 	while true; do \
 		IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
@@ -175,12 +176,12 @@ expose-wait:
 		echo "Waiting for loadBalancer to get an IP\n";\
 	done
 
-curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD~1)-admin.conf
 curl-run:
-	curl http://$(shell kubectl describe service nginx --kubeconfig=${KUBECONFIG} | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
+	curl http://$$(kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'):80
 
 
-clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short HEAD)-admin.conf
+clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 clean-after-integration-test:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	kolt destroy tests/koris_test.yml --force
