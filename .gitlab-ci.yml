@@ -9,7 +9,7 @@ static-analysis:
   stage: static-analysis
   image: oz123/koris-alpine:0.1.1
   script:
-    - sudo apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
+    - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
     - pip3 install -U pip
     - pip3 install flake8 pylint pylint-exit
     - make lint
@@ -18,7 +18,7 @@ unittest:
   stage: unittest
   image: oz123/koris-alpine:0.1.1
   script:
-    - sudo apk add --update py3-cryptography python3-dev libffi-dev
+    - apk add --update py3-cryptography python3-dev libffi-dev
     - pip3 install -U pip
     - pip3 install -e .
     - make coverage PY=python3
@@ -30,26 +30,18 @@ integration-test:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
-  - sudo apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
-  - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
-  - cat tests/koris_test.yml
-  - kolt k8s tests/koris_test.yml
-  - export KUBECONFIG=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
-  - echo $KUBECONFIG
+  - make launch-cluster
   - kubectl get nodes
-  - kubectl run nginx --image=nginx --port=80
-  - while [ $(kubectl describe pod nginx | grep "Status:" | cut -d ":" -f2 | tr -d " ") != "Running" ]; do echo "Waiting for container...." ;sleep 2; done;
-  - kubectl patch deployment.apps nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}'
-  - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
-  - sleep 200
-  - kubectl get services
-  - kubectl get pods
-  - echo $(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
-  - curl http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
-  - kubectl delete svc nginx
+  - make integration-run
+  - make integration-wait
+  - make integration-patch-wait
+  - make integration-expose
+  - make integration-wait
+  - make curl-run
+  - make clean-lb
 
 cleanup:
   stage: cleanup
@@ -58,15 +50,10 @@ cleanup:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+  - apk add make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
-  - "source ./koris-env/bin/activate"
-  - "cd -"
-  - sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
-  - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
-  - cat tests/koris_test.yml
-  - kolt destroy tests/koris_test.yml --force
+  - make clean-after-integration-test
   when: always
 
 pages:

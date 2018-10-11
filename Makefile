@@ -193,8 +193,9 @@ curl-run:
 		fi; \
 	done
 
-clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
-clean-after-integration-test:
+
+clean-lb: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+clean-lb:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
@@ -203,6 +204,11 @@ clean-after-integration-test:
 			break; \
 		fi; \
 	done;
+	sleep 90
+
+
+clean-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+clean-after-integration-test: clean-lb
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
