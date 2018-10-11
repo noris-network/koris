@@ -2,7 +2,9 @@ stages:
  - static-analysis
  - unittest
  - integration-test
+ - build-cluster
  - cleanup
+ - manual-cleanup
  - pages
 
 static-analysis:
@@ -23,6 +25,19 @@ unittest:
     - pip3 install -e .
     - make coverage PY=python3
 
+build-cluster:
+  stage: build-cluster
+  image: oz123/koris-alpine:0.1.1
+  artifacts:
+    paths:
+    - "certs-koris-pipe-line-*/"
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - make launch-cluster
+  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
+
 integration-test:
   stage: integration-test
   image: oz123/koris-alpine:0.1.1
@@ -33,8 +48,6 @@ integration-test:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make launch-cluster
-  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
   - make integration-run
   - make integration-wait
   - make integration-patch-wait
@@ -56,6 +69,20 @@ cleanup:
   - make update-config
   - make clean-cluster
   when: always
+
+manual-cleanup:
+  stage: cleanup
+  image: oz123/koris-alpine:0.1.1
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - make update-config
+  - make clean-cluster
+  when: manual
 
 pages:
   stage: pages
