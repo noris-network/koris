@@ -174,7 +174,7 @@ expose-wait:
 		echo "Waiting for loadBalancer to get an IP\n";\
 	done; \
 	echo "Got an IP!"; \
-	echo "Echo ${IP}"
+	echo "Echo $${IP}"
 
 
 reset-config:
@@ -184,9 +184,9 @@ reset-config:
 curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 curl-run:
 	IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
-	echo ${IP}; \
+	echo $${IP}; \
 	while true; do \
-		curl http://${IP}:80;\
+		curl http://$${IP}:80;\
 		if [ $$? -eq 0 ]; then \
 			break; \
 		fi; \
