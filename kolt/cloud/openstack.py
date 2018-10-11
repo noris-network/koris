@@ -15,8 +15,7 @@ from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import NotFound as NeutronNotFound
-from novaclient.exceptions import (NotFound as NovaNotFound,
-                                   ClientException as NovaClientException)  # noqa
+from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
