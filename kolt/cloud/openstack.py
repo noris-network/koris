@@ -36,6 +36,7 @@ def remove_cluster(name, nova, neutron):
     cluster_suffix = "-%s" % name
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
+
     if not servers:
         print(red("No servers were found ..."))
         print(red("Could not remove cluster ..."))
@@ -56,11 +57,10 @@ def remove_cluster(name, nova, neutron):
     if tasks:
         loop.run_until_complete(asyncio.wait(tasks))
 
-    loop.close()
     delete_loadbalancer(neutron, cluster_suffix)
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
-        {"name": '%s-sec-group' % cluster_suffix})
+        {"name": '%s-sec-group' % name})
     if secg:
         for sg in secg:
             for rule in sg.security_group_rules:
@@ -69,9 +69,9 @@ def remove_cluster(name, nova, neutron):
             for port in connection.list_ports():
                 if sg.id in port.security_groups:
                     connection.delete_port(port.id)
-
     connection.delete_security_group(
-        '%s-sec-group' % cluster_suffix)
+        '%s-sec-group' % name)
+    loop.close()
 
 
 async def create_volume(cinder, image, zone, klass, size=25):
@@ -203,7 +203,6 @@ def create_loadbalancer(client, name, provider='octavia',
     """
     # see examle of how to create an LB
     # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
-
     if 'subnet' in kwargs:
         subnet_id = client.find_resource('subnet', kwargs['subnet'])['id']
     else:
