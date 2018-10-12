@@ -15,12 +15,6 @@ from .util.util import get_kubeconfig_yaml, get_logger
 
 LOGGER = get_logger(__name__)
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-# add ch to logger
-logger.addHandler(ch)
 
 def delete_cluster(cluster_name, nova, neutron, force=False):
     """
