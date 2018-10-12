@@ -3,12 +3,14 @@ import re
 import uuid
 import yaml
 
+from unittest.mock import patch
 import pytest
 
-from kolt.cloud import MasterInit, NodeInit
-from kolt.kolt import create_certs
-from kolt.util import (EtcdHost, get_kubeconfig_yaml,
-                       OSCloudConfig, get_token_csv)
+from kolt.provision.cloud_init import MasterInit, NodeInit
+from kolt.ssl import create_certs
+from kolt.cloud.openstack import OSCloudConfig
+from kolt.util.util import (EtcdHost, get_kubeconfig_yaml,
+                            get_token_csv)
 
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,
@@ -20,13 +22,15 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in etcd_host_list]))
 
 
-cloud_config = OSCloudConfig(username="serviceuser", password="s9kr9t",
-                             auth_url="keystone.myopenstack.de",
-                             project_id="c869168a828847f39f7f06edd7305637",
-                             domain_id="2a73b8f597c04551a0fdc8e95544be8a",
-                             user_domain_name="noris.de",
-                             region_name="de-nbg6-1")
+with patch('kolt.cloud.openstack.read_os_auth_variables') as p:
+    p.return_value = dict(username="kubepipeline", password="s9kr9t",
+                          auth_url="keystone.myopenstack.de",
+                          project_id="f4c0a6de561e487d8ba5d1cc3f1042e8",
+                          domain_id="2a73b8f597c04551a0fdc8e95544be8a",
+                          user_domain_name="noris.de",
+                          region_name="de-nbg6-1")
 
+    cloud_config = OSCloudConfig()
 
 certs = create_certs({}, hostnames, ips, write=False)
 
@@ -40,7 +44,7 @@ token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 @pytest.fixture
 def ci_master():
-    ci = MasterInit("master", test_cluster,
+    ci = MasterInit(test_cluster,
                     cert_bundle=(certs['ca'],
                                  certs['k8s'],
                                  certs['service-account']),
@@ -51,13 +55,13 @@ def ci_master():
 
 @pytest.fixture
 def ci_node():
-    ci = NodeInit("node",
-                  kubelet_token,
+    ci = NodeInit(kubelet_token,
                   certs['ca'],
                   certs['k8s'],
                   certs['service-account'],
                   test_cluster,
-                  calico_token
+                  calico_token,
+                  "10.32.192.121"
                   )
     return ci
 
@@ -65,25 +69,25 @@ def ci_node():
 def test_token_cvs(ci_master):
 
     token_csv = ci_master._get_token_csv()
-    assert yaml.load(token_csv)[0]['permissions'] == '0600'
+    assert yaml.safe_load(token_csv)[0]['permissions'] == '0600'
 
 
 def test_cloud_config(ci_master):
 
     _cloud_config = ci_master._get_cloud_provider()
-    assert yaml.load(_cloud_config)[0]['permissions'] == '0600'
+    assert yaml.safe_load(_cloud_config)[0]['permissions'] == '0600'
 
 
 def test_encryption_config(ci_master):
 
     _config = ci_master._get_encryption_config()
 
-    _config = yaml.load(_config)[0]
+    _config = yaml.safe_load(_config)[0]
 
     assert _config['path'] == '/var/lib/kubernetes/encryption-config.yaml'
 
     content = _config['content']
-    enc_ = yaml.load(base64.b64decode(content).decode())
+    enc_ = yaml.safe_load(base64.b64decode(content).decode())
     assert enc_['resources'][0]['providers'][0][
         'aescbc']['keys'][0]['secret'] == encryption_key
 
@@ -92,13 +96,13 @@ def test_certificate_info(ci_master):
 
     certs_config = ci_master._get_certificate_info()
 
-    assert 4 == len(yaml.load(certs_config))
+    assert 4 == len(yaml.safe_load(certs_config))
 
 
 def test_cloud_init(ci_master):
 
     config = ci_master.get_files_config()
-    config = yaml.load(config)
+    config = yaml.safe_load(config)
 
     assert len(config['write_files']) == 10
 
@@ -114,16 +118,16 @@ def test_cloud_init(ci_master):
 
 def test_node_init(ci_node):
     config = ci_node.get_files_config()
-    config = yaml.load(config)
+    config = yaml.safe_load(config)
 
     assert len(config['write_files']) == 8
 
 
 def test_get_kube_config():
 
-    kcy = get_kubeconfig_yaml("https://foo:2349", "kubelet", "12312aed321",
+    kcy = get_kubeconfig_yaml("https://bar:2349", "kubelet", "12312aed321",
                               skip_tls=True,
                               encode=False)
 
-    kcy_dict = yaml.load(kcy)
+    kcy_dict = yaml.safe_load(kcy)
     assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']

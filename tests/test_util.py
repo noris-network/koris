@@ -1,5 +1,6 @@
+import uuid
 from unittest import mock
-from kolt.util import OSClusterInfo
+from kolt.cloud.openstack import OSClusterInfo
 
 nova = mock.Mock()
 neutron = mock.Mock()
@@ -7,6 +8,13 @@ nova.keypairs.get = mock.MagicMock(return_value='otiram')
 nova.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 nova.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
 neutron.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
+
+
+def list_subnets():
+    return {'subnets': [{'id': str(uuid.uuid1())}]}
+
+
+neutron.list_subnets = list_subnets
 
 
 config = {
@@ -19,6 +27,7 @@ config = {
     "security_group": "test-group",
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.4-8",
+    "master_flavor": "ECS.C1.4-8",
     "storage_class": "Fast"
 }
 

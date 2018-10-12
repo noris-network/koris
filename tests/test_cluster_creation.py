@@ -1,7 +1,4 @@
-import asyncio
 from unittest import mock
-
-from kolt.kolt import create_certs
 
 nova = mock.Mock()
 neutron = mock.Mock()

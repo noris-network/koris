@@ -1,6 +1,86 @@
-image: mleiner/kolt-base:0.2
+stages:
+ - static-analysis
+ - unittest
+ - build-cluster
+ - integration-test
+ - cleanup
+ - pages
 
-test:
+static-analysis:
+  stage: static-analysis
+  image: oz123/koris-alpine:0.1.1
   script:
+    - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
+    - pip3 install -U pip
+    - pip3 install flake8 pylint pylint-exit
+    - make lint
+
+unittest:
+  stage: unittest
+  image: oz123/koris-alpine:0.1.1
+  script:
+    - apk add --update py3-cryptography python3-dev libffi-dev
+    - pip3 install -U pip
     - pip3 install -e .
     - make coverage PY=python3
+
+build-cluster:
+  stage: build-cluster
+  image: oz123/koris-alpine:0.1.1
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - make launch-cluster
+  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
+  - ls -l
+  artifacts:
+    paths:
+      - "certs-koris-pipe-line-*"
+      - "koris-pipe-line-*-admin.conf"
+
+integration-test:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.1
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - make integration-run
+  - make integration-wait
+  - make integration-patch-wait
+  - make integration-expose
+  - make expose-wait
+  - make curl-run
+  - make clean-lb
+
+cleanup:
+  stage: cleanup
+  image: oz123/koris-alpine:0.1.1
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - make update-config
+  - make clean-cluster
+  when: always
+
+pages:
+  stage: pages
+  image: oz123/koris-alpine:0.1.1
+  script:
+  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+  - which sphinx-build
+  - make -C docs html
+  - mv docs/_build/html/ public/
+  artifacts:
+    paths:
+    - public
+  only:
+  - master

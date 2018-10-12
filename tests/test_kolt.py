@@ -6,9 +6,9 @@
 import uuid
 import yaml
 
-from kolt.util import host_names
-from kolt.util import get_kubeconfig_yaml
-from kolt.util import EtcdHost
+from kolt.util.util import host_names
+from kolt.util.util import get_kubeconfig_yaml
+from kolt.util.util import EtcdHost
 
 test_cluster = [EtcdHost("master-%d-k8s" % i,
                          "10.32.192.10%d" % i) for i in range(1, 4)]
@@ -33,7 +33,7 @@ def test_kubeconfig():
     admin_token = uuid.uuid4().hex[:32]
     kubeconfig = get_kubeconfig_yaml(master_uri, username, admin_token,
                                      encode=False, skip_tls=True)
-    kcy = yaml.load(kubeconfig)
+    kcy = yaml.safe_load(kubeconfig)
     assert kcy["clusters"][0]["cluster"]["server"] == master_uri
     assert kcy["users"][0]["name"] == "admin"
     assert kcy["users"][0]["user"]["token"] == admin_token

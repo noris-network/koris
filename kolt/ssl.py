@@ -1,3 +1,6 @@
+"""
+ssl.py hold all ssl certifcates creation utilities and classes
+"""
 import base64
 import datetime
 import ipaddress
@@ -10,8 +13,22 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
+from kolt.util.util import get_logger
+
+LOGGER = get_logger(__name__)
+
 
 def create_key(size=2048, public_exponent=65537):
+    """
+    create an RSA private key
+
+    Args:
+        size (int) - the key byte size
+        public_exponent (int) - the key public_exponent
+
+    Return:
+        rsa key object instance
+    """
     key = rsa.generate_private_key(
         public_exponent=public_exponent,
         key_size=size,
@@ -22,6 +39,22 @@ def create_key(size=2048, public_exponent=65537):
 
 def create_ca(private_key, public_key, country,
               state_province, locality, orga, unit, name):
+    """
+    create a CA signed with private_key
+
+    Args:
+        private_key (inst) - private key instance to sign the CA
+        public_key (inst) - public key for the CSR
+        country (str) - the country for the CSR
+        state_province (str) - the state or province for the CSR
+        locality (str) - the locality for the CSR
+        orga (str) - the organization for the CSR
+        unit (str) - the unit for the CSR
+        name (str) - the name for the CSR
+
+    Return:
+        ssl certificate object
+    """
     issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
@@ -78,14 +111,30 @@ def create_ca(private_key, public_key, country,
     return cert
 
 
-def create_certificate(private_key, public_key, country,
+def create_certificate(ca_bundle, public_key, country,
                        state_province, locality, orga, unit, name, hosts, ips):
+    """
+    create a certificate signed with CA private_key
+
+    Args:
+        ca_bundle (inst) - private key instance to sign the CA
+        public_key (inst) - public key for the CSR
+        country (str) - the country for the CSR
+        state_province (str) - the state or province for the CSR
+        locality (str) - the locality for the CSR
+        orga (str) - the organization for the CSR
+        unit (str) - the unit for the CSR
+        name (str) - the name for the CSR
+
+    Return:
+        ssl certificate object
+    """
 
     issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
         x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
@@ -94,9 +143,9 @@ def create_certificate(private_key, public_key, country,
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name),
+        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -149,7 +198,7 @@ def create_certificate(private_key, public_key, country,
         critical=False)
 
     cert = cert.add_extension(
-        x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key),
+        x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_bundle.cert.public_key()),  # noqa
         critical=False)
 
     if alt_names:
@@ -157,7 +206,7 @@ def create_certificate(private_key, public_key, country,
             x509.SubjectAlternativeName(alt_names),
             critical=False)
 
-    cert = cert.sign(private_key, hashes.SHA256(), default_backend())
+    cert = cert.sign(ca_bundle.key, hashes.SHA256(), default_backend())
 
     return cert
 
@@ -195,8 +244,8 @@ def write_key(key, passwd=None, filename="key.pem"):  # pragma: no coverage
         enc_algo = serialization.NoEncryption()
 
     # Write our key to disk for safe keeping
-    with open(filename, "wb") as f:
-        f.write(key.private_bytes(
+    with open(filename, "wb") as fh:
+        fh.write(key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=enc_algo,))
@@ -207,23 +256,28 @@ def write_cert(cert, filename):  # pragma: no coverage
     Write the certifiacte instance to the file as ASCII string
 
     Args:
-
        cert (SSL certificate instance)
        filename (str): the file to write
     """
 
-    with open(filename, "wb") as f:
-        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(filename, "wb") as fh:
+        fh.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
 class CertBundle:
+    """
+    A CertBundle instace holds the bytes information of a certificate and the
+    key used to sign it.
+    """
 
     @classmethod
-    def create_signed(cls, ca_key, country, state, locality,
+    def create_signed(cls, ca_bundle, country, state, locality,
                       orga, unit, name, hosts, ips):
-
+        """
+        create a self signed CA cert key bundle
+        """
         key = create_key()
-        cert = create_certificate(ca_key,
+        cert = create_certificate(ca_bundle,
                                   key.public_key(),
                                   country,
                                   state,
@@ -238,6 +292,9 @@ class CertBundle:
 
     @classmethod
     def read_bundle(cls, key, cert):
+        """
+        read a certificate bundle from file system
+        """
         key, cert = read_key(key), read_cert(cert)
         return cls(key, cert)
 
@@ -246,12 +303,25 @@ class CertBundle:
         self.cert = cert
 
     def save(self, name, directory):
+        """
+        save a certificate bundle to the file system
+        """
         write_key(self.key,
                   filename=os.path.join(directory, name + "-key.pem"))
         write_cert(self.cert, os.path.join(directory, name + ".pem"))
 
 
 def read_cert(cert):  # pragma: no coverage
+    """
+    read SSL certificate from path
+
+    Args:
+        cert (str) - path to a cert on a file system
+
+    Return:
+        cert (inst) - a certificate instance
+    """
+
     with open(cert, "rb") as f:
         cert = x509.load_pem_x509_certificate(
             f.read(), default_backend())
@@ -259,9 +329,116 @@ def read_cert(cert):  # pragma: no coverage
 
 
 def read_key(key):  # pragma: no coverage
+    """
+    read SSL key from path
+
+    Args:
+        key (str) - path to a key on a file system
+
+    Return:
+        private_key (inst) - a private key instance
+    """
     with open(key, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
             key_file.read(),
             password=None,
             backend=default_backend())
     return private_key
+
+
+def create_certs(config, names, ips, write=True, ca_bundle=None):
+    """
+    create new certificates, useful for replacing certificates
+    and later for adding nodes ...
+    """
+    country = "DE"
+    state = "Bayern"
+    location = "NUE"
+
+    if not ca_bundle:
+        ca_key = create_key()
+        ca_cert = create_ca(ca_key, ca_key.public_key(), country,
+                            state, location, "Kubernetes", "CDA-PI",
+                            "kubernetes")
+        ca_bundle = CertBundle(ca_key, ca_cert)
+
+    else:
+        ca_key = ca_bundle.key
+        ca_cert = ca_bundle.cert
+
+    k8s_bundle = CertBundle.create_signed(ca_bundle,
+                                          country,
+                                          state,
+                                          location,
+                                          "Kubernetes",
+                                          "CDA-PI",
+                                          "kubernetes",
+                                          names,
+                                          ips)
+
+    svc_accnt_bundle = CertBundle.create_signed(ca_bundle,
+                                                country,
+                                                state,
+                                                location,
+                                                "Kubernetes",
+                                                "CDA-PI",
+                                                name="service-accounts",
+                                                hosts="",
+                                                ips="")
+
+    admin_bundle = CertBundle.create_signed(ca_bundle,
+                                            country,
+                                            state,
+                                            location,
+                                            "system:masters",
+                                            "CDA-PI",
+                                            name="admin",
+                                            hosts="",
+                                            ips=""
+                                            )
+
+    kubelet_bundle = CertBundle.create_signed(ca_bundle,
+                                              country,
+                                              state,
+                                              location,
+                                              "system:masters",
+                                              "CDA-PI",
+                                              name="kubelet",
+                                              hosts=names,
+                                              ips=ips
+                                              )
+
+    nodes = []
+    node_bundles = []
+    node_ip = None
+    # todo: add node_ip
+    for node in nodes:
+        node_bundles.append(CertBundle.create_signed(ca_bundle,
+                                                     country,
+                                                     state,
+                                                     location,
+                                                     "system:nodes",
+                                                     "CDA-PI",
+                                                     name="system:node:%s" % node,  # noqa
+                                                     hosts=[node],
+                                                     ips=[node_ip]))
+
+    LOGGER.debug("Done creating all certificates")
+    if write:  # pragma: no coverage
+        cert_dir = "-".join(("certs", config["cluster-name"]))
+
+        if not os.path.exists(cert_dir):
+            os.mkdir(cert_dir)
+
+        write_key(ca_key, filename=cert_dir + "/ca-key.pem")
+        write_cert(ca_cert, cert_dir + "/ca.pem")
+
+        k8s_bundle.save("kubernetes", cert_dir)
+        svc_accnt_bundle.save("service-account", cert_dir)
+        admin_bundle.save("admin", cert_dir)
+        kubelet_bundle.save("kubelet", cert_dir)
+
+    return {'ca': ca_bundle, 'k8s': k8s_bundle,
+            'service-account': svc_accnt_bundle,
+            'admin': admin_bundle,
+            'kubelet': kubelet_bundle}
