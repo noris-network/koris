@@ -59,18 +59,18 @@ def create_ca(private_key, public_key, country,
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -136,7 +136,7 @@ def create_certificate(ca_bundle, public_key, country,
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     subject = x509.Name([
