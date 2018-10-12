@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d4b012a41ceb77fccbddbbbe6f6de68ca4caf781fdc95f87198096bec470773f"
+            "sha256": "8f96166b4135338a3060f728ca4d81b68756f99b441d05451d44d7f361d56960"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -622,9 +622,6 @@
         }
     },
     "develop": {
-        "074c5b0": {
-            "file": "file:///home/otiram/Software/kolt"
-        },
         "adal": {
             "hashes": [
                 "sha256:534ab04df7ab7c30bc7fe9526c3120e50b9496982f6c85001b05fd7cf4134eb7",

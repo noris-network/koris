@@ -65,7 +65,6 @@ cryptography = "*"
 
 [dev-packages]
 
-"074c5b0" = {file = "file:///home/otiram/Software/kolt"}
 "flake8" = ">=3.5.0"
 coverage = ">=4.5.1"
 Sphinx = "==1.7.1"
