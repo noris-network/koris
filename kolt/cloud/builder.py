@@ -19,7 +19,8 @@ from kolt.deploy.k8s import K8S
 from kolt.cli import write_kubeconfig
 from kolt.provision.cloud_init import MasterInit, NodeInit
 from kolt.ssl import create_certs, b64_key, b64_cert
-from kolt.util.hue import red, info, lightcyan as cyan
+from kolt.util.hue import (  # pylint: disable=no-name-in-module
+    red, info, lightcyan as cyan)
 
 from kolt.util.util import (EtcdHost,
                             create_inventory,
@@ -35,7 +36,7 @@ from .openstack import (get_clients,
 
 LOGGER = get_logger(__name__)
 
-nova, neutron, cinder = get_clients()
+NOVA, NEUTRON, CINDER = get_clients()
 
 
 class NodeBuilder:
@@ -53,8 +54,12 @@ class NodeBuilder:
             "gathering node information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
 
-    def create_userdata(self, cluster_info=None, cloud_provider=None,
+    @staticmethod
+    def create_userdata(cluster_info=None, cloud_provider=None,
                         cert_bundle=None, encryption_key=None, **kwargs):
+        """
+        create the userdata which is given to cloud init
+        """
         kubelet_token = kwargs.get('kubelet_token')
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
@@ -81,6 +86,9 @@ class NodeBuilder:
                            lb_ip,
                            no_cloud_init=False
                            ):
+        """
+        Create future tasks for creating the cluster worker nodes
+        """
         node_args = {'kubelet_token': kubelet_token,
                      'cluster_info': etcd_host_list,
                      'calico_token': calico_token,
@@ -101,12 +109,16 @@ class NodeBuilder:
         volume_klass = self._info.storage_class
         loop = asyncio.get_event_loop()
 
-        tasks = [loop.create_task(create_instance_with_volume(
-            host.name, host.zone,
-            nics=host.nic, volume_klass=volume_klass, nova=nova, cinder=cinder,
-            neutron=neutron,
-            *task_args_node))
-            for host in hosts]
+        tasks = [loop.create_task(
+            create_instance_with_volume(
+                host.name, host.zone,
+                nics=host.nic,
+                volume_klass=volume_klass,
+                nova=NOVA,
+                cinder=CINDER,
+                neutron=NEUTRON,
+                *task_args_node))
+            for host in hosts]  # pylint: disable=bad-continuation
 
         return tasks
 
@@ -133,6 +145,9 @@ class ControlPlaneBuilder:
 
     def create_userdata(self, cluster_info=None, cloud_provider=None,
                         cert_bundle=None, encryption_key=None, **kwargs):
+        """
+        create the userdata which is given to cloud init
+        """
         userdata = str(MasterInit(cluster_info, cert_bundle,
                                   encryption_key,
                                   cloud_provider, **kwargs))
@@ -147,6 +162,9 @@ class ControlPlaneBuilder:
                            admin_token,
                            etcd_host_list,
                            no_cloud_init=False, **kwargs):
+        """
+        Create future tasks for creating the cluster control plane nodes
+        """
 
         # generate a random string
         # this should be the equal of
@@ -183,27 +201,33 @@ class ControlPlaneBuilder:
         loop = asyncio.get_event_loop()
 
         tasks = [loop.create_task(create_instance_with_volume(
-                 masters_zones[i].name, masters_zones[i].zone,
-                 nics=masters_zones[i].nic,
-                 volume_klass=volume_klass,
-                 nova=nova, cinder=cinder, neutron=neutron,
-                 *tasks_args_masters)) for i in range(0, self._info.n_masters)]
+            masters_zones[i].name, masters_zones[i].zone,
+            nics=masters_zones[i].nic,
+            volume_klass=volume_klass,
+            nova=NOVA, cinder=CINDER, neutron=NEUTRON,
+            *tasks_args_masters)) for i in range(0, self._info.n_masters)]
 
         return tasks
 
 
 class ClusterBuilder:
 
-    def run(self, config, no_cloud_init=False):
+    """
+    Plan and build a kubernetes cluster in the cloud
+    """
 
+    def run(self, config, no_cloud_init=False):
+        """
+        execute the complete cluster build
+        """
         if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
             print(red("You must have an odd number (>1) of etcd machines!"))
             sys.exit(2)
 
-        nb = NodeBuilder(nova, neutron, config)
-        cpb = ControlPlaneBuilder(nova, neutron, config)
+        nb = NodeBuilder(NOVA, NEUTRON, config)
+        cpb = ControlPlaneBuilder(NOVA, NEUTRON, config)
         LOGGER.debug(info("Done collecting infromation from OpenStack"))
-        worker_nodes = nb.get_nodes_info(nova, neutron, config)
+        worker_nodes = nb.get_nodes_info(NOVA, NEUTRON, config)
 
         cp_hosts = cpb.get_hosts_info()
         etcd_host_list = []
@@ -227,27 +251,27 @@ class ClusterBuilder:
                    not isinstance(nic, novaclient.v2.servers.NetworkInterface)]
 
         # stupid check which needs to be improved!
-        if not (nics + cp_nics):
+        if not nics + cp_nics:
             LOGGER.info(info(red("Skipping certificate creations")))
             tasks = []
             LOGGER.debug(info("Not creating any tasks"))
         else:
             loop = asyncio.get_event_loop()
-            cluster_info = OSClusterInfo(nova, neutron, config)
+            cluster_info = OSClusterInfo(NOVA, NEUTRON, config)
 
-            config_sec_group(neutron, cluster_info.secgroup['id'])
+            config_sec_group(NEUTRON, cluster_info.secgroup['id'])
 
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
             subnet = config.get('subnet')
             kwargs = {'subnet': subnet} if subnet else {}
             lb = create_loadbalancer(
-                neutron,
+                NEUTRON,
                 config['cluster-name'],
                 **kwargs)
 
             configure_lb_task = loop.create_task(
-                configure_lb(neutron,
+                configure_lb(NEUTRON,
                              lb,
                              config['cluster-name'],
                              master_ips,
@@ -288,7 +312,6 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.gather(*tasks))
-            loop.close()
             kubeconfig = write_kubeconfig(config, lb['vip_address'],
                                           admin_token,
                                           True)
@@ -311,7 +334,7 @@ class ClusterBuilder:
             tries = 0
             while True:
                 tries += 1
-                if tries > 60:
+                if tries > 120:
                     break
                 try:
                     k8s.apply_calico(b64_key(certs["k8s"].key),
@@ -324,6 +347,8 @@ class ClusterBuilder:
                     LOGGER.debug(E)
                     LOGGER.debug(dir(E))
                     continue
+
+            loop.close()
 
         if no_cloud_init:
             return create_inventory(hosts, config)

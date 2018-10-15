@@ -1,27 +1,48 @@
 stages:
  - static-analysis
  - unittest
+ - build-cluster
  - integration-test
  - master-security-checks
  - cleanup
+ - pages
 
 static-analysis:
   stage: static-analysis
-  image: mleiner/kolt-base:0.2
+  image: oz123/koris-alpine:0.1.1
   script:
+    - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev
+    - pip3 install -U pip
     - pip3 install flake8 pylint pylint-exit
     - make lint
 
 unittest:
   stage: unittest
-  image: mleiner/kolt-base:0.2
+  image: oz123/koris-alpine:0.1.1
   script:
+    - apk add --update py3-cryptography python3-dev libffi-dev
+    - pip3 install -U pip
     - pip3 install -e .
     - make coverage PY=python3
 
+build-cluster:
+  stage: build-cluster
+  image: oz123/koris-alpine:0.1.1
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - make launch-cluster
+  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
+  - ls -l
+  artifacts:
+    paths:
+      - "certs-koris-pipe-line-*"
+      - "koris-pipe-line-*-admin.conf"
+
 integration-test:
   stage: integration-test
-  image: mleiner/kolt-base:0.2
+  image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -30,30 +51,16 @@ integration-test:
     - tests/koris_test.yml
     expire_in: 1 week
   script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
-  - "source ./koris-env/bin/activate"
-  - "cd -"
-  - "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && mv kubectl /usr/local/bin/kubectl  && chmod  777  /usr/local/bin/kubectl"
-  - sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
-  - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
-  - cat tests/koris_test.yml
-  - kolt k8s tests/koris_test.yml
-  - export KUBECONFIG=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
-  - echo $KUBECONFIG
-  - kubectl get nodes
-  - kubectl run nginx --image=nginx --port=80
-  - "while [[ $(kubectl --kubeconfig=koltdev-admin.conf describe pod nginx | grep 'Status:' | cut -d ':' -f2 | tr -d ' ') != 'Running' ]]; do echo 'Waiting for container....' ;sleep 2; done;"
-
-  - kubectl patch deployment.apps nginx -p '{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}'
-  - kubectl expose deployment nginx --type=LoadBalancer --name=nginx
-  - "while [[ $(kubectl describe svc nginx | grep 'LoadBalancer Ingress' | cut  -d':' -f2 | tr -d ' ') == 'Pending' ]]; do echo 'Waiting for floating IP....' ; sleep 2; done;"
-
-  - kubectl get services
-  - kubectl get pods
-  - echo http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
-  - curl http://$(kubectl describe svc nginx | grep "LoadBalancer Ingress" | cut  -d":" -f2 | tr -d " ")
+  - make integration-run
+  - make integration-wait
+  - make integration-patch-wait
+  - make integration-expose
+  - make expose-wait
+  - make curl-run
+  - make clean-lb
 
 master-security-checks:
   stage: master-security-checks
@@ -76,17 +83,28 @@ master-security-checks:
 
 cleanup:
   stage: cleanup
-  image: mleiner/kolt-base:0.2
+  image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+  - apk add make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
-  - "source ./koris-env/bin/activate"
-  - "cd -"
-  - sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(git rev-parse --short HEAD)/g" tests/koris_test.yml
-  - sed -i "s/%%date%%/$(date '+%Y-%m-%d')/g" tests/koris_test.yml
-  - kolt destroy tests/koris_test.yml --force
+  - make update-config
+  - make clean-cluster
   when: always
+
+pages:
+  stage: pages
+  image: oz123/koris-alpine:0.1.1
+  script:
+  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+  - which sphinx-build
+  - make -C docs html
+  - mv docs/_build/html/ public/
+  artifacts:
+    paths:
+    - public
+  only:
+  - master

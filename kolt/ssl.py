@@ -1,3 +1,6 @@
+"""
+ssl.py hold all ssl certifcates creation utilities and classes
+"""
 import base64
 import datetime
 import ipaddress
@@ -16,6 +19,16 @@ LOGGER = get_logger(__name__)
 
 
 def create_key(size=2048, public_exponent=65537):
+    """
+    create an RSA private key
+
+    Args:
+        size (int) - the key byte size
+        public_exponent (int) - the key public_exponent
+
+    Return:
+        rsa key object instance
+    """
     key = rsa.generate_private_key(
         public_exponent=public_exponent,
         key_size=size,
@@ -26,22 +39,38 @@ def create_key(size=2048, public_exponent=65537):
 
 def create_ca(private_key, public_key, country,
               state_province, locality, orga, unit, name):
+    """
+    create a CA signed with private_key
+
+    Args:
+        private_key (inst) - private key instance to sign the CA
+        public_key (inst) - public key for the CSR
+        country (str) - the country for the CSR
+        state_province (str) - the state or province for the CSR
+        locality (str) - the locality for the CSR
+        orga (str) - the organization for the CSR
+        unit (str) - the unit for the CSR
+        name (str) - the name for the CSR
+
+    Return:
+        ssl certificate object
+    """
     issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -84,6 +113,22 @@ def create_ca(private_key, public_key, country,
 
 def create_certificate(ca_bundle, public_key, country,
                        state_province, locality, orga, unit, name, hosts, ips):
+    """
+    create a certificate signed with CA private_key
+
+    Args:
+        ca_bundle (inst) - private key instance to sign the CA
+        public_key (inst) - public key for the CSR
+        country (str) - the country for the CSR
+        state_province (str) - the state or province for the CSR
+        locality (str) - the locality for the CSR
+        orga (str) - the organization for the CSR
+        unit (str) - the unit for the CSR
+        name (str) - the name for the CSR
+
+    Return:
+        ssl certificate object
+    """
 
     issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
@@ -91,7 +136,7 @@ def create_certificate(ca_bundle, public_key, country,
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     subject = x509.Name([
@@ -199,8 +244,8 @@ def write_key(key, passwd=None, filename="key.pem"):  # pragma: no coverage
         enc_algo = serialization.NoEncryption()
 
     # Write our key to disk for safe keeping
-    with open(filename, "wb") as f:
-        f.write(key.private_bytes(
+    with open(filename, "wb") as fh:
+        fh.write(key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=enc_algo,))
@@ -211,21 +256,26 @@ def write_cert(cert, filename):  # pragma: no coverage
     Write the certifiacte instance to the file as ASCII string
 
     Args:
-
        cert (SSL certificate instance)
        filename (str): the file to write
     """
 
-    with open(filename, "wb") as f:
-        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(filename, "wb") as fh:
+        fh.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
 class CertBundle:
+    """
+    A CertBundle instace holds the bytes information of a certificate and the
+    key used to sign it.
+    """
 
     @classmethod
     def create_signed(cls, ca_bundle, country, state, locality,
                       orga, unit, name, hosts, ips):
-
+        """
+        create a self signed CA cert key bundle
+        """
         key = create_key()
         cert = create_certificate(ca_bundle,
                                   key.public_key(),
@@ -242,6 +292,9 @@ class CertBundle:
 
     @classmethod
     def read_bundle(cls, key, cert):
+        """
+        read a certificate bundle from file system
+        """
         key, cert = read_key(key), read_cert(cert)
         return cls(key, cert)
 
@@ -250,12 +303,25 @@ class CertBundle:
         self.cert = cert
 
     def save(self, name, directory):
+        """
+        save a certificate bundle to the file system
+        """
         write_key(self.key,
                   filename=os.path.join(directory, name + "-key.pem"))
         write_cert(self.cert, os.path.join(directory, name + ".pem"))
 
 
 def read_cert(cert):  # pragma: no coverage
+    """
+    read SSL certificate from path
+
+    Args:
+        cert (str) - path to a cert on a file system
+
+    Return:
+        cert (inst) - a certificate instance
+    """
+
     with open(cert, "rb") as f:
         cert = x509.load_pem_x509_certificate(
             f.read(), default_backend())
@@ -263,6 +329,15 @@ def read_cert(cert):  # pragma: no coverage
 
 
 def read_key(key):  # pragma: no coverage
+    """
+    read SSL key from path
+
+    Args:
+        key (str) - path to a key on a file system
+
+    Return:
+        private_key (inst) - a private key instance
+    """
     with open(key, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
             key_file.read(),

@@ -1,4 +1,4 @@
-Welcome to colt's documentation!
+Welcome to kolt's documentation!
 ======================================
 
 .. toctree::
@@ -10,7 +10,6 @@ Welcome to colt's documentation!
    usage
    modules
    contributing
-   history
 
 Indices and tables
 ==================

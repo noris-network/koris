@@ -15,16 +15,67 @@ from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import NotFound as NeutronNotFound
-from novaclient.exceptions import (NotFound as NovaNotFound, ClientException as NovaClientException)  # noqa
+from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
+from kolt.cloud import OpenStackAPI
 from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
 
 LOGGER = get_logger(__name__)
+
+
+def remove_cluster(name, nova, neutron):
+    """
+    Delete a cluster from OpenStack
+    """
+    cluster_suffix = "-%s" % name
+    servers = [server for server in nova.servers.list() if
+               server.name.endswith(cluster_suffix)]
+
+    if not servers:
+        print(red("No servers were found ..."))
+        print(red("Could not remove cluster ..."))
+        sys.exit(1)
+
+    print("Scheduling the deletion of ", servers)
+
+    async def del_server(server):
+        await asyncio.sleep(1)
+        nics = [nic for nic in server.interface_list()]
+        server.delete()
+        list(neutron.delete_port(nic.id) for nic in nics)
+        print("deleted %s ..." % server.name)
+
+    loop = asyncio.get_event_loop()
+    tasks = [loop.create_task(del_server(server)) for server in servers]
+
+    if tasks:
+        loop.run_until_complete(asyncio.wait(tasks))
+
+    delete_loadbalancer(neutron, cluster_suffix)
+    connection = OpenStackAPI.connect()
+    secg = connection.list_security_groups(
+        {"name": '%s-sec-group' % name})
+    if secg:
+        for sg in secg:
+            for rule in sg.security_group_rules:
+                connection.delete_security_group_rule(rule['id'])
+
+            for port in connection.list_ports():
+                if sg.id in port.security_groups:
+                    connection.delete_port(port.id)
+    connection.delete_security_group(
+        '%s-sec-group' % name)
+    loop.close()
+
+
+class BuilderError(Exception):
+    """Raise a custom error if the build fails"""
+    pass
 
 
 async def create_volume(cinder, image, zone, klass, size=25):
@@ -97,18 +148,12 @@ async def create_instance_with_volume(name, zone, flavor, image,
                                        block_device_mapping_v2=[volume_data],
                                        userdata=userdata,
                                        )
-
-    except NovaClientException as nce:
+    except (Exception) as err:
         print(info(red("Something weired happend, I so I didn't create %s" %
                        name)))
-        print(info(yellow(nce.message)))
-        # TODO: clean volume and nic here
-    except KeyboardInterrupt:
-        print(info(red("Oky doky, stopping as you interrupted me ...")))
-        print(info(red("Cleaning after myself")))
-        # TODO: clean volume and nic here
-        # clean volume
-        cinder.volumes.delete(volume_data["id"])
+        print(info(red("Removing cluser ...")))
+        print(info(yellow("The exception is", str((err)))))
+        raise BuilderError(str(err))
 
     inst_status = instance.status
     print("waiting for 5 seconds for the machine to be launched ... ")
@@ -152,7 +197,6 @@ def create_loadbalancer(client, name, provider='octavia',
     """
     # see examle of how to create an LB
     # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
-
     if 'subnet' in kwargs:
         subnet_id = client.find_resource('subnet', kwargs['subnet'])['id']
     else:
@@ -218,9 +262,9 @@ async def configure_lb(client, lb, name, master_ips):
 
     client.create_lbaas_healthmonitor(
         {'healthmonitor':
-            {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
-             "pool_id": pool['pool']['id'],
-             "name": "%s-health" % name}})
+         {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
+          "pool_id": pool['pool']['id'],
+          "name": "%s-health" % name}})
 
     LOGGER.debug("added health monitor ...")
 
@@ -347,6 +391,13 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
 
 
 def delete_loadbalancer(client, name):
+    """
+    Delete the cluster API loadbalancer
+
+    Args:
+        client (neutron client)
+        name (str) - the name of the load balancer to delete
+    """
     try:
         client.delete_lbaas_healthmonitor(
             client.list_lbaas_healthmonitors(
@@ -355,14 +406,17 @@ def delete_loadbalancer(client, name):
         pass
 
     try:
-        lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+        lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
     except IndexError:
         return
 
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
+        try:
+            lb = lb['loadbalancers'][0]
+            time.sleep(0.5)
+        except IndexError:
+            return
 
     while True:
         try:
@@ -371,11 +425,11 @@ def delete_loadbalancer(client, name):
                     {"name": "%s-pool" % name})['pools'][0]['id'])
         except IndexError:
             break
-        except Exception as E:
-            LOGGER.debug("Error while deleting pool: %s", E)
+        except Exception as err:
+            LOGGER.debug("Error while deleting pool: %s", err)
             time.sleep(0.5)
 
-    lb = client.list_loadbalancers({"name": "nude-lb"})['loadbalancers'][0]
+    lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
 
     while lb['provisioning_status'] != 'ACTIVE':
         lb = client.list_loadbalancers(id=lb['id'])
@@ -392,15 +446,15 @@ def delete_loadbalancer(client, name):
         except IndexError:
             break
 
-        except Exception as E:
-            LOGGER.debug("Error while deleting listener: %s " % E)
+        except Exception as err:
+            LOGGER.debug("Error while deleting listener: %s " % err)
             continue
 
     while True:
         try:
             client.delete_loadbalancer(lb['id'])
             break
-        except Exception as exp:
+        except Exception as exp:  # pylint: disable=broad-except
             LOGGER.debug("Error while deleting loadbalancer: %s ", exp)
             continue
 
@@ -571,34 +625,49 @@ class OSClusterInfo:
 
     @property
     def nodes_names(self):
+        """get the host names of all worker nodes"""
         return host_names("node", self.n_nodes, self.name)
 
     @property
     def management_names(self):
+        """get the host names of all control plane nodes"""
         return host_names("master", self.n_masters, self.name)
 
     def master_args_builder(self, user_data, hosts):
-
+        """return a list containing all args for building a master task"""
         return [self.master_flavor, self.image, self.keypair, self.secgroups,
                 user_data, hosts]
 
     def node_args_builder(self, user_data, hosts):
+        """return a list containing all args for building a worker node task"""
 
         return [self.node_flavor, self.image, self.keypair, self.secgroups,
                 user_data, hosts]
 
     def distribute_management(self):
+        """
+        distribute control plane nodes in the different availability zones
+        """
         return list(get_host_zones(self.management_names, self.azones))
 
     def distribute_nodes(self):
+        """
+        distribute worker nodes in the different availability zones
+        """
         return list(get_host_zones(self.nodes_names, self.azones))
 
     def assign_nics_to_management(self, management_zones, nics):
+        """
+        assign network interfaces to control plane nodes
+        """
         for idx, nic in enumerate(nics):
             management_zones[idx].nic = [{'net-id': self.net['id'],
-                                         'port-id': nic['port']['id']}]
+                                          'port-id': nic['port']['id']}]
 
     def assign_nics_to_nodes(self, nodes_zones, nics):
+        """
+        assign network interfaces to worker nodes
+        """
         for idx, nic in enumerate(nics):
             nodes_zones[idx].nic = [{'net-id': self.net['id'],
                                      'port-id': nic['port']['id']}]

@@ -1,8 +1,9 @@
 FROM alpine:3.8
+MAINTAINER Oz Tiram <oz.tiram@gmail.com>
 
 RUN apk update
 
-RUN apk add alpine-sdk python3-dev linux-headers py-cryptography
+RUN apk add alpine-sdk python3-dev linux-headers py3-cryptography libffi-dev
 
 COPY requirements.txt requirements_dev.txt ./
 
