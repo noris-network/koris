@@ -226,4 +226,4 @@ clean-all-after-integration-test: clean-lb
 
 
 clean-network-ports:  ## remove dangling ports in Openstack
-	openstack port delete $(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
+	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
