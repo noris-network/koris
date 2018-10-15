@@ -223,3 +223,7 @@ clean-all-after-integration-test: clean-lb
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
 	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
+
+
+clean-network-ports:  ## remove dangling ports in Openstack
+	openstack port delete $(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
