@@ -223,3 +223,14 @@ clean-all-after-integration-test: clean-lb
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
 	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
+	
+master-security-checks: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+master-security-checks:
+	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
+	#kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
+	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+
+node-security-checks: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+node-security-checks:
+	kubectl run --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11

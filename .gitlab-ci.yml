@@ -3,7 +3,7 @@ stages:
  - unittest
  - build-cluster
  - integration-test
- - master-security-checks
+ - security-checks
  - cleanup
  - pages
 
@@ -62,24 +62,17 @@ integration-test:
   - make curl-run
   - make clean-lb
 
-master-security-checks:
-  stage: master-security-checks
-  image: mleiner/kolt-base:0.2
-  dependencies:
-    - integration-test
+security-checks:
+  stage: security-checks
+  image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
-  - "pip3 install -r requirements.txt"
-  - "pip3 install -e ."
-  - "mkdir  koris-install  && cd koris-install && python3 -m venv koris-env"
-  - "source ./koris-env/bin/activate"
-  - "cd -"
+  - apk add make
   - "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && mv kubectl /usr/local/bin/kubectl  && chmod  777  /usr/local/bin/kubectl"
-  - kubectl get services
-  - kubectl get pods
-  - 'kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never --overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"node-role.kubernetes.io/master\": \"true\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.8'
+  - make master-security-checks
+  - make node-security-checks
 
 cleanup:
   stage: cleanup
