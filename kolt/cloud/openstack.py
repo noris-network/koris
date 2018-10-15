@@ -412,7 +412,6 @@ def delete_loadbalancer(client, name):
         client (neutron client)
         name (str) - the name of the load balancer to delete
     """
-    import pdb; pdb.set_trace()
     _del_health_monitor(client, name)
 
     try:
