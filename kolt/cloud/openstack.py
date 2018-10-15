@@ -23,7 +23,8 @@ from keystoneauth1 import session
 from kolt.cloud import OpenStackAPI
 from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
-from kolt.util.util import (get_logger, Server, get_host_zones, host_names)
+from kolt.util.util import (get_logger, Server, get_host_zones, host_names,
+                            retry)
 
 LOGGER = get_logger(__name__)
 
@@ -56,7 +57,7 @@ def remove_cluster(name, nova, neutron):
     if tasks:
         loop.run_until_complete(asyncio.wait(tasks))
 
-    delete_loadbalancer(neutron, cluster_suffix)
+    delete_loadbalancer(neutron, name)
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % name})
@@ -390,13 +391,10 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
                  port_range_max=22, port_range_min=22)
 
 
-def delete_loadbalancer(client, name):
+@retry(exceptions=OSError, backoff=1, logger=LOGGER)
+def _del_health_monitor(client, name):
     """
-    Delete the cluster API loadbalancer
-
-    Args:
-        client (neutron client)
-        name (str) - the name of the load balancer to delete
+    delete a LB health monitor
     """
     try:
         client.delete_lbaas_healthmonitor(
@@ -405,14 +403,26 @@ def delete_loadbalancer(client, name):
     except IndexError:
         pass
 
+
+def delete_loadbalancer(client, name):
+    """
+    Delete the cluster API loadbalancer
+
+    Args:
+        client (neutron client)
+        name (str) - the name of the load balancer to delete
+    """
+    import pdb; pdb.set_trace()
+    _del_health_monitor(client, name)
+
     try:
         lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
     except IndexError:
         return
 
     while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
         try:
+            lb = client.list_loadbalancers(id=lb['id'])
             lb = lb['loadbalancers'][0]
             time.sleep(0.5)
         except IndexError:
