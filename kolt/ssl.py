@@ -130,15 +130,6 @@ def create_certificate(ca_bundle, public_key, country,
         ssl certificate object
     """
 
-    issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name),
-    ])
-
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
@@ -151,7 +142,7 @@ def create_certificate(ca_bundle, public_key, country,
     cert = x509.CertificateBuilder().subject_name(
         subject
     ).issuer_name(
-        issuer
+        ca_bundle.cert.subject
     ).public_key(
         public_key
     ).not_valid_before(
