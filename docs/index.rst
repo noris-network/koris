@@ -9,6 +9,7 @@ Welcome to kolt's documentation!
    installation
    usage
    modules
+   certificates
    contributing
 
 Indices and tables
