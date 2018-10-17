@@ -54,12 +54,13 @@ class NodeBuilder:
             "gathering node information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
 
-    @staticmethod
-    def create_userdata(cluster_info=None, cloud_provider=None,
+    def create_userdata(self, cluster_info=None, cloud_provider=None,
                         cert_bundle=None, encryption_key=None, **kwargs):
         """
         create the userdata which is given to cloud init
         """
+        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
+
         kubelet_token = kwargs.get('kubelet_token')
         ca_cert = kwargs.get('ca_cert')
         calico_token = kwargs.get('calico_token')
@@ -67,7 +68,8 @@ class NodeBuilder:
         lb_ip = kwargs.get("lb_ip")
         userdata = str(NodeInit(kubelet_token, ca_cert,
                                 cert_bundle, service_account_bundle,
-                                cluster_info, calico_token, lb_ip))
+                                cluster_info, calico_token, lb_ip,
+                                cloud_provider=cloud_provider_info))
         return userdata
 
     def get_nodes_info(self, nova, neutron, config):
@@ -88,7 +90,12 @@ class NodeBuilder:
                            ):
         """
         Create future tasks for creating the cluster worker nodes
+
+        Args:
+            cloud_provider (OSCloudConfig) - used to write cloud.conf
         """
+        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
+
         node_args = {'kubelet_token': kubelet_token,
                      'cluster_info': etcd_host_list,
                      'calico_token': calico_token,
@@ -98,7 +105,8 @@ class NodeBuilder:
                           'service_account_bundle': certs[
                               'service-account'],  # noqa
                           'cert_bundle': certs['k8s'],
-                          'lb_ip': lb_ip})
+                          'lb_ip': lb_ip,
+                          'cloud_provider': cloud_provider_info})
 
         user_data = self.create_userdata(**node_args)
         task_args_node = self._info.node_args_builder(user_data, hosts)
@@ -147,6 +155,9 @@ class ControlPlaneBuilder:
                         cert_bundle=None, encryption_key=None, **kwargs):
         """
         create the userdata which is given to cloud init
+
+        Args:
+            cloud_provider (OSCloudConfig) - used to write cloud.conf
         """
         userdata = str(MasterInit(cluster_info, cert_bundle,
                                   encryption_key,
