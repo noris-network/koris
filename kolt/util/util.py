@@ -340,7 +340,8 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
                 try:
                     return f(*args, **kwargs)
                 except exceptions as e:
-                    msg = '{}, Retrying in {} seconds...'.format(e, mdelay)
+                    msg = '{}, Retrying in {} seconds...'.format(e,
+                                                                 int(mdelay))
                     if logger:
                         logger.warning(msg)
                     else:
