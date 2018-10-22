@@ -332,6 +332,7 @@ class ClusterBuilder:
             LOGGER.debug(info("Done creating control plane tasks"))
 
             tasks = cp_tasks + tasks
+
         if tasks:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)

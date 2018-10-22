@@ -9,13 +9,14 @@ import os
 import re
 import sys
 import textwrap
-import time
 import uuid
 
+from functools import lru_cache
 from novaclient import client as nvclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
-from neutronclient.common.exceptions import NotFound as NeutronNotFound
+from neutronclient.common.exceptions import Conflict as NeutronConflict
+from neutronclient.common.exceptions import StateInvalidClient
 from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
 from keystoneauth1 import identity
@@ -340,8 +341,12 @@ def add_sec_rule(neutron, sec_gr_id, **kwargs):
     """
     add a security group rule
     """
-    kwargs.update({'security_group_id': sec_gr_id})
-    neutron.create_security_group_rule({'security_group_rule': kwargs})
+    try:
+        kwargs.update({'security_group_id': sec_gr_id})
+        neutron.create_security_group_rule({'security_group_rule': kwargs})
+    except NeutronConflict:
+        kwargs.pop('security_group_id')
+        print(info("Rule with %s already exists" % str(kwargs)))
 
 
 async def del_sec_rule(connection, _id):
@@ -351,7 +356,8 @@ async def del_sec_rule(connection, _id):
     connection.delete_security_group_rule(_id)
 
 
-def create_sec_group(neutron, name):
+@lru_cache()
+def get_or_create_sec_group(neutron, name):
     """
     Create a security group for all machines
 
@@ -362,9 +368,17 @@ def create_sec_group(neutron, name):
     Return:
         a security group dict
     """
-
-    return neutron.create_security_group(
-        {'security_group': {'name': "%s-sec-group" % name}})['security_group']
+    name = "%s-sec-group" % name
+    secgroup = next(neutron.list_security_groups(
+        retrieve_all=False, **{'name': 'nww3-sec-group'}))['security_groups']
+    if secgroup:
+        print(info(red("A Security group named %s already exists" % name)))
+        print(info(red("I will add my own rules, please manually review all others")))  # noqa
+        return secgroup[0]
+    else:
+        return neutron.create_security_group(
+            {'security_group': {'name':
+                                "%s-sec-group" % name}})['security_group']
 
 
 def config_sec_group(neutron, sec_group_id, subnet=None):
@@ -433,81 +447,73 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
                  port_range_max=22, port_range_min=22)
 
 
-@retry(exceptions=OSError, backoff=1, logger=LOGGER)
-def _del_health_monitor(client, name):
+@retry(exceptions=(OSError, NeutronConflict), backoff=1, logger=LOGGER)
+def _del_health_monitor(client, id_):
     """
     delete a LB health monitor
     """
-    try:
-        client.delete_lbaas_healthmonitor(
-            client.list_lbaas_healthmonitors(
-                {"name": "%s-health" % name})['healthmonitors'][0]['id'])
-    except IndexError:
-        pass
+    client.delete_lbaas_healthmonitor(id_)
 
 
-def delete_loadbalancer(client, name):
+@retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1)
+def _del_pool(client, name, lb_id):
+    # if pool has health monitor delete it first
+    pools = list(client.list_lbaas_pools(retrieve_all=False,
+                                         name="%s-pool" % name))
+    lb_id = {'id': lb_id}
+    pools = pools[0]['pools']
+    for pool in pools:
+        if lb_id in pool['loadbalancers']:
+            if pool['healthmonitor_id']:
+                _del_health_monitor(client, pool['healthmonitor_id'])
+
+            client.delete_lbaas_pool(pool['id'])
+
+
+@retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1)
+def _del_listener(client, name, lb_id):
+    lb_id = {'id': lb_id}
+    listeners = list(client.list_listeners(retrieve_all=False,
+                                           name="%s-listener" % name))
+    listeners = listeners[0]['listeners']
+    for item in listeners:
+        if lb_id in item['loadbalancers']:
+            client.delete_listener(item['id'])
+
+
+@retry(exceptions=(NeutronConflict, StateInvalidClient), tries=10, backoff=1)
+def _del_loadbalancer(client, lb_id):
+    client.delete_loadbalancer(lb_id)
+
+
+@retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
+def delete_loadbalancer(client, name, suffix='-lb'):
     """
     Delete the cluster API loadbalancer
 
+    Deletion order of LoadBalancer:
+        - remove pool (LB is pending update)
+        - if healthmonitor in pool, delete it first
+        - remove listener (LB is pending update)
+        - remove LB (LB is pending delete)
     Args:
         client (neutron client)
         name (str) - the name of the load balancer to delete
+        suffix (str) - the suffix of the name, appended to the search string
     """
-    _del_health_monitor(client, name)
-
-    try:
-        lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
-    except IndexError:
+    lb = client.list_lbaas_loadbalancers(retrieve_all=True,
+                                         name=name + suffix)['loadbalancers']
+    if not lb:
         return
+    else:
+        lb = lb[0]
 
-    while lb['provisioning_status'] != 'ACTIVE':
-        try:
-            lb = client.list_loadbalancers(id=lb['id'])
-            lb = lb['loadbalancers'][0]
-            time.sleep(0.5)
-        except IndexError:
-            return
+    if lb['pools']:
+        _del_pool(client, name, lb['id'])
+    if lb['listeners']:
+        _del_listener(client, name, lb['id'])
 
-    while True:
-        try:
-            client.delete_lbaas_pool(
-                client.list_lbaas_pools(
-                    {"name": "%s-pool" % name})['pools'][0]['id'])
-        except IndexError:
-            break
-        except Exception as err:
-            LOGGER.debug("Error while deleting pool %s-pool: %s", name, err)
-            time.sleep(0.5)
-
-    lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
-
-    while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        time.sleep(0.5)
-
-    while True:
-        try:
-            client.delete_listener(
-                client.list_listeners(
-                    {"name": "%s-listener" % name})['listeners'][0]['id']
-            )
-            break
-        except IndexError:
-            break
-
-        except Exception as err:
-            LOGGER.debug("Error while deleting listener %s: %s ", name, err)
-            continue
-
-    while True:
-        try:
-            client.delete_loadbalancer(lb['id'])
-            break
-        except Exception as exp:  # pylint: disable=broad-except
-            LOGGER.debug("Error while deleting loadbalancer: %s ", exp)
-            continue
+    _del_loadbalancer(client, lb['id'])
 
 
 def read_os_auth_variables(trim=True):
@@ -614,15 +620,10 @@ class OSClusterInfo:
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
 
-        try:
-            secgroup = neutron_client.find_resource(
-                'security_group', "%s-sec-group" % config['cluster-name'])
-        except NeutronNotFound:
-            secgroup = create_sec_group(neutron_client, config['cluster-name'])
-
+        secgroup = get_or_create_sec_group(neutron_client,
+                                           config['cluster-name'])
         self.secgroup = secgroup
         self.secgroups = [secgroup['id']]
-        print(self.secgroups)
 
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
 
