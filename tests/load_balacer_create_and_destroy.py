@@ -40,14 +40,16 @@ if __name__ == '__main__':
             action = actions.index(sys.argv[1])
         except ValueError:
             pass
-
     if action == 0:
         create_and_configure('test')
+        sys.exit(0)
     if action == 1:
         delete_loadbalancer(CLIENT, 'test')
+        sys.exit(0)
     if action == 2:
         create_and_configure('test')
         delete_loadbalancer(CLIENT, 'test')
+        sys.exit(0)
     else:
         print("You must run this script with an action")
         print("Action must be one of: {}".format(', '.join(actions)))
