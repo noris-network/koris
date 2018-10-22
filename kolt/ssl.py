@@ -59,18 +59,18 @@ def create_ca(private_key, public_key, country,
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -130,28 +130,19 @@ def create_certificate(ca_bundle, public_key, country,
         ssl certificate object
     """
 
-    issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
-    ])
-
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country),
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
         x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga.capitalize()),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name.capitalize()),
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
         subject
     ).issuer_name(
-        issuer
+        ca_bundle.cert.subject
     ).public_key(
         public_key
     ).not_valid_before(
@@ -198,8 +189,8 @@ def create_certificate(ca_bundle, public_key, country,
         critical=False)
 
     cert = cert.add_extension(
-        x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_bundle.cert.public_key()),  # noqa
-        critical=False)
+        x509.AuthorityKeyIdentifier.from_issuer_public_key(
+            ca_bundle.cert.public_key()), critical=False)
 
     if alt_names:
         cert = cert.add_extension(
@@ -256,6 +247,7 @@ def write_cert(cert, filename):  # pragma: no coverage
     Write the certifiacte instance to the file as ASCII string
 
     Args:
+
        cert (SSL certificate instance)
        filename (str): the file to write
     """
@@ -265,17 +257,11 @@ def write_cert(cert, filename):  # pragma: no coverage
 
 
 class CertBundle:
-    """
-    A CertBundle instace holds the bytes information of a certificate and the
-    key used to sign it.
-    """
 
     @classmethod
     def create_signed(cls, ca_bundle, country, state, locality,
                       orga, unit, name, hosts, ips):
-        """
-        create a self signed CA cert key bundle
-        """
+
         key = create_key()
         cert = create_certificate(ca_bundle,
                                   key.public_key(),
