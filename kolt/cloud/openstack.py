@@ -6,6 +6,7 @@ import asyncio
 import base64
 import copy
 import os
+import re
 import sys
 import textwrap
 import time
@@ -192,6 +193,10 @@ def create_loadbalancer(client, name, provider='octavia',
         subnet (str): if given this subnet will be used, in any other case
           the last one will be used.
 
+    Kwargs:
+        floating_ip (bool, str): If given associate a floating IP with the
+          loadbalancer. True will create a new floating IP.
+
     Returns:
         lb (dict): A dictionary containing the information about the lb created
 
@@ -209,18 +214,55 @@ def create_loadbalancer(client, name, provider='octavia',
                                       'name': "%s-lb" % name
                                       }
                                      })
+
     LOGGER.debug("created loadbalancer ...")
-    return lb
+
+    floatingip = kwargs.get('floating_ip')
+    fip_addr = None
+
+    if floatingip:
+        fip_addr = _associate_floating_ip(client, lb['loadbalancer'],
+                                          floatingip)
+
+    return lb, fip_addr
 
 
-async def configure_lb(client, lb, name, master_ips):
+def _associate_floating_ip(client, lb, floatingip):
+
+    if isinstance(floatingip, str):
+        valid_ip = re.match("\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}", floatingip) # noqa
+        # TODO: allow re-using a floating IP
+    else:
+        fips = client.list_floatingips()['floatingips']
+        if len(fips):
+            fnet_id = client.list_floatingips()['floatingips'][0]['floating_network_id']  # noqa
+        else:
+            raise ValueError(
+                "Please create a floating ip and specify it in the configuration file")  # noqa
+        new_fip = client.create_floatingip(
+            {'floatingip': {'project_id': lb['tenant_id'],
+                            'floating_network_id': fnet_id}})['floatingip']
+
+        client.update_floatingip(new_fip['id'],
+                                 {'floatingip':
+                                  {'port_id': lb['vip_port_id']}})
+
+        LOGGER.info("Loadbalancer external IP: %s",
+                    new_fip['floating_ip_address'])
+
+        return new_fip['floating_ip_address']
+
+
+async def configure_lb(client, lb, name, master_ips, **kwargs):
     """
     Configure a load balancer created in earlier step
 
     Args:
         master_ips (list): A list of the master IP addresses
+
     """
     lb = lb['loadbalancer']
+
     subnet_id = lb['vip_subnet_id']
 
     while lb['provisioning_status'] != 'ACTIVE':
@@ -435,7 +477,7 @@ def delete_loadbalancer(client, name):
         except IndexError:
             break
         except Exception as err:
-            LOGGER.debug("Error while deleting pool: %s", err)
+            LOGGER.debug("Error while deleting pool %s-pool: %s", name, err)
             time.sleep(0.5)
 
     lb = client.list_loadbalancers({"name": name})['loadbalancers'][0]
@@ -456,7 +498,7 @@ def delete_loadbalancer(client, name):
             break
 
         except Exception as err:
-            LOGGER.debug("Error while deleting listener: %s " % err)
+            LOGGER.debug("Error while deleting listener %s: %s ", name, err)
             continue
 
     while True:
@@ -678,5 +720,8 @@ class OSClusterInfo:
         assign network interfaces to worker nodes
         """
         for idx, nic in enumerate(nics):
-            nodes_zones[idx].nic = [{'net-id': self.net['id'],
-                                     'port-id': nic['port']['id']}]
+            try:
+                nodes_zones[idx].nic = [{'net-id': self.net['id'],
+                                         'port-id': nic['port']['id']}]
+            except IndexError:
+                LOGGER.debug("I got more nics then servers ...")

@@ -275,8 +275,14 @@ class ClusterBuilder:
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
             subnet = config.get('subnet')
+            floating_ip = config.get('loadbalancer-floatingip', '')
+
             kwargs = {'subnet': subnet} if subnet else {}
-            lb = create_loadbalancer(
+
+            if floating_ip:
+                kwargs['floating_ip'] = floating_ip
+
+            lb, floatingip = create_loadbalancer(
                 NEUTRON,
                 config['cluster-name'],
                 **kwargs)
@@ -288,8 +294,15 @@ class ClusterBuilder:
                              master_ips,
                              )
             )
+
             lb = lb['loadbalancer']
-            ips.append(lb['vip_address'])
+
+            if floatingip:
+                lb_ip = floatingip
+            else:
+                lb_ip = lb['vip_address']
+
+            ips.append(lb_ip)
             certs = create_certs(config, cluster_host_names, ips)
             LOGGER.debug(info("Done creating nodes tasks"))
 
@@ -308,7 +321,7 @@ class ClusterBuilder:
             tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
                                           calico_token, etcd_host_list,
                                           no_cloud_init=no_cloud_init,
-                                          lb_ip=lb['vip_address'])
+                                          lb_ip=lb_ip)
 
             cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                               kubelet_token, calico_token,
@@ -323,7 +336,7 @@ class ClusterBuilder:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.gather(*tasks))
-            kubeconfig = write_kubeconfig(config, lb['vip_address'],
+            kubeconfig = write_kubeconfig(config, lb_ip,
                                           admin_token,
                                           True)
 
