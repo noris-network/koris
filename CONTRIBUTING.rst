@@ -97,7 +97,7 @@ If you prefer to use `Pipenv` you can let Pipenv manage the virtual environment:
 6. Commit your changes and push your branch to GitHub::
 
     $ git add .
-    $ git commit -m "Your detailed description of your changes."
+    $ git commit
     $ git push origin name-of-your-bugfix-or-feature
 
 7. Submit a merge request through the Gitlab website.
@@ -202,6 +202,7 @@ Instead make small commits that are easy to reason about and to understand.
 
 Instead write a `nice commit message`_ with a short title and informative body.
 Make sure the body contains a reference to the ticket you are working on.
+The reference should be in the form of a the jira ticket number: KOLT-XY.
 Make sure your titles are meaningful, they will appear in the ChangeLog!
 
 
