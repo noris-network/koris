@@ -242,7 +242,8 @@ class ClusterBuilder:
 
         cluster_host_names = [host.name for host in etcd_host_list] + [
             host.name for host in worker_nodes] + [
-            "kubernetes.default", "kubernetes.default.svc.cluster.local"]
+            "kubernetes.default", "kubernetes.default.svc.cluster.local",
+            "kubernetes"]
         nics = [host.interface_list()[0] for host in worker_nodes]
         cp_nics = [host.interface_list()[0] for host in cp_hosts]
         nics = [nic for nic in nics if
