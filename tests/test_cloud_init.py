@@ -61,7 +61,8 @@ def ci_node():
                   certs['service-account'],
                   test_cluster,
                   calico_token,
-                  "10.32.192.121"
+                  "10.32.192.121",
+                  cloud_provider=cloud_config
                   )
     return ci
 
@@ -120,7 +121,7 @@ def test_node_init(ci_node):
     config = ci_node.get_files_config()
     config = yaml.safe_load(config)
 
-    assert len(config['write_files']) == 8
+    assert len(config['write_files']) == 9
 
 
 def test_get_kube_config():
