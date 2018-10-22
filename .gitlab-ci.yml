@@ -21,7 +21,7 @@ unittest:
   script:
     - apk add --update py3-cryptography python3-dev libffi-dev
     - pip3 install -U pip
-    - pip3 install -e .
+    - pip3 install -r requirements_dev.txt
     - make coverage PY=python3
 
 build-cluster:
