@@ -5,26 +5,26 @@ in OpenStack
 
 import asyncio
 from kolt.cloud.builder import get_clients
-from kolt.cloud.openstack import (delete_loadbalancer, create_loadbalancer,
-                                  configure_lb)
+from kolt.cloud.openstack import LoadBalancer
 _, CLIENT, _ = get_clients()
 
 
-def create_and_configure(name):
+config = {'cluster-name': 'test'}
+
+LB = LoadBalancer(config)
+
+
+def create_and_configure():
     """
     create and configure a load-balancer in oneshot, in real life
     we postpone the configuration to a later stage.
     """
     loop = asyncio.get_event_loop()
-    lb, _ = create_loadbalancer(
-        CLIENT,
-        'test',
-    )
+    lb, _ = LB.create(CLIENT)
 
     master_ips = ['192.168.0.103', '192.168.0.104', '192.168.0.105']
 
-    configure_lb_task = loop.create_task(
-        configure_lb(CLIENT, lb, name, master_ips))
+    configure_lb_task = loop.create_task(LB.configure(CLIENT, master_ips))
 
     tasks = [configure_lb_task]
 
@@ -44,11 +44,11 @@ if __name__ == '__main__':
         create_and_configure('test')
         sys.exit(0)
     if action == 1:
-        delete_loadbalancer(CLIENT, 'test')
+        LB.delete(CLIENT)
         sys.exit(0)
     if action == 2:
-        create_and_configure('test')
-        delete_loadbalancer(CLIENT, 'test')
+        create_and_configure()
+        LB.delete(CLIENT)
         sys.exit(0)
     else:
         print("You must run this script with an action")

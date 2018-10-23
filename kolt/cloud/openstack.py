@@ -27,15 +27,14 @@ from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, Server, get_host_zones, host_names,
                             retry)
-
 LOGGER = get_logger(__name__)
 
 
-def remove_cluster(name, nova, neutron):
+def remove_cluster(config, nova, neutron):
     """
     Delete a cluster from OpenStack
     """
-    cluster_suffix = "-%s" % name
+    cluster_suffix = "-%s" % config['cluster-name']
     servers = [server for server in nova.servers.list() if
                server.name.endswith(cluster_suffix)]
 
@@ -58,11 +57,11 @@ def remove_cluster(name, nova, neutron):
 
     if tasks:
         loop.run_until_complete(asyncio.wait(tasks))
-
-    delete_loadbalancer(neutron, name)
+    lbinst = LoadBalancer(config)
+    lbinst.delete(neutron)
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
-        {"name": '%s-sec-group' % name})
+        {"name": '%s-sec-group' % config['cluster-name']})
     if secg:
         for sg in secg:
             for rule in sg.security_group_rules:
@@ -72,7 +71,7 @@ def remove_cluster(name, nova, neutron):
                 if sg.id in port.security_groups:
                     connection.delete_port(port.id)
     connection.delete_security_group(
-        '%s-sec-group' % name)
+        '%s-sec-group' % config['cluster-name'])
     loop.close()
 
 
@@ -178,163 +177,228 @@ async def create_instance_with_volume(name, zone, flavor, image,
     hosts[name] = (ip)
 
 
-def create_loadbalancer(client, name, provider='octavia',
-                        **kwargs):
-    """Create a load balancer for the kuberentes api server
-
-    The API is async, so we need to check `provisioning_status` of the LB
-    created.
-
-    Args:
-        client (neutronclient.v2_0.client.Client)
-        name (str): The loadbalancer name
-        provider (str): The Openstack provider for loadbalancing
-
-    Kwargs:
-        subnet (str): if given this subnet will be used, in any other case
-          the last one will be used.
-
-    Kwargs:
-        floating_ip (bool, str): If given associate a floating IP with the
-          loadbalancer. True will create a new floating IP.
-
-    Returns:
-        lb (dict): A dictionary containing the information about the lb created
+class LoadBalancer:
 
     """
-    # see examle of how to create an LB
-    # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
-    if 'subnet' in kwargs:
-        subnet_id = client.find_resource('subnet', kwargs['subnet'])['id']
-    else:
-        subnet_id = client.list_subnets()['subnets'][-1]['id']
+    A class to create a LoadBalancer in OpenStack.
 
-    lb = client.create_loadbalancer({'loadbalancer':
-                                     {'provider': provider,
-                                      'vip_subnet_id': subnet_id,
-                                      'name': "%s-lb" % name
-                                      }
-                                     })
+    Openstack allows one to create a loadbalancer and configure it later.
+    Thus we create a LoadBalancer, so we have it's IP. The IP
+    of the LoadBalancer, is then stored in the SSL certificates.
+    During the boot of the machines, we configure the LoadBalancer.
+    """
 
-    LOGGER.debug("created loadbalancer ...")
+    def __init__(self, config):
+        self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
+        if not self.floatingip:
+            LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
+        self.name = "%s-lb" % config['cluster-name']
+        self.subnet = config.get('subnet')
+        # these attributes are set after create
+        self._id = None
+        self._subnet_id = None
 
-    floatingip = kwargs.get('floating_ip')
-    fip_addr = None
+    async def configure(self, client, master_ips):
+        """
+        Configure a load balancer created in earlier step
 
-    if floatingip:
-        fip_addr = _associate_floating_ip(client, lb['loadbalancer'],
-                                          floatingip)
+        Args:
+            master_ips (list): A list of the master IP addresses
 
-    return lb, fip_addr
+        """
 
+        listener = self._add_listener(client)
+        LOGGER.info("added listener ...")
 
-def _associate_floating_ip(client, lb, floatingip):
+        listener_id = listener["listener"]['id']
 
-    if isinstance(floatingip, str):
-        valid_ip = re.match("\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}", floatingip) # noqa
-        # TODO: allow re-using a floating IP
-    else:
-        fips = client.list_floatingips()['floatingips']
-        if len(fips):
-            fnet_id = client.list_floatingips()['floatingips'][0]['floating_network_id']  # noqa
+        pool = self._add_pool(client, listener_id)
+
+        LOGGER.info("added pool ...")
+
+        self._add_health_monitor(client, pool['pool']['id'])
+        LOGGER.info("added health monitor ...")
+
+        self._add_members(client, pool['pool']['id'], master_ips)
+
+    def create(self, client, provider='octavia'):
+        """
+        provision a minimally configured LoadBalancer in OpenStack
+
+        Args:
+            client (neutronclient.v2_0.client.Client)
+
+        Return:
+            tuple (dict, str) - the dict is the load balancer information, if
+            a floating IP was associated it is returned as a string. Else it's
+            None.
+        """
+        # see examle of how to create an LB
+        # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
+        if self.subnet:
+            subnet_id = client.find_resource('subnet', self.subnet)['id']
         else:
-            raise ValueError(
-                "Please create a floating ip and specify it in the configuration file")  # noqa
-        new_fip = client.create_floatingip(
-            {'floatingip': {'project_id': lb['tenant_id'],
-                            'floating_network_id': fnet_id}})['floatingip']
+            subnet_id = client.list_subnets()['subnets'][-1]['id']
 
-        client.update_floatingip(new_fip['id'],
-                                 {'floatingip':
-                                  {'port_id': lb['vip_port_id']}})
+        lb = client.create_loadbalancer({'loadbalancer':
+                                         {'provider': provider,
+                                          'vip_subnet_id': subnet_id,
+                                          'name': "%s" % self.name
+                                          }})
+        self._id = lb['loadbalancer']['id']
+        self._subnet_id = lb['loadbalancer']['vip_subnet_id']
+        LOGGER.info("created loadbalancer ...")
 
-        LOGGER.info("Loadbalancer external IP: %s",
-                    new_fip['floating_ip_address'])
+        fip_addr = None
 
-        return new_fip['floating_ip_address']
+        if self.floatingip:
+            fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
+        return lb, fip_addr
 
+    @retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
+    def delete(self, client):
+        """
+        Delete the cluster API loadbalancer
 
-async def configure_lb(client, lb, name, master_ips, **kwargs):
-    """
-    Configure a load balancer created in earlier step
+        Deletion order of LoadBalancer:
+            - remove pool (LB is pending update)
+            - if healthmonitor in pool, delete it first
+            - remove listener (LB is pending update)
+            - remove LB (LB is pending delete)
+        Args:
+            client (neutron client)
+            suffix (str) - the suffix of the name, appended to name
+        """
+        lb = client.list_lbaas_loadbalancers(retrieve_all=True,
+                                             name=self.name)['loadbalancers']
+        if not lb or 'DELETE' in lb[0]['provisioning_status']:
+            return
+        else:
+            lb = lb[0]
+        self._id = lb['id']
 
-    Args:
-        master_ips (list): A list of the master IP addresses
+        if lb['pools']:
+            self._del_pool(client)
+        if lb['listeners']:
+            self._del_listener(client)
 
-    """
-    lb = lb['loadbalancer']
+        self._del_loadbalancer(client)
 
-    subnet_id = lb['vip_subnet_id']
+    def _associate_floating_ip(self, client, lb):
 
-    while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        await asyncio.sleep(1)
+        if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
+            valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}", floatingip) # noqa
+            # TODO: allow re-using a floating IP
+        else:
+            fips = client.list_floatingips()['floatingips']
+            if len(fips):
+                fnet_id = client.list_floatingips()['floatingips'][0]['floating_network_id']  # noqa
+            else:
+                raise ValueError(
+                    "Please create a floating ip and specify it in the configuration file")  # noqa
+            new_fip = client.create_floatingip(
+                {'floatingip': {'project_id': lb['tenant_id'],
+                                'floating_network_id': fnet_id}})['floatingip']
 
-    listener = client.create_listener({'listener':
-                                       {"loadbalancer_id":
-                                        lb['id'],
-                                        "protocol": "HTTPS",
-                                        "protocol_port": 6443,
-                                        'admin_state_up': True,
-                                        'name': '%s-listener' % name
-                                        }})
+            client.update_floatingip(new_fip['id'],
+                                     {'floatingip':
+                                      {'port_id': lb['vip_port_id']}})
 
-    LOGGER.debug("added listener ...")
-    lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+            LOGGER.info("Loadbalancer external IP: %s",
+                        new_fip['floating_ip_address'])
 
-    while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        await asyncio.sleep(1)
+            return new_fip['floating_ip_address']
 
-    pool = client.create_lbaas_pool(
-        {"pool": {"lb_algorithm": "SOURCE_IP",
-                  "listener_id": listener["listener"]['id'],
-                  "loadbalancer_id": lb["id"],
-                  "protocol": "HTTPS",
-                  "name": "%s-pool" % name},
-         })
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=30, backoff=0.8)
+    def _add_listener(self, client):
+        listener = client.create_listener({'listener':
+                                           {"loadbalancer_id":
+                                            self._id,
+                                            "protocol": "HTTPS",
+                                            "protocol_port": 6443,
+                                            'admin_state_up': True,
+                                            'name': '%s-listener' % self.name
+                                            }})
+        return listener
 
-    LOGGER.debug("added pool ...")
-    lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
+    def _add_pool(self, client, listener_id):
+        pool = client.create_lbaas_pool(
+            {"pool": {"lb_algorithm": "SOURCE_IP",
+                      "listener_id": listener_id,
+                      "loadbalancer_id": self._id,
+                      "protocol": "HTTPS",
+                      "name": "%s-pool" % self.name},
+             })
 
-    while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        await asyncio.sleep(0.5)
+        return pool
 
-    client.create_lbaas_healthmonitor(
-        {'healthmonitor':
-         {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
-          "pool_id": pool['pool']['id'],
-          "name": "%s-health" % name}})
+    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1,
+           logger=LOGGER.debug)
+    def _add_health_monitor(self, client, pool_id):
+        client.create_lbaas_healthmonitor(
+            {'healthmonitor':
+             {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
+              "pool_id": pool_id,
+              "name": "%s-health" % self.name}})
 
-    LOGGER.debug("added health monitor ...")
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
+    def _add_member(self, client, pool_id, ip):
+        client.create_lbaas_member(pool_id,
+                                   {'member':
+                                    {'subnet_id': self._subnet_id,
+                                     'protocol_port': 6443,
+                                     'address': ip,
+                                     }})
 
-    lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
+    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
+    def _add_members(self, client, pool_id, master_ips):
+        for ip in master_ips:
+            self._add_member(client, pool_id, ip)
+            LOGGER.info("added pool member %s ...", ip)
 
-    while lb['provisioning_status'] != 'ACTIVE':
-        lb = client.list_loadbalancers(id=lb['id'])
-        lb = lb['loadbalancers'][0]
-        await asyncio.sleep(0.5)
+    @retry(exceptions=(OSError, NeutronConflict), backoff=1,
+           logger=LOGGER.debug)
+    def _del_health_monitor(self, client, id_):  # pylint: disable=no-self-use
+        """
+        delete a LB health monitor
+        """
+        client.delete_lbaas_healthmonitor(id_)
+        LOGGER.info("Deleted healthmonitor ...")
 
-    for ip in master_ips:
-        client.create_lbaas_member(pool['pool']['id'],
-                                   {'member': {'subnet_id': subnet_id,
-                                               'protocol_port': 6443,
-                                               'address': ip,
-                                               }})
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1,
+           logger=LOGGER.debug)
+    def _del_pool(self, client):
+        # if pool has health monitor delete it first
+        pools = list(client.list_lbaas_pools(retrieve_all=False,
+                                             name="%s-pool" % self.name))
+        lb_id = {'id': self._id}
+        pools = pools[0]['pools']
+        for pool in pools:
+            if lb_id in pool['loadbalancers']:
+                if pool['healthmonitor_id']:
+                    self._del_health_monitor(client, pool['healthmonitor_id'])
 
-        lb = client.list_loadbalancers(id=lb['id'])['loadbalancers'][0]
-        while lb['provisioning_status'] != 'ACTIVE':
-            lb = client.list_loadbalancers(id=lb['id'])
-            lb = lb['loadbalancers'][0]
-            await asyncio.sleep(0.5)
+                client.delete_lbaas_pool(pool['id'])
+                LOGGER.info("deleted pool ...")
 
-        LOGGER.debug("added pool member %s ...", ip)
+    @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1,
+           logger=LOGGER.debug)
+    def _del_listener(self, client):
+        lb_id = {'id': self._id}
+        listeners = list(client.list_listeners(retrieve_all=False,
+                                               name="%s-listener" % self.name))
+        listeners = listeners[0]['listeners']
+        for item in listeners:
+            if lb_id in item['loadbalancers']:
+                client.delete_listener(item['id'])
+                LOGGER.info("Deleted listener...")
 
-    return lb
+    @retry(exceptions=(NeutronConflict, StateInvalidClient),
+           tries=12, backoff=1, logger=LOGGER.debug)
+    def _del_loadbalancer(self, client):
+        client.delete_loadbalancer(self._id)
+        LOGGER.info("Deleted loadbalancer...")
 
 
 def add_sec_rule(neutron, sec_gr_id, **kwargs):
@@ -445,75 +509,6 @@ def config_sec_group(neutron, sec_group_id, subnet=None):
     add_sec_rule(neutron, sec_group_id,
                  direction='ingress', protocol='TCP',
                  port_range_max=22, port_range_min=22)
-
-
-@retry(exceptions=(OSError, NeutronConflict), backoff=1, logger=LOGGER)
-def _del_health_monitor(client, id_):
-    """
-    delete a LB health monitor
-    """
-    client.delete_lbaas_healthmonitor(id_)
-
-
-@retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1)
-def _del_pool(client, name, lb_id):
-    # if pool has health monitor delete it first
-    pools = list(client.list_lbaas_pools(retrieve_all=False,
-                                         name="%s-pool" % name))
-    lb_id = {'id': lb_id}
-    pools = pools[0]['pools']
-    for pool in pools:
-        if lb_id in pool['loadbalancers']:
-            if pool['healthmonitor_id']:
-                _del_health_monitor(client, pool['healthmonitor_id'])
-
-            client.delete_lbaas_pool(pool['id'])
-
-
-@retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1)
-def _del_listener(client, name, lb_id):
-    lb_id = {'id': lb_id}
-    listeners = list(client.list_listeners(retrieve_all=False,
-                                           name="%s-listener" % name))
-    listeners = listeners[0]['listeners']
-    for item in listeners:
-        if lb_id in item['loadbalancers']:
-            client.delete_listener(item['id'])
-
-
-@retry(exceptions=(NeutronConflict, StateInvalidClient), tries=10, backoff=1)
-def _del_loadbalancer(client, lb_id):
-    client.delete_loadbalancer(lb_id)
-
-
-@retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
-def delete_loadbalancer(client, name, suffix='-lb'):
-    """
-    Delete the cluster API loadbalancer
-
-    Deletion order of LoadBalancer:
-        - remove pool (LB is pending update)
-        - if healthmonitor in pool, delete it first
-        - remove listener (LB is pending update)
-        - remove LB (LB is pending delete)
-    Args:
-        client (neutron client)
-        name (str) - the name of the load balancer to delete
-        suffix (str) - the suffix of the name, appended to the search string
-    """
-    lb = client.list_lbaas_loadbalancers(retrieve_all=True,
-                                         name=name + suffix)['loadbalancers']
-    if not lb:
-        return
-    else:
-        lb = lb[0]
-
-    if lb['pools']:
-        _del_pool(client, name, lb['id'])
-    if lb['listeners']:
-        _del_listener(client, name, lb['id'])
-
-    _del_loadbalancer(client, lb['id'])
 
 
 def read_os_auth_variables(trim=True):

@@ -28,11 +28,10 @@ from kolt.util.util import (EtcdHost,
                             get_token_csv)
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
-                        OSCloudConfig,
+                        OSCloudConfig, LoadBalancer,
                         create_instance_with_volume,
-                        create_loadbalancer,
                         config_sec_group,
-                        configure_lb)
+                        )
 
 LOGGER = get_logger(__name__)
 
@@ -274,26 +273,12 @@ class ClusterBuilder:
 
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
-            subnet = config.get('subnet')
-            floating_ip = config.get('loadbalancer-floatingip', '')
+            lbinst = LoadBalancer(config)
 
-            kwargs = {'subnet': subnet} if subnet else {}
+            lb, floatingip = lbinst.create(NEUTRON)
 
-            if floating_ip:
-                kwargs['floating_ip'] = floating_ip
-
-            lb, floatingip = create_loadbalancer(
-                NEUTRON,
-                config['cluster-name'],
-                **kwargs)
-
-            configure_lb_task = loop.create_task(
-                configure_lb(NEUTRON,
-                             lb,
-                             config['cluster-name'],
-                             master_ips,
-                             )
-            )
+            configure_lb_task = loop.create_task(lbinst.configure(NEUTRON,
+                                                                  master_ips))
 
             lb = lb['loadbalancer']
 
@@ -347,10 +332,10 @@ class ClusterBuilder:
             k8s = K8S(kubeconfig, manifest_path)
 
             while not k8s.is_ready:
-                LOGGER.debug("Kubernetes API Server is still not ready ...")
+                LOGGER.info("Kubernetes API Server is still not ready ...")
                 time.sleep(2)
 
-            LOGGER.debug("Kubernetes API Server is ready !!!")
+            LOGGER.info("Kubernetes API Server is ready !!!")
 
             etcd_endpoints = ",".join(
                 "https://%s:%d" % (
