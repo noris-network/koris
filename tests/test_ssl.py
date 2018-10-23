@@ -56,7 +56,3 @@ def test_sslcertcreation():
     ##########################################################
     assert set(san_names).issuperset(set(cluster_host_names))
     assert set(san_ips).issuperset(set(ips))
-
-
-if __name__ == '__main__':
-    test_sslcertcreation()
