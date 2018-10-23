@@ -84,6 +84,12 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
+export DEBCONF_FRONTEND=noninteractive
+
+echo "console-setup   console-setup/charmap47 select  UTF-8" > encoding.conf
+debconf-set-selections encoding.conf
+rm encoding.conf
+
 apt-get -y update && apt-get -y -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade && apt-get -y autoclean
 
 cat << EOF > /etc/systemd/system/etcd.service

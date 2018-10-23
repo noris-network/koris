@@ -84,6 +84,12 @@ class BaseInit:
 
         return self.combined_message.as_string()
 
+    def _get_cloud_provider(self):
+        return self.format_file('cloud_config',
+                                '/etc/kubernetes/cloud.conf',
+                                self.cloud_provider,
+                                encoder=lambda x: bytes(x))
+
 
 class MasterInit(BaseInit):
 
@@ -172,12 +178,6 @@ class MasterInit(BaseInit):
             "/var/lib/kubernetes/encryption-config.yaml",
             encryption_config)
 
-    def _get_cloud_provider(self):
-        return self.format_file('cloud_config',
-                                '/etc/kubernetes/cloud.conf',
-                                self.cloud_provider,
-                                encoder=lambda x: bytes(x))
-
     def _get_svc_account_info(self):
 
         svc_accnt_key = self.format_file(
@@ -219,6 +219,7 @@ class NodeInit(BaseInit):
                  svc_account_bundle,
                  etcd_cluster_info, calico_token,
                  lb_ip,
+                 cloud_provider=None,
                  os_type='ubuntu', os_version="16.04"):
 
         self.role = 'node'
@@ -230,7 +231,7 @@ class NodeInit(BaseInit):
         self.calico_token = calico_token
         self.lb_ip_address = lb_ip
         self.combined_message = MIMEMultipart()
-
+        self.cloud_provider = cloud_provider
         self.etcd_cert_bundle = etcd_cert_bundle
         self.svc_accnt_bundle = svc_account_bundle
 
@@ -329,6 +330,7 @@ class NodeInit(BaseInit):
              + self._get_certificate_info() \
              + self._get_svc_account_info() \
              + self._get_kubeproxy_info() \
+             + self._get_cloud_provider().lstrip() \
              + self._get_calico_config() \
 
         return config

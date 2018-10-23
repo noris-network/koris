@@ -55,6 +55,11 @@ function version_found() {  return $($1 $2 | grep -qi $3); }
 # download a file and set +x on a file
 function curlx() { curl $1 -o $2 && chmod -v +x $2 ; }
 
+export DEBCONF_FRONTEND=noninteractive
+
+echo "console-setup   console-setup/charmap47 select  UTF-8" > encoding.conf
+debconf-set-selections encoding.conf
+rm encoding.conf
 
 apt-get -qy update && apt-get -qy -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade &&  apt-get -qy autoclean
 
@@ -130,6 +135,8 @@ ExecStart=/usr/bin/kubelet \\
   --cluster-dns=10.32.0.10  \\
   --cni-bin-dir=/opt/cni/bin \\
   --hostname-override=$(hostname -s) \\
+  --cloud-provider=openstack \\
+  --cloud-config=/etc/kubernetes/cloud.conf \\
   --container-runtime=docker \\
   --docker=unix:///var/run/docker.sock \\
   --network-plugin=cni \\

@@ -234,3 +234,6 @@ node-security-checks: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(R
 node-security-checks:
 	kubectl run --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
 		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+
+clean-network-ports:  ## remove dangling ports in Openstack
+	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
