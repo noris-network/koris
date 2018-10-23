@@ -24,7 +24,7 @@ for line in sys.stdin:
 endef
 export PRINT_HELP_PYSCRIPT
 
-PY ?= python
+PY ?= python3
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 REV ?= HEAD
 
