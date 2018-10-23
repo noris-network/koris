@@ -28,11 +28,10 @@ from kolt.util.util import (EtcdHost,
                             get_token_csv)
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
-                        OSCloudConfig,
+                        OSCloudConfig, LoadBalancer,
                         create_instance_with_volume,
-                        create_loadbalancer,
                         config_sec_group,
-                        configure_lb)
+                        )
 
 LOGGER = get_logger(__name__)
 
@@ -275,22 +274,21 @@ class ClusterBuilder:
 
             master_ips = [str(host.ip_address) for host in etcd_host_list]
 
-            subnet = config.get('subnet')
-            kwargs = {'subnet': subnet} if subnet else {}
-            lb = create_loadbalancer(
-                NEUTRON,
-                config['cluster-name'],
-                **kwargs)
+            lbinst = LoadBalancer(config)
 
-            configure_lb_task = loop.create_task(
-                configure_lb(NEUTRON,
-                             lb,
-                             config['cluster-name'],
-                             master_ips,
-                             )
-            )
+            lb, floatingip = lbinst.create(NEUTRON)
+
+            configure_lb_task = loop.create_task(lbinst.configure(NEUTRON,
+                                                                  master_ips))
+
             lb = lb['loadbalancer']
-            ips.append(lb['vip_address'])
+
+            if floatingip:
+                lb_ip = floatingip
+            else:
+                lb_ip = lb['vip_address']
+
+            ips.append(lb_ip)
             certs = create_certs(config, cluster_host_names, ips)
             LOGGER.debug(info("Done creating nodes tasks"))
 
@@ -309,7 +307,7 @@ class ClusterBuilder:
             tasks = nb.create_hosts_tasks(nics, hosts, certs, kubelet_token,
                                           calico_token, etcd_host_list,
                                           no_cloud_init=no_cloud_init,
-                                          lb_ip=lb['vip_address'])
+                                          lb_ip=lb_ip)
 
             cp_tasks = cpb.create_hosts_tasks(cp_nics, hosts, certs,
                                               kubelet_token, calico_token,
@@ -320,11 +318,12 @@ class ClusterBuilder:
             LOGGER.debug(info("Done creating control plane tasks"))
 
             tasks = cp_tasks + tasks
+
         if tasks:
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.gather(*tasks))
-            kubeconfig = write_kubeconfig(config, lb['vip_address'],
+            kubeconfig = write_kubeconfig(config, lb_ip,
                                           admin_token,
                                           True)
 
@@ -334,10 +333,10 @@ class ClusterBuilder:
             k8s = K8S(kubeconfig, manifest_path)
 
             while not k8s.is_ready:
-                LOGGER.debug("Kubernetes API Server is still not ready ...")
+                LOGGER.info("Kubernetes API Server is still not ready ...")
                 time.sleep(2)
 
-            LOGGER.debug("Kubernetes API Server is ready !!!")
+            LOGGER.info("Kubernetes API Server is ready !!!")
 
             etcd_endpoints = ",".join(
                 "https://%s:%d" % (

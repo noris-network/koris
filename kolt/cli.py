@@ -16,7 +16,7 @@ from .util.util import get_kubeconfig_yaml, get_logger
 LOGGER = get_logger(__name__)
 
 
-def delete_cluster(cluster_name, nova, neutron, force=False):
+def delete_cluster(config, nova, neutron, force=False):
     """
     completly delete a cluster from openstack.
 
@@ -30,7 +30,7 @@ def delete_cluster(cluster_name, nova, neutron, force=False):
         ans = 'y'
 
     if ans.lower() == 'y':
-        remove_cluster(cluster_name, nova, neutron)
+        remove_cluster(config, nova, neutron)
     else:
         sys.exit(1)
 

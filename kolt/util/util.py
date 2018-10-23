@@ -12,11 +12,11 @@ from ipaddress import IPv4Address
 import yaml
 
 
-def get_logger(name):
+def get_logger(name, level=logging.INFO):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(level)
     # add ch to logger
     logger.addHandler(ch)
     return logger
@@ -340,11 +340,10 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
                 try:
                     return f(*args, **kwargs)
                 except exceptions as e:
-                    msg = '{}, Retrying in {} seconds...'.format(e, mdelay)
+                    msg = '{}, Retrying in {} seconds...'.format(e,
+                                                                 int(mdelay))
                     if logger:
-                        logger.warning(msg)
-                    else:
-                        print(msg)
+                        logger(msg)
                     time.sleep(mdelay)
                     mtries -= 1
                     mdelay *= backoff
