@@ -71,7 +71,26 @@ cleanup:
   - make clean-cluster
   when: always
 
-pages:
+dev-docs:
+  stage: pages
+  image: oz123/koris-alpine:0.1.1
+  script:
+  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+  - which sphinx-build
+  - git checkout master
+  - make -C docs html
+  - mv docs/_build/html/ public/
+  - git checkout $CI_COMMIT_REF_NAME
+  - make -C docs html
+  - mv docs/_build/html/ public/dev/
+  artifacts:
+    paths:
+    - public
+  only:
+    variables:
+      - $CI_COMMIT_REF_NAME == "dev"
+
+master-docs:
   stage: pages
   image: oz123/koris-alpine:0.1.1
   script:
@@ -83,4 +102,4 @@ pages:
     paths:
     - public
   only:
-  - master
+    - master
