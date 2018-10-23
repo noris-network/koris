@@ -8,6 +8,8 @@ nova.keypairs.get = mock.MagicMock(return_value='otiram')
 nova.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 nova.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
 neutron.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
+neutron.list_security_groups = mock.MagicMock(
+    return_value=iter([{'security_groups': [{'id': 'acedfr3c4223ee21'}]}]))
 
 
 def list_subnets():
