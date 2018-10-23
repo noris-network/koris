@@ -81,6 +81,7 @@ dev-docs:
   - make -C docs html
   - mv docs/_build/html/ public/
   - git checkout $CI_COMMIT_REF_NAME
+  - git pull origin
   - make -C docs html
   - mv docs/_build/html/ public/dev/
   artifacts:
