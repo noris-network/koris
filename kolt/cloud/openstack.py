@@ -13,11 +13,12 @@ import uuid
 
 from functools import lru_cache
 from novaclient import client as nvclient
+from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
+
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import Conflict as NeutronConflict
 from neutronclient.common.exceptions import StateInvalidClient
-from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -40,8 +41,6 @@ def remove_cluster(config, nova, neutron):
 
     if not servers:
         print(red("No servers were found ..."))
-        print(red("Could not remove cluster ..."))
-        sys.exit(1)
 
     print("Scheduling the deletion of ", servers)
 
@@ -273,8 +272,8 @@ class LoadBalancer:
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
             return
-        else:
-            lb = lb[0]
+
+        lb = lb[0]
         self._id = lb['id']
 
         if lb['pools']:
@@ -284,30 +283,32 @@ class LoadBalancer:
 
         self._del_loadbalancer(client)
 
-    def _associate_floating_ip(self, client, lb):
+    def _associate_floating_ip(self, client, loadbalancer):
 
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
-            valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}", floatingip) # noqa
+            valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
+                                self.floatingip)
             # TODO: allow re-using a floating IP
+            return None
+
+        fips = client.list_floatingips()['floatingips']
+        if fips:
+            fnet_id = fips[0]['floating_network_id']  # noqa
         else:
-            fips = client.list_floatingips()['floatingips']
-            if len(fips):
-                fnet_id = client.list_floatingips()['floatingips'][0]['floating_network_id']  # noqa
-            else:
-                raise ValueError(
-                    "Please create a floating ip and specify it in the configuration file")  # noqa
-            new_fip = client.create_floatingip(
-                {'floatingip': {'project_id': lb['tenant_id'],
-                                'floating_network_id': fnet_id}})['floatingip']
+            raise ValueError(
+                "Please create a floating ip and specify it in the configuration file")  # noqa
+        new_fip = client.create_floatingip(
+            {'floatingip': {'project_id': loadbalancer['tenant_id'],
+                            'floating_network_id': fnet_id}})['floatingip']
 
-            client.update_floatingip(new_fip['id'],
-                                     {'floatingip':
-                                      {'port_id': lb['vip_port_id']}})
+        client.update_floatingip(new_fip['id'],
+                                 {'floatingip':
+                                  {'port_id': loadbalancer['vip_port_id']}})
 
-            LOGGER.info("Loadbalancer external IP: %s",
-                        new_fip['floating_ip_address'])
+        LOGGER.info("Loadbalancer external IP: %s",
+                    new_fip['floating_ip_address'])
 
-            return new_fip['floating_ip_address']
+        return new_fip['floating_ip_address']
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=30, backoff=0.8)
     def _add_listener(self, client):
@@ -602,7 +603,7 @@ class OSCloudConfig:
         return base64.b64encode(str(self).encode())
 
 
-class OSClusterInfo:
+class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     """
     collect various information on the cluster
 
