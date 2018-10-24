@@ -7,6 +7,7 @@ Don't use it directly, instead install the package with setup.py.
 It automatically creates an executable in your path.
 
 """
+import argparse
 import sys
 import yaml
 
@@ -46,7 +47,8 @@ class Kolt:
         self.neutron = neutron
         self.cinder = cinder
         self.parser.add_argument("--version", action="store_true",
-                                 help="show version and exit")
+                                 help="show version and exit",
+                                 default=argparse.SUPPRESS)
 
     def _get_version(self):
         print("Kolt version:", __version__)
