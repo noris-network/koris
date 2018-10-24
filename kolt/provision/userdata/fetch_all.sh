@@ -66,20 +66,28 @@ done
 # check if a binary version is found
 # version_check kube-scheduler --version v1.10.4 return 1 if binary is found
 # in that version
-function version_found() {  return $($1 $2 | grep -qi $3); }
+function version_found() {  return $($1 2>/dev/null $2 | grep -qi $3); }
 
 # download a file and set +x on a file
-function curlx() { curl -L $1 -o $2 && chmod -v +x $2 ; }
+function curlx() { curl -s -L $1 -o $2 && chmod -v +x $2 ; }
 
 # download a tar ball and extract it to a path
 function curl_untar(){
-    curl -L $1 -O
+    curl -s -L $1 -O
     tar xavf $2 -C $3
 }
 
+export DEBIAN_FRONTEND="noninteractive"
+
+echo "console-setup   console-setup/charmap47 select  UTF-8" > encoding.conf
+debconf-set-selections encoding.conf
+rm encoding.conf
+
+
+
 if [ "$(version_found docker --version ${DOCKER_VERSION}; echo $?)" -eq 1 ]; then
     echo "Docker version did not match"
-    apt-get update
+    apt-get update -y
     apt-get install -y apt-transport-https ca-certificates curl software-properties-common
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
     add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" -u
@@ -91,7 +99,7 @@ Pin: version ${DOCKER_VERSION}.*
 Pin-Priority: 1000
 EOF
 
-   sudo apt-get -y install socat conntrack ipset docker-ce
+   apt-get install -y socat conntrack ipset docker-ce
 
 fi
 
@@ -112,7 +120,7 @@ if [ "$(version_found /opt/cni/bin/calico -v ${calico_version}; echo $?)" -eq 1 
 
     cd /tmp
 
-    curl_untar https://github.com/containernetworking/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v{CNI_VERSION}.tgz  cni-plugins-amd64-v{CNI_VERSION}.tgz /opt/cni/bin/
+    curl_untar https://github.com/containernetworking/cni/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v{CNI_VERSION}.tgz  cni-plugins-amd64-v{CNI_VERSION}.tgz /opt/cni/bin/
 
     curlx https://github.com/projectcalico/calicoctl/releases/download/v${calico_version}/calicoctl ${BIN_PATH}/calicoctl
 
@@ -134,7 +142,7 @@ done
 if [ "$(version_found etcd --version ${ETCD_VERSION:1}; echo $?)" -eq 1 ]; then
     echo "etcd version did not match ..."
     cd /tmp
-    curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
+    curl -sL ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
     tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
     cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
 
@@ -149,4 +157,15 @@ version_found  kubectl "version --client --short" 1.10.4 || curlx ${K8S_URL}/${K
 # Finished downloading all binaries
 ###
 
-sudo apt-get update && apt-get upgrade -y
+apt-get update -y && apt-get upgrade -y
+
+# install the latest image
+apt install $(apt search linux-image|grep kvm|grep 'linux-image-[0-9]'|tail -1 | cut -d"/" -f1)
+
+
+###
+# install nginx - needed for local proxy
+###
+
+apt-get install nginx -y
+
