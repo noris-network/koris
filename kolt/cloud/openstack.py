@@ -41,8 +41,8 @@ def remove_cluster(config, nova, neutron):
 
     if not servers:
         print(red("No servers were found ..."))
-
-    print("Scheduling the deletion of ", servers)
+    else:
+        print("Scheduling the deletion of ", servers)
 
     async def del_server(server):
         await asyncio.sleep(1)
