@@ -435,7 +435,7 @@ def get_or_create_sec_group(neutron, name):
     """
     name = "%s-sec-group" % name
     secgroup = next(neutron.list_security_groups(
-        retrieve_all=False, **{'name': 'nww3-sec-group'}))['security_groups']
+        retrieve_all=False, **{'name': name}))['security_groups']
     if secgroup:
         print(info(red("A Security group named %s already exists" % name)))
         print(info(red("I will add my own rules, please manually review all others")))  # noqa
