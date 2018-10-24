@@ -103,4 +103,6 @@ master-docs:
     paths:
     - public
   only:
+    - tags
+    - triggers
     - master
