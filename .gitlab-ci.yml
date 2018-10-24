@@ -32,7 +32,7 @@ build-cluster:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - make launch-cluster
-  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
+  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-$(CI_PIPELINE_ID)-admin.conf
   - ls -l
   artifacts:
     paths:

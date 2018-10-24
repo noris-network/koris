@@ -27,6 +27,7 @@ export PRINT_HELP_PYSCRIPT
 PY ?= python3
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 REV ?= HEAD
+PN = "-$(CI_PIPELINE_ID)"
 
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -119,14 +120,14 @@ launch-cluster: update-config
 	kolt k8s tests/koris_test.yml
 
 
-integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
+integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})${PN}-admin.conf
 integration-run:
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
 	@echo "started"
 
 
-integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
+integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})${PN}-admin.conf
 integration-wait:
 	until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
 		do \
@@ -137,7 +138,7 @@ integration-wait:
 	echo "The pod is scheduled"
 
 
-integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
+integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})${PN}-admin.conf
 integration-patch-wait:
 	STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 	while true; do \
@@ -151,18 +152,18 @@ integration-patch-wait:
 	done ; \
 
 
-integration-patch: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+integration-patch: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))${PN}-admin.conf
 integration-patch:
 	kubectl patch deployment.apps nginx -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
 
-integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
+integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})${PN}-admin.conf
 integration-expose:
 	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
 
-expose-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+expose-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))${PN}-admin.conf
 expose-wait:
 	while true; do \
 		IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
@@ -181,7 +182,7 @@ reset-config:
 	git checkout tests/koris_test.yml
 
 
-curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
+curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})${PN}-admin.conf
 curl-run:
 	IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
 	echo $${IP}; \
@@ -194,7 +195,7 @@ curl-run:
 	done
 
 
-clean-lb: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+clean-lb: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))${PN}-admin.conf
 clean-lb:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
@@ -217,7 +218,8 @@ clean-cluster: update-config
 	kolt destroy tests/koris_test.yml --force
 
 
-clean-all-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
+clean-all-after-integration-test: PN = "-$(CI_PIPELINE_ID)"
+clean-all-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))${PN}-admin.conf
 clean-all-after-integration-test: clean-lb
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
