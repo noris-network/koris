@@ -127,6 +127,9 @@ launch-cluster: update-config
 	kolt k8s tests/koris_test.yml
 
 
+show-nodes:
+	kubectl get nodes -o wide --kubeconfig=${KUBECONFIG}
+
 integration-run:
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
