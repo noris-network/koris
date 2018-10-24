@@ -206,9 +206,9 @@ clean-lb:
 	done;
 	sleep 90
 
-
+update-config: PN = "-$(CI_PIPELINE_ID)"
 update-config:
-	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})/g" tests/koris_test.yml
+	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})${PN}/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
 	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
 
