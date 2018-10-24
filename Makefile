@@ -212,6 +212,7 @@ update-config:
 	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})${PN}/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
 	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
+	cat tests/koris_test.yml
 
 
 clean-cluster: update-config
