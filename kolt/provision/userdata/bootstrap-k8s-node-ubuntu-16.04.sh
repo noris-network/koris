@@ -50,10 +50,10 @@ done
 # check if a binary version is found
 # version_check kube-scheduler --version v1.10.4 return 1 if binary is found
 # in that version
-function version_found() {  return $($1 $2 | grep -qi $3); }
+function version_found() {  return $($1 $2 2>/dev/null | grep -qi $3); }
 
 # download a file and set +x on a file
-function curlx() { curl $1 -o $2 && chmod -v +x $2 ; }
+function curlx() { curl -s $1 -o $2 && chmod -v +x $2 ; }
 
 export DEBCONF_FRONTEND=noninteractive
 
@@ -92,17 +92,17 @@ done
 
 if [ "$(version_found /opt/cni/bin/calico -v ${calico_version}; echo $?)" -eq 1 ]; then
     cd /tmp
-    curl -L  https://github.com/containernetworking/plugins/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v${CNI_VERSION}.tgz -O
+    curl -s -L  https://github.com/containernetworking/plugins/releases/download/v${CNI_VERSION}/cni-plugins-amd64-v${CNI_VERSION}.tgz -O
     mkdir -pv /opt/cni/bin
     tar xvzf cni-plugins-amd64-v0.6.0.tgz -C /opt/cni/bin/
     mkdir -pv /etc/cni/net.d
 
-    curl -L https://github.com/projectcalico/calicoctl/releases/download/v${calico_version}/calicoctl -o ${BIN_PATH}/calicoctl && chmod -v +x /usr/bin/calicoctl &
+    curl -s -L https://github.com/projectcalico/calicoctl/releases/download/v${calico_version}/calicoctl -o ${BIN_PATH}/calicoctl && chmod -v +x /usr/bin/calicoctl &
 
     install -v -m 0755 -g root -o root -d /opt/cni/bin/
 
     for item in calico calico-ipam; do
-        curl -L ${CALICO_URL}/v${calico_version}/${item} \
+        curl -s -L ${CALICO_URL}/v${calico_version}/${item} \
              -o /opt/cni/bin/${item} && chmod -v +x /opt/cni/bin/${item} &
     done
 

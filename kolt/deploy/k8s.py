@@ -13,7 +13,7 @@ from pkg_resources import resource_filename, Requirement
 
 from kolt.util.util import (get_logger, retry)
 
-LOGGER = get_logger(__name__)
+LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
 class K8S:
