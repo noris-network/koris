@@ -91,7 +91,7 @@ dev-docs:
     variables:
       - $CI_COMMIT_REF_NAME == "dev"
 
-master-docs:
+pages:
   stage: pages
   image: oz123/koris-alpine:0.1.1
   script:
