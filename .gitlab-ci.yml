@@ -1,6 +1,7 @@
 stages:
  - static-analysis
  - unittest
+ - wait-for-resources
  - build-cluster
  - integration-test
  - cleanup
@@ -23,6 +24,20 @@ unittest:
     - pip3 install -U pip
     - pip3 install -e .
     - make coverage PY=python3
+
+
+.wait: &wait |
+  if [ $(openstack volume list -f value | wc -l) -gt 5 ]; then
+      echo "waiting until enough resources are free";
+      sleep 90;
+  fi
+
+wait-for-resources:
+  stage: wait-for-resources
+  image: oz123/koris-alpine:0.1.1
+  script:
+   - *wait
+
 
 build-cluster:
   stage: build-cluster
@@ -106,3 +121,4 @@ pages:
     - tags
     - triggers
     - master
+
