@@ -9,7 +9,6 @@ import os
 import re
 import sys
 import textwrap
-import uuid
 
 from functools import lru_cache
 from novaclient import client as nvclient
@@ -79,101 +78,111 @@ class BuilderError(Exception):
     pass
 
 
-async def create_volume(cinder, image, zone, klass, size=25):
+class Instance:
     """
-    create a cinder volume for use with a compute instance
+    Create an Openstack Server with an attached volume
     """
-    bdm_v2 = {
-        "boot_index": 0,
-        "source_type": "volume",
-        "volume_size": str(size),
-        "destination_type": "volume",
-        "delete_on_termination": True}
 
-    vol = cinder.volumes.create(size, name=uuid.uuid4(), imageRef=image.id,
-                                availability_zone=zone,
-                                volume_type=klass)
+    def __init__(self, cinder, nova, name, zone,
+                 volume_config):
+        self.cinder = cinder
+        self.nova = nova
+        self.name = name
+        self.zone = zone
+        self.volume_size = volume_config.get('size', '25')
+        self.volume_class = volume_config.get('class')
+        self.volume_img = volume_config.get('image')
 
-    while vol.status != 'available':
-        await asyncio.sleep(1)
-        vol = cinder.volumes.get(vol.id)
+        # ip is populated after create
+        self.ip = None
 
-    LOGGER.debug("created volume %s %s", vol, vol.volume_type)
+    async def _create_volume(self):
+        bdm_v2 = {
+            "boot_index": 0,
+            "source_type": "volume",
+            "volume_size": str(self.volume_size),
+            "destination_type": "volume",
+            "delete_on_termination": True}
 
-    if vol.bootable != 'true':
-        vol.update(bootable=True)
-        # wait for mark as bootable
-        await asyncio.sleep(2)
+        vol = self.client.volumes.create(self.volume_size,
+                                         name=self.name,
+                                         imageRef=self.volume_img.id,
+                                         availability_zone=self.zone,
+                                         volume_type=self.volume_class)
 
-    volume_data = copy.deepcopy(bdm_v2)
-    volume_data['uuid'] = vol.id
+        while vol.status != 'available':
+            await asyncio.sleep(1)
+            vol = self.client.volumes.get(vol.id)
 
-    return volume_data
+        LOGGER.debug("created volume %s %s", vol, vol.volume_type)
 
+        if vol.bootable != 'true':
+            vol.update(bootable=True)
+            # wait for mark as bootable
+            await asyncio.sleep(2)
 
-async def create_instance_with_volume(name, zone, flavor, image,
-                                      keypair, secgroups, userdata, hosts,
-                                      nova=None,
-                                      neutron=None,
-                                      cinder=None,
-                                      nics=None,
-                                      volume_klass=""
-                                      ):
-    """
-    Create a compute instance with cloud-init and volume and port for use
-    in a kubernetes cluster
-    """
-    try:
-        print(que("Checking if %s does not already exist" % name))
-        server = nova.servers.find(name=name)
-        ip = server.interface_list()[0].fixed_ips[0]['ip_address']
-        print(info("This machine already exists ... skipping"))
-        hosts[name] = (ip)
-        return
-    except NovaNotFound:
-        print(info("Okay, launching %s" % name))
-    except IndexError:
-        LOGGER.debug("Server found in weired state witout IP ... recreating")
-        server.delete()
+        volume_data = copy.deepcopy(bdm_v2)
+        volume_data['uuid'] = vol.id
 
-    volume_data = await create_volume(cinder, image, zone, volume_klass)
+        return volume_data
 
-    try:
-        print("Creating instance %s... " % name)
-        instance = nova.servers.create(name=name,
-                                       availability_zone=zone,
-                                       image=None,
-                                       key_name=keypair.name,
-                                       flavor=flavor,
-                                       nics=nics, security_groups=secgroups,
-                                       block_device_mapping_v2=[volume_data],
-                                       userdata=userdata,
-                                       )
-    except (Exception) as err:
-        print(info(red("Something weired happend, I so I didn't create %s" %
-                       name)))
-        print(info(red("Removing cluser ...")))
-        print(info(yellow("The exception is", str((err)))))
-        raise BuilderError(str(err))
+    async def create(self, flavor, nics, secgroups, keypair, userdata):
+        """
+        Boot the instance on openstack
+        """
+        try:
+            print(que("Checking if %s does not already exist" % self.name))
+            server = self.nova.servers.find(name=self.name)
+            self.ip = server.interface_list()[0].fixed_ips[0]['ip_address']
+            print(info("This machine already exists ... skipping"))
+        except NovaNotFound:
+            print(info("Okay, launching %s" % self.name))
+        except IndexError:
+            LOGGER.debug("Server found in weired state witout IP ... recreating")
+            server.delete()
+            """boot the instance"""
 
-    inst_status = instance.status
-    print("waiting for 5 seconds for the machine to be launched ... ")
-    await asyncio.sleep(5)
+        volume_data = await self._create_volume()
 
-    while inst_status == 'BUILD':
-        print("Instance: " + instance.name + " is in " + inst_status +
-              " state, sleeping for 5 seconds more...")
-        await asyncio.sleep(5)
-        instance = nova.servers.get(instance.id)
+        try:
+            print("Creating instance %s... " % self.name)
+            instance = self.nova.servers.create(
+                name=self.name,
+                availability_zone=self.zone,
+                image=None,
+                key_name=keypair.name,
+                flavor=flavor,
+                nics=nics, security_groups=secgroups,
+                block_device_mapping_v2=[volume_data],
+                userdata=userdata
+            )
+        except (Exception) as err:
+            print(info(red("Something weired happend, I so I didn't create %s" %
+                           self.name)))
+            print(info(red("Removing cluser ...")))
+            print(info(yellow("The exception is", str((err)))))
+            raise BuilderError(str(err))
+
         inst_status = instance.status
+        print("waiting for 5 seconds for the machine to be launched ... ")
+        await asyncio.sleep(5)
 
-    print("Instance: " + instance.name + " is in " + inst_status + " state")
+        while inst_status == 'BUILD':
+            print("Instance: " + instance.name + " is in " + inst_status +
+                  " state, sleeping for 5 seconds more...")
+            await asyncio.sleep(5)
+            instance = self.nova.servers.get(instance.id)
+            inst_status = instance.status
 
-    ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
-    print("Instance booted! Name: " + instance.name + " Status: " +
-          instance.status + ", IP: " + ip)
+        print("Instance: " + instance.name + " is in " + inst_status + " state")
 
-    hosts[name] = (ip)
+        ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
+        print("Instance booted! Name: " + instance.name + " Status: " +
+              instance.status + ", IP: " + ip)
+
+    def delete(self):
+        """stop and terminate an instance"""
+        pass
 
 
 class LoadBalancer:
@@ -435,7 +444,7 @@ def get_or_create_sec_group(neutron, name):
     """
     name = "%s-sec-group" % name
     secgroup = next(neutron.list_security_groups(
-        retrieve_all=False, **{'name': name}))['security_groups']
+        retrieve_all=False, **{'name': "%s-sec-group" % name}))['security_groups']
     if secgroup:
         print(info(red("A Security group named %s already exists" % name)))
         print(info(red("I will add my own rules, please manually review all others")))  # noqa
@@ -443,7 +452,7 @@ def get_or_create_sec_group(neutron, name):
 
     return neutron.create_security_group(
         {'security_group': {'name':
-                            name}})['security_group']
+                            "%s-sec-group" % name}})['security_group']
 
 
 def config_sec_group(neutron, sec_group_id, subnet=None):
