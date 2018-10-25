@@ -29,7 +29,6 @@ from kolt.util.util import (EtcdHost,
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
-                        create_instance_with_volume,
                         config_sec_group,
                         )
 
@@ -48,10 +47,11 @@ class NodeBuilder:
         neutron (neutron client instance) - to create a network interface
         config (dict) - the parsed configuration file
     """
-    def __init__(self, nova, neutron, config):
+    def __init__(self, nova, neutron, cinder, config):
         LOGGER.info(info(cyan(
             "gathering node information from openstack ...")))
-        self._info = OSClusterInfo(nova, neutron, config)
+        self._info = OSClusterInfo(nova, neutron, cinder, config)
+        self.config = config
 
     def create_userdata(self, cluster_info=None, cloud_provider=None,
                         cert_bundle=None, encryption_key=None, **kwargs):
@@ -71,27 +71,24 @@ class NodeBuilder:
                                 cloud_provider=cloud_provider_info))
         return userdata
 
-    def get_nodes_info(self, nova, neutron, config):
+    def get_nodes(self):
         """
-        Find if hosts already exists, if they don't exist already create
-        a future task for creating a NIC for attaching it to a host.
-        calculate node names and zone, build nics
+        get information on the nodes from openstack.
+
+        Return:
+            list [openstack.Instance, openstack.Instance, ...]
         """
 
-        return self._info.nodes_status
+        return list(self._info.distribute_nodes())
 
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
                            calico_token,
                            etcd_host_list,
                            lb_ip,
-                           no_cloud_init=False
                            ):
         """
         Create future tasks for creating the cluster worker nodes
-
-        Args:
-            cloud_provider (OSCloudConfig) - used to write cloud.conf
         """
         cloud_provider_info = OSCloudConfig(self._info.subnet_id)
 
@@ -108,24 +105,10 @@ class NodeBuilder:
                           'cloud_provider': cloud_provider_info})
 
         user_data = self.create_userdata(**node_args)
-        task_args_node = self._info.node_args_builder(user_data, hosts)
-
-        hosts = self._info.distribute_nodes()
-
-        self._info.assign_nics_to_nodes(hosts, nics)
-        volume_klass = self._info.storage_class
+        assert user_data
+        nodes = self.get_nodes()
         loop = asyncio.get_event_loop()
-
-        tasks = [loop.create_task(
-            create_instance_with_volume(
-                host.name, host.zone,
-                nics=host.nic,
-                volume_klass=volume_klass,
-                nova=NOVA,
-                cinder=CINDER,
-                neutron=NEUTRON,
-                *task_args_node))
-            for host in hosts]  # pylint: disable=bad-continuation
+        tasks = [loop.create_task(nodes)]
 
         return tasks
 
@@ -149,6 +132,7 @@ class ControlPlaneBuilder:
         LOGGER.info(info(cyan(
             "gathering control plane information from openstack ...")))
         self._info = OSClusterInfo(nova, neutron, config)
+        self._config = config
 
     def create_userdata(self, cluster_info=None, cloud_provider=None,
                         cert_bundle=None, encryption_key=None, **kwargs):
@@ -166,12 +150,15 @@ class ControlPlaneBuilder:
     def get_hosts_info(self):
         return self._info.management_status
 
+    def _prep_resources(self):
+        pass
+
     def create_hosts_tasks(self, nics, hosts, certs,
                            kubelet_token,
                            calico_token,
                            admin_token,
                            etcd_host_list,
-                           no_cloud_init=False, **kwargs):
+                           **kwargs):
         """
         Create future tasks for creating the cluster control plane nodes
         """
@@ -201,21 +188,13 @@ class ControlPlaneBuilder:
                              certs['service-account'])})
 
         user_data = self.create_userdata(**master_args)
-
-        tasks_args_masters = self._info.master_args_builder(user_data, hosts)
-
+        assert user_data
         masters_zones = self._info.distribute_management()
         self._info.assign_nics_to_management(masters_zones, nics)
 
-        volume_klass = self._info.storage_class
         loop = asyncio.get_event_loop()
 
-        tasks = [loop.create_task(create_instance_with_volume(
-            masters_zones[i].name, masters_zones[i].zone,
-            nics=masters_zones[i].nic,
-            volume_klass=volume_klass,
-            nova=NOVA, cinder=CINDER, neutron=NEUTRON,
-            *tasks_args_masters)) for i in range(0, self._info.n_masters)]
+        tasks = [loop.create_task()]
 
         return tasks
 
@@ -226,7 +205,7 @@ class ClusterBuilder:
     Plan and build a kubernetes cluster in the cloud
     """
 
-    def run(self, config, no_cloud_init=False):
+    def run(self, config, no_cloud_init=False):  # pylint: disable=too-many-locals
         """
         execute the complete cluster build
         """
@@ -234,8 +213,8 @@ class ClusterBuilder:
             print(red("You must have an odd number (>1) of etcd machines!"))
             sys.exit(2)
 
-        nb = NodeBuilder(NOVA, NEUTRON, config)
-        cpb = ControlPlaneBuilder(NOVA, NEUTRON, config)
+        nb = NodeBuilder(NOVA, NEUTRON, CINDER, config)
+        cpb = ControlPlaneBuilder(NOVA, NEUTRON, CINDER, config)
         LOGGER.debug(info("Done collecting infromation from OpenStack"))
         worker_nodes = nb.get_nodes_info(NOVA, NEUTRON, config)
 

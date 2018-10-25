@@ -672,18 +672,20 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._cinderclient = cinder_client
 
     @lru_cache()
-    def _status(self, host, zone):
+    def _get_or_create(self, host, zone):
         """
-        Finds if all mahcines in the group exists, if the don't exist create
-        a network port for the machine
+        Find if a instance exists Openstack.
+
+        If instance is found return Instance instance with the info.
+        If not found create a NIC and assign it to an Instance instance.
         """
         try:
             _server = self._novaclient.servers.find(name=host)
-            yield Instance(self._cinderclient,
-                           self._novaclient,
-                           _server.name,
-                           zone,
-                           {})
+            return Instance(self._cinderclient,
+                            self._novaclient,
+                            _server.name,
+                            zone,
+                            {})
 
         except NovaNotFound:
             port = self._neutronclient.create_port(
@@ -698,7 +700,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             {})
 
             inst.nics = [port, ]
-            yield inst
+            return inst
 
     @property
     def nodes_names(self):
@@ -717,7 +719,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         mz = list(distribute_host_zones(self.management_names, self.azones))
         for hosts, zone in mz:
             for host in hosts:
-                yield self._status(host, zone)
+                yield self._get_or_create(host, zone)
 
     def distribute_nodes(self):
         """
@@ -726,7 +728,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         hz = list(distribute_host_zones(self.nodes_names, self.azones))
         for hosts, zone in hz:
             for host in hosts:
-                yield self._status(host, zone)
+                yield self._get_or_create(host, zone)
 
     def assign_nics_to_management(self, management_zones, nics):
         """
