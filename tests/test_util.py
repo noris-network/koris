@@ -4,6 +4,7 @@ from kolt.cloud.openstack import OSClusterInfo
 
 nova = mock.Mock()
 neutron = mock.Mock()
+cinder = mock.Mock()
 nova.keypairs.get = mock.MagicMock(return_value='otiram')
 nova.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 nova.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
@@ -36,7 +37,7 @@ config = {
 
 def test_osclusterinfo():
 
-    info = OSClusterInfo(nova, neutron, config)
+    info = OSClusterInfo(nova, neutron, cinder, config)
 
     assert info.nodes_names == ['node-1-test', 'node-2-test', 'node-3-test']
     hosts = {}
@@ -45,7 +46,7 @@ def test_osclusterinfo():
         'ECS.C1.4-8', 'Ubuntu', 'otiram',
         ['acedfr3c4223ee21'], 'generic_user_data', {}]
 
-    nodes_zones = info.distribute_nodes()
+    nodes_zones = list(info.distribute_nodes())
 
     assert nodes_zones[0].name == "node-1-test"
     assert nodes_zones[0].zone == "nbg6-1a"

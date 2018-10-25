@@ -25,7 +25,7 @@ from keystoneauth1 import session
 from kolt.cloud import OpenStackAPI
 from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
-from kolt.util.util import (get_logger, Server, get_host_zones, host_names,
+from kolt.util.util import (get_logger, host_names,
                             retry)
 LOGGER = get_logger(__name__)
 
@@ -93,8 +93,9 @@ class Instance:
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
 
+        self.nics = None
         # ip is populated after create
-        self.ip = None
+        self.ip_address = None
 
     async def _create_volume(self):
         bdm_v2 = {
@@ -104,7 +105,7 @@ class Instance:
             "destination_type": "volume",
             "delete_on_termination": True}
 
-        vol = self.client.volumes.create(self.volume_size,
+        vol = self.cinder.volumes.create(self.volume_size,
                                          name=self.name,
                                          imageRef=self.volume_img.id,
                                          availability_zone=self.zone,
@@ -112,7 +113,7 @@ class Instance:
 
         while vol.status != 'available':
             await asyncio.sleep(1)
-            vol = self.client.volumes.get(vol.id)
+            vol = self.cinder.volumes.get(vol.id)
 
         LOGGER.debug("created volume %s %s", vol, vol.volume_type)
 
@@ -126,21 +127,20 @@ class Instance:
 
         return volume_data
 
-    async def create(self, flavor, nics, secgroups, keypair, userdata):
+    async def create(self, flavor, secgroups, keypair, userdata):
         """
         Boot the instance on openstack
         """
         try:
             print(que("Checking if %s does not already exist" % self.name))
             server = self.nova.servers.find(name=self.name)
-            self.ip = server.interface_list()[0].fixed_ips[0]['ip_address']
+            self.ip_address = server.interface_list()[0].fixed_ips[0]['ip_address']  # noqa
             print(info("This machine already exists ... skipping"))
         except NovaNotFound:
             print(info("Okay, launching %s" % self.name))
         except IndexError:
             LOGGER.debug("Server found in weired state witout IP ... recreating")
             server.delete()
-            """boot the instance"""
 
         volume_data = await self._create_volume()
 
@@ -152,7 +152,7 @@ class Instance:
                 image=None,
                 key_name=keypair.name,
                 flavor=flavor,
-                nics=nics, security_groups=secgroups,
+                nics=self.nics, security_groups=secgroups,
                 block_device_mapping_v2=[volume_data],
                 userdata=userdata
             )
@@ -353,12 +353,12 @@ class LoadBalancer:
               "name": "%s-health" % self.name}})
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
-    def _add_member(self, client, pool_id, ip):
+    def _add_member(self, client, pool_id, ip_addr):
         client.create_lbaas_member(pool_id,
                                    {'member':
                                     {'subnet_id': self._subnet_id,
                                      'protocol_port': 6443,
-                                     'address': ip,
+                                     'address': ip_addr,
                                      }})
 
     @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
@@ -612,12 +612,35 @@ class OSCloudConfig:
         return base64.b64encode(str(self).encode())
 
 
+def distribute_host_zones(hosts, zones):
+    """
+    this divides the lists of hosts into zones
+    >>> hosts
+    >>> ['host1', 'host2', 'host3', 'host4', 'host5']
+    >>> zones
+    >>> ['A', 'B']
+    >>> list(zip([hosts[i:i + n] for i in range(0, len(hosts), n)], zones)) # noqa
+    >>> [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]  # noqa
+    """
+
+    if len(zones) == len(hosts):
+        return list(zip(hosts, zones))
+
+    end = len(zones) + 1 if len(zones) % 2 else len(zones)
+    host_zones = list(zip([hosts[i:i + end] for i in
+                           range(0, len(hosts), end)],
+                          zones))
+    return host_zones
+
+
 class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     """
     collect various information on the cluster
 
     """
-    def __init__(self, nova_client, neutron_client, config):
+    def __init__(self, nova_client, neutron_client,
+                 cinder_client,
+                 config):
 
         self.keypair = nova_client.keypairs.get(config['keypair'])
         self.image = nova_client.glance.find_image(config['image'])
@@ -646,25 +669,36 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
         self._novaclient = nova_client
         self._neutronclient = neutron_client
+        self._cinderclient = cinder_client
 
-    def _status(self, names):
+    def _status(self, hosts_zones):
         """
         Finds if all mahcines in the group exists, if the don't exist create
         a network port for the machine
         """
-        for name in names:
-            try:
-                _server = self._novaclient.servers.find(name=name)
-                yield Server(_server.name, _server.interface_list(),
-                             server=_server)
+        for hosts, zone in hosts_zones:
+            for host in hosts:
+                try:
+                    _server = self._novaclient.servers.find(name=host)
+                    yield Instance(self._cinderclient,
+                                   self._novaclient,
+                                   _server.name,
+                                   zone,
+                                   {})
 
-            except NovaNotFound:
-                port = self._neutronclient.create_port(
-                    {"port": {"admin_state_up": True,
-                              "network_id": self.net['id'],
-                              "security_groups": self.secgroups}})
+                except NovaNotFound:
+                    port = self._neutronclient.create_port(
+                        {"port": {"admin_state_up": True,
+                                  "network_id": self.net['id'],
+                                  "security_groups": self.secgroups}})
 
-                yield Server(name, [port])
+                    inst = Instance(self._cinderclient,
+                                    self._novaclient,
+                                    _server.name,
+                                    zone,
+                                    {})
+
+                    inst.nics = [port, ]
 
     @property
     def nodes_status(self):
@@ -705,13 +739,29 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         """
         distribute control plane nodes in the different availability zones
         """
-        return list(get_host_zones(self.management_names, self.azones))
+        mz = list(distribute_host_zones(self.management_names, self.azones))
+        for hosts, zone in mz:
+            for host in hosts:
+                yield Instance(self._cinderclient,
+                               self._novaclient,
+                               host,
+                               zone,
+                               volume_config={'class': self.storage_class,
+                                              'image': self.image})
 
     def distribute_nodes(self):
         """
         distribute worker nodes in the different availability zones
         """
-        return list(get_host_zones(self.nodes_names, self.azones))
+        hz = list(distribute_host_zones(self.nodes_names, self.azones))
+        for hosts, zone in hz:
+            for host in hosts:
+                yield Instance(self._cinderclient,
+                               self._novaclient,
+                               host,
+                               zone,
+                               volume_config={'class': self.storage_class,
+                                              'image': self.image})
 
     def assign_nics_to_management(self, management_zones, nics):
         """
