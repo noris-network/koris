@@ -671,48 +671,34 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._neutronclient = neutron_client
         self._cinderclient = cinder_client
 
-    def _status(self, hosts_zones):
+    @lru_cache()
+    def _status(self, host, zone):
         """
         Finds if all mahcines in the group exists, if the don't exist create
         a network port for the machine
         """
-        for hosts, zone in hosts_zones:
-            for host in hosts:
-                try:
-                    _server = self._novaclient.servers.find(name=host)
-                    yield Instance(self._cinderclient,
-                                   self._novaclient,
-                                   _server.name,
-                                   zone,
-                                   {})
+        try:
+            _server = self._novaclient.servers.find(name=host)
+            yield Instance(self._cinderclient,
+                           self._novaclient,
+                           _server.name,
+                           zone,
+                           {})
 
-                except NovaNotFound:
-                    port = self._neutronclient.create_port(
-                        {"port": {"admin_state_up": True,
-                                  "network_id": self.net['id'],
-                                  "security_groups": self.secgroups}})
+        except NovaNotFound:
+            port = self._neutronclient.create_port(
+                {"port": {"admin_state_up": True,
+                          "network_id": self.net['id'],
+                          "security_groups": self.secgroups}})
 
-                    inst = Instance(self._cinderclient,
-                                    self._novaclient,
-                                    _server.name,
-                                    zone,
-                                    {})
+            inst = Instance(self._cinderclient,
+                            self._novaclient,
+                            _server.name,
+                            zone,
+                            {})
 
-                    inst.nics = [port, ]
-
-    @property
-    def nodes_status(self):
-        """
-        Finds if all work nodes exists
-        """
-        return list(self._status(self.nodes_names))
-
-    @property
-    def management_status(self):
-        """
-        Finds if all mangament nodes exists
-        """
-        return list(self._status(self.management_names))
+            inst.nics = [port, ]
+            yield inst
 
     @property
     def nodes_names(self):
@@ -724,17 +710,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         """get the host names of all control plane nodes"""
         return host_names("master", self.n_masters, self.name)
 
-    def master_args_builder(self, user_data, hosts):
-        """return a list containing all args for building a master task"""
-        return [self.master_flavor, self.image, self.keypair, self.secgroups,
-                user_data, hosts]
-
-    def node_args_builder(self, user_data, hosts):
-        """return a list containing all args for building a worker node task"""
-
-        return [self.node_flavor, self.image, self.keypair, self.secgroups,
-                user_data, hosts]
-
     def distribute_management(self):
         """
         distribute control plane nodes in the different availability zones
@@ -742,12 +717,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         mz = list(distribute_host_zones(self.management_names, self.azones))
         for hosts, zone in mz:
             for host in hosts:
-                yield Instance(self._cinderclient,
-                               self._novaclient,
-                               host,
-                               zone,
-                               volume_config={'class': self.storage_class,
-                                              'image': self.image})
+                yield self._status(host, zone)
 
     def distribute_nodes(self):
         """
@@ -756,12 +726,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         hz = list(distribute_host_zones(self.nodes_names, self.azones))
         for hosts, zone in hz:
             for host in hosts:
-                yield Instance(self._cinderclient,
-                               self._novaclient,
-                               host,
-                               zone,
-                               volume_config={'class': self.storage_class,
-                                              'image': self.image})
+                yield self._status(host, zone)
 
     def assign_nics_to_management(self, management_zones, nics):
         """
