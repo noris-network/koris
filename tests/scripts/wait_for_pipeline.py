@@ -26,3 +26,6 @@ while is_another_job_running() or cinder.volumes.list():
     print("Woha, another job is running, or there are some volumes left behined ...")
     print("In any case I'm waiting ... ")
     time.sleep(60)
+
+print("Awesome !!! no jobs and no volume found!")
+print("I will run that integration test now!")
