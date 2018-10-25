@@ -18,12 +18,11 @@ gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
 project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
-def is_job_running():
-    return 'running' in [lin.attributes['status'] for
-                         lin in project.pipelines.list()]
+def is_another_job_running():
+    return sum([1 for lin in project.pipelines.list() if lin.attributes['status'] == 'running']) > 1  # noqa
 
 
-while is_job_running() or cinder.volumes.list():
+while is_another_job_running() or cinder.volumes.list():
     print("Woha, another job is running, or there are some volumes left behined ...")
     print("In any case I'm waiting ... ")
     time.sleep(60)
