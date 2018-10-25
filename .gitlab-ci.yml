@@ -25,19 +25,12 @@ unittest:
     - pip3 install -e .
     - make coverage PY=python3
 
-
-.wait: &wait |
-  if [ $(openstack volume list -f value | wc -l) -gt 5 ]; then
-      echo "waiting until enough resources are free";
-      sleep 90;
-  fi
-
 wait-for-resources:
   stage: wait-for-resources
   image: oz123/koris-alpine:0.1.1
   script:
-   - *wait
-
+   - pip3 install python-gitlab
+   - python3 tests/scripts/wait_for_pipeline
 
 build-cluster:
   stage: build-cluster
