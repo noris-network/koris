@@ -33,6 +33,8 @@ LOGGER = get_logger(__name__)
 def remove_cluster(config, nova, neutron):
     """
     Delete a cluster from OpenStack
+
+    TODO: explicitly search for volumes and remove them.
     """
     cluster_suffix = "-%s" % config['cluster-name']
     servers = [server for server in nova.servers.list() if
@@ -145,7 +147,7 @@ class Instance:
         volume_data = await self._create_volume()
 
         try:
-            print("Creating instance %s... " % self.name)
+            LOGGER.info("Creating instance %s... ", self.name)
             instance = self.nova.servers.create(
                 name=self.name,
                 availability_zone=self.zone,
@@ -729,22 +731,3 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         for hosts, zone in hz:
             for host in hosts:
                 yield self._get_or_create(host, zone)
-
-    def assign_nics_to_management(self, management_zones, nics):
-        """
-        assign network interfaces to control plane nodes
-        """
-        for idx, nic in enumerate(nics):
-            management_zones[idx].nic = [{'net-id': self.net['id'],
-                                          'port-id': nic['port']['id']}]
-
-    def assign_nics_to_nodes(self, nodes_zones, nics):
-        """
-        assign network interfaces to worker nodes
-        """
-        for idx, nic in enumerate(nics):
-            try:
-                nodes_zones[idx].nic = [{'net-id': self.net['id'],
-                                         'port-id': nic['port']['id']}]
-            except IndexError:
-                LOGGER.debug("I got more nics then servers ...")
