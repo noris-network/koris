@@ -1,7 +1,20 @@
+"""
+Test kolt.cloud.builder
+"""
+from unittest import mock
+
 import kolt.cloud.openstack
 
-from unittest import mock
 from kolt.cloud.builder import NodeBuilder
+
+
+class DummyServer:  # pylint: disable=too-few-public-methods
+    """
+    Mock an OpenStack server
+    """
+    def __init__(self, name):
+        self.name = name
+
 
 NOVA = mock.Mock()
 NEUTRON = mock.Mock()
@@ -17,9 +30,10 @@ CONFIG = {
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.2-4",
     "master_flavor": "ECS.C1.4-8",
-    'storage_class': "TestStorageClass"
+    'storage_class': "Tes tStorageClass"
 }
 
+NOVA.servers.find = mock.MagicMock(return_value=DummyServer("node-1-test"))
 NOVA.keypairs.get = mock.MagicMock(return_value='otiram')
 NOVA.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 NOVA.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
@@ -41,7 +55,9 @@ NEUTRON.list_subnets = mock.MagicMock(
 
 
 def test_node_builder():
+    """ test the node builder class"""
     nb = NodeBuilder(NOVA, NEUTRON, CINDER, CONFIG)
     nodes = nb.get_nodes()
 
     assert isinstance(nodes[0], kolt.cloud.openstack.Instance)
+    assert nodes[0].name == 'node-1-test'
