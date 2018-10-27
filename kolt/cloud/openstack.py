@@ -85,7 +85,7 @@ class Instance:
     Create an Openstack Server with an attached volume
     """
 
-    def __init__(self, cinder, nova, name, zone,
+    def __init__(self, cinder, nova, name, zone, role,
                  volume_config):
         self.cinder = cinder
         self.nova = nova
@@ -94,6 +94,7 @@ class Instance:
         self.volume_size = volume_config.get('size', '25')
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
+        self.role = role
 
         self.nics = None
         # ip is populated after create
@@ -178,9 +179,9 @@ class Instance:
 
         print("Instance: " + instance.name + " is in " + inst_status + " state")
 
-        ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
+        self.ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
         print("Instance booted! Name: " + instance.name + " Status: " +
-              instance.status + ", IP: " + ip)
+              instance.status + ", IP: " + self.ip)
 
     def delete(self):
         """stop and terminate an instance"""
@@ -674,7 +675,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._cinderclient = cinder_client
 
     @lru_cache()
-    def _get_or_create(self, host, zone):
+    def _get_or_create(self, host, zone, role):
         """
         Find if a instance exists Openstack.
 
@@ -687,6 +688,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             self._novaclient,
                             _server.name,
                             zone,
+                            role,
                             {})
 
         except NovaNotFound:
@@ -699,6 +701,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             self._novaclient,
                             _server.name,
                             zone,
+                            role,
                             {})
 
             inst.nics = [port, ]
@@ -721,7 +724,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         mz = list(distribute_host_zones(self.management_names, self.azones))
         for hosts, zone in mz:
             for host in hosts:
-                yield self._get_or_create(host, zone)
+                yield self._get_or_create(host, zone, 'master')
 
     def distribute_nodes(self):
         """
@@ -730,4 +733,4 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         hz = list(distribute_host_zones(self.nodes_names, self.azones))
         for hosts, zone in hz:
             for host in hosts:
-                yield self._get_or_create(host, zone)
+                yield self._get_or_create(host, zone, 'node')
