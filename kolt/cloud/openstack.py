@@ -95,12 +95,13 @@ class Instance:
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
         self.role = role
-
         self.nics = None
-        # ip is populated after create
-        self.ip_address = None
 
-    async def _create_volume(self):
+    @property
+    def ip_address(self):
+        return self.nics[0]['port']['fixed_ips'][0]['ip_address']
+
+    async def _create_volume(self):  # pragma: no coverage
         bdm_v2 = {
             "boot_index": 0,
             "source_type": "volume",
@@ -130,14 +131,13 @@ class Instance:
 
         return volume_data
 
-    async def create(self, flavor, secgroups, keypair, userdata):
+    async def create(self, flavor, secgroups, keypair, userdata):  # pragma: no coverage
         """
         Boot the instance on openstack
         """
         try:
             print(que("Checking if %s does not already exist" % self.name))
             server = self.nova.servers.find(name=self.name)
-            self.ip_address = server.interface_list()[0].fixed_ips[0]['ip_address']  # noqa
             print(info("This machine already exists ... skipping"))
         except NovaNotFound:
             print(info("Okay, launching %s" % self.name))
@@ -188,7 +188,7 @@ class Instance:
         pass
 
 
-class LoadBalancer:
+class LoadBalancer:  # pragma: no coverage
 
     """
     A class to create a LoadBalancer in OpenStack.
@@ -682,6 +682,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         If instance is found return Instance instance with the info.
         If not found create a NIC and assign it to an Instance instance.
         """
+        volume_config = {'image': self.image, 'class': self.storage_class}
         try:
             _server = self._novaclient.servers.find(name=host)
             return Instance(self._cinderclient,
@@ -689,7 +690,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             _server.name,
                             zone,
                             role,
-                            {})
+                            volume_config)
 
         except NovaNotFound:
             port = self._neutronclient.create_port(
@@ -699,10 +700,10 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
             inst = Instance(self._cinderclient,
                             self._novaclient,
-                            _server.name,
+                            host,
                             zone,
                             role,
-                            {})
+                            volume_config)
 
             inst.nics = [port, ]
             return inst

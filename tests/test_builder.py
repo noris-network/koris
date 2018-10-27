@@ -1,6 +1,9 @@
 """
 Test kolt.cloud.builder
 """
+import base64
+import json
+import re
 import uuid
 from unittest import mock
 
@@ -79,3 +82,21 @@ def test_node_builder():
     node_tasks = nb.create_nodes_tasks(certs, kubelet_token,
                                        calico_token, test_cluster,
                                        lb_ip)
+
+    coro_server_create = node_tasks[1]
+
+    call_args = coro_server_create.get_stack()[0].f_locals
+    # we go a long way to check that nb.creat_node_tasks
+    # will create a future with the correct user data
+    assert call_args['keypair'] == 'otiram'
+    assert call_args['self'].name == 'node-1-test'
+    assert call_args['flavor'] == 'ECS.C1.2-4'
+    userdata = call_args['userdata']
+
+    se = re.search(
+        "calico_config.*\n.*\n.*\n\s+content: (?P<file>.*==)", userdata)
+
+    calico_config = json.loads(base64.b64decode(se.groupdict()['file']))
+    assert calico_config['etcd_endpoints'] == (
+        'https://10.32.192.101:2739,'
+        'https://10.32.192.102:2739,https://10.32.192.103:2739')

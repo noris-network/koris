@@ -143,8 +143,7 @@ class ControlPlaneBuilder:
                         admin_token,
                         calico_token,
                         kubelet_token,
-                        cloud_provider=None,
-                        cert_bundle=None):
+                        cert_bundle):
         """
         create the userdata which is given to cloud init
 
@@ -157,9 +156,8 @@ class ControlPlaneBuilder:
 
         encryption_key = base64.b64encode(
             uuid.uuid4().hex[:32].encode()).decode()
-        OSCloudConfig(self._info.subnet_id)
+        cloud_provider = OSCloudConfig(self._info.subnet_id)
 
-        admin_token = uuid.uuid4().hex[:32]
         token_csv_data = get_token_csv(admin_token,
                                        calico_token,
                                        kubelet_token)
@@ -189,8 +187,6 @@ class ControlPlaneBuilder:
         Create future tasks for creating the cluster control plane nodes
         """
 
-        cloud_provider = OSCloudConfig(self._info.subnet_id)
-
         cert_bundle = (certs['ca'], certs['k8s'],
                        certs['service-account'])
 
@@ -198,8 +194,10 @@ class ControlPlaneBuilder:
 
         user_data = self.create_userdata(
             masters,
-            cloud_provider=cloud_provider,
-            cert_bundle=cert_bundle)
+            admin_token,
+            calico_token,
+            kubelet_token,
+            cert_bundle)
 
         loop = asyncio.get_event_loop()
         tasks = [loop.create_task(
@@ -228,7 +226,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _create_tokes():
-        for _ in range(2):
+        for _ in range(3):
             yield uuid.uuid4().hex[:32]
 
     @staticmethod
@@ -291,7 +289,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         cp_tasks = self.masters_builder.create_masters_tasks(certs,
                                                              kubelet_t,
                                                              calico_t,
-                                                             cp_hosts)  # noqa
+                                                             admin_t)  # noqa
 
         LOGGER.debug(info("Done creating control plane tasks"))
 

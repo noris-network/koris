@@ -75,7 +75,7 @@ class Kolt:
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        builder = ClusterBuilder()
+        builder = ClusterBuilder(config)
         try:
             builder.run(config)
         except BuilderError as err:
