@@ -81,7 +81,7 @@ class Kolt:
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))
-            delete_cluster(config['cluster-name'], self.nova, self.neutron,
+            delete_cluster(config, self.nova, self.neutron,
                            True)
 
     def kubespray(self, config, inventory=None):  # pylint: disable=no-self-use
