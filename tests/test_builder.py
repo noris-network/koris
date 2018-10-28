@@ -90,7 +90,7 @@ def test_node_builder():
     # will create a future with the correct user data
     assert call_args['keypair'] == 'otiram'
     assert call_args['self'].name == 'node-1-test'
-    assert call_args['flavor'] == 'ECS.C1.2-4'
+    assert call_args['flavor'] == 'ECS.C1.4-8'
     userdata = call_args['userdata']
 
     se = re.search(

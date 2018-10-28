@@ -85,21 +85,27 @@ class Instance:
     Create an Openstack Server with an attached volume
     """
 
-    def __init__(self, cinder, nova, name, zone, role,
+    def __init__(self, cinder, nova, name, network, zone, role,
                  volume_config):
         self.cinder = cinder
         self.nova = nova
         self.name = name
+        self.network = network
         self.zone = zone
         self.volume_size = volume_config.get('size', '25')
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
         self.role = role
-        self.nics = None
+        self._ports = None
+
+    @property
+    def nics(self):
+        return [{'net-id': self.network['id'],
+                 'port-id': self._ports[0]['port']['id']}]
 
     @property
     def ip_address(self):
-        return self.nics[0]['port']['fixed_ips'][0]['ip_address']
+        return self._ports[0]['port']['fixed_ips'][0]['ip_address']
 
     async def _create_volume(self):  # pragma: no coverage
         bdm_v2 = {
@@ -675,7 +681,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._cinderclient = cinder_client
 
     @lru_cache()
-    def _get_or_create(self, host, zone, role):
+    def _get_or_create(self, hostname, zone, role):
         """
         Find if a instance exists Openstack.
 
@@ -684,10 +690,11 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         """
         volume_config = {'image': self.image, 'class': self.storage_class}
         try:
-            _server = self._novaclient.servers.find(name=host)
+            _server = self._novaclient.servers.find(name=hostname)
             return Instance(self._cinderclient,
                             self._novaclient,
                             _server.name,
+                            self.net,
                             zone,
                             role,
                             volume_config)
@@ -700,12 +707,13 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
             inst = Instance(self._cinderclient,
                             self._novaclient,
-                            host,
+                            hostname,
+                            self.net,
                             zone,
                             role,
                             volume_config)
 
-            inst.nics = [port, ]
+            inst._ports = [port, ]
             return inst
 
     @property
