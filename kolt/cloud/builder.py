@@ -108,7 +108,7 @@ class NodeBuilder:
 
         loop = asyncio.get_event_loop()
         tasks = [loop.create_task(
-            node.create(self.config['node_flavor'],
+            node.create(self._info.node_flavor,
                         self._info.secgroups,
                         self._info.keypair,
                         user_data
@@ -201,7 +201,7 @@ class ControlPlaneBuilder:
 
         loop = asyncio.get_event_loop()
         tasks = [loop.create_task(
-            master.create(self._config['master_flavor'],
+            master.create(self._info.master_flavor,
                           self._info.secgroups,
                           self._info.keypair,
                           user_data
