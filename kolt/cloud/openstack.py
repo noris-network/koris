@@ -97,14 +97,17 @@ class Instance:
         self.volume_img = volume_config.get('image')
         self.role = role
         self._ports = None
+        self._ip_address = None
 
     @property
     def nics(self):
+        """return all network interfaces attached to the instance"""
         return [{'net-id': self.network['id'],
                  'port-id': self._ports[0]['port']['id']}]
 
     @property
     def ip_address(self):
+        """return the IP address of the first NIC"""
         return self._ports[0]['port']['fixed_ips'][0]['ip_address']
 
     async def _create_volume(self):  # pragma: no coverage
@@ -185,9 +188,9 @@ class Instance:
 
         print("Instance: " + instance.name + " is in " + inst_status + " state")
 
-        self.ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
+        self._ip_address = instance.interface_list()[0].fixed_ips[0]['ip_address']
         print("Instance booted! Name: " + instance.name + " Status: " +
-              instance.status + ", IP: " + self.ip)
+              instance.status + ", IP: " + self._ip_address)
 
     def delete(self):
         """stop and terminate an instance"""
@@ -453,15 +456,14 @@ def get_or_create_sec_group(neutron, name):
     """
     name = "%s-sec-group" % name
     secgroup = next(neutron.list_security_groups(
-        retrieve_all=False, **{'name': "%s-sec-group" % name}))['security_groups']
+        retrieve_all=False, **{'name': name}))['security_groups']
     if secgroup:
         print(info(red("A Security group named %s already exists" % name)))
         print(info(red("I will add my own rules, please manually review all others")))  # noqa
         return secgroup[0]
 
     return neutron.create_security_group(
-        {'security_group': {'name':
-                            "%s-sec-group" % name}})['security_group']
+        {'security_group': {'name': name}})['security_group']
 
 
 def config_sec_group(neutron, sec_group_id, subnet=None):
@@ -656,7 +658,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-
         secgroup = get_or_create_sec_group(neutron_client,
                                            config['cluster-name'])
         self.secgroup = secgroup
