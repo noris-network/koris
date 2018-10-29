@@ -9,7 +9,6 @@ import os
 import re
 import sys
 import textwrap
-import uuid
 
 from functools import lru_cache
 from novaclient import client as nvclient
@@ -26,7 +25,7 @@ from keystoneauth1 import session
 from kolt.cloud import OpenStackAPI
 from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
                            yellow)  # pylint: disable=no-name-in-module
-from kolt.util.util import (get_logger, Server, get_host_zones, host_names,
+from kolt.util.util import (get_logger, host_names,
                             retry)
 LOGGER = get_logger(__name__)
 
@@ -34,6 +33,8 @@ LOGGER = get_logger(__name__)
 def remove_cluster(config, nova, neutron):
     """
     Delete a cluster from OpenStack
+
+    TODO: explicitly search for volumes and remove them.
     """
     cluster_suffix = "-%s" % config['cluster-name']
     servers = [server for server in nova.servers.list() if
@@ -79,104 +80,124 @@ class BuilderError(Exception):
     pass
 
 
-async def create_volume(cinder, image, zone, klass, size=25):
+class Instance:
     """
-    create a cinder volume for use with a compute instance
+    Create an Openstack Server with an attached volume
     """
-    bdm_v2 = {
-        "boot_index": 0,
-        "source_type": "volume",
-        "volume_size": str(size),
-        "destination_type": "volume",
-        "delete_on_termination": True}
 
-    vol = cinder.volumes.create(size, name=uuid.uuid4(), imageRef=image.id,
-                                availability_zone=zone,
-                                volume_type=klass)
+    def __init__(self, cinder, nova, name, network, zone, role,
+                 volume_config):
+        self.cinder = cinder
+        self.nova = nova
+        self.name = name
+        self.network = network
+        self.zone = zone
+        self.volume_size = volume_config.get('size', '25')
+        self.volume_class = volume_config.get('class')
+        self.volume_img = volume_config.get('image')
+        self.role = role
+        self._ports = None
+        self._ip_address = None
 
-    while vol.status != 'available':
-        await asyncio.sleep(1)
-        vol = cinder.volumes.get(vol.id)
+    @property
+    def nics(self):
+        """return all network interfaces attached to the instance"""
+        return [{'net-id': self.network['id'],
+                 'port-id': self._ports[0]['port']['id']}]
 
-    LOGGER.debug("created volume %s %s", vol, vol.volume_type)
+    @property
+    def ip_address(self):
+        """return the IP address of the first NIC"""
+        return self._ports[0]['port']['fixed_ips'][0]['ip_address']
 
-    if vol.bootable != 'true':
-        vol.update(bootable=True)
-        # wait for mark as bootable
-        await asyncio.sleep(2)
+    async def _create_volume(self):  # pragma: no coverage
+        bdm_v2 = {
+            "boot_index": 0,
+            "source_type": "volume",
+            "volume_size": str(self.volume_size),
+            "destination_type": "volume",
+            "delete_on_termination": True}
 
-    volume_data = copy.deepcopy(bdm_v2)
-    volume_data['uuid'] = vol.id
+        vol = self.cinder.volumes.create(self.volume_size,
+                                         name=self.name,
+                                         imageRef=self.volume_img.id,
+                                         availability_zone=self.zone,
+                                         volume_type=self.volume_class)
 
-    return volume_data
+        while vol.status != 'available':
+            await asyncio.sleep(1)
+            vol = self.cinder.volumes.get(vol.id)
 
+        LOGGER.debug("created volume %s %s", vol, vol.volume_type)
 
-async def create_instance_with_volume(name, zone, flavor, image,
-                                      keypair, secgroups, userdata, hosts,
-                                      nova=None,
-                                      neutron=None,
-                                      cinder=None,
-                                      nics=None,
-                                      volume_klass=""
-                                      ):
-    """
-    Create a compute instance with cloud-init and volume and port for use
-    in a kubernetes cluster
-    """
-    try:
-        print(que("Checking if %s does not already exist" % name))
-        server = nova.servers.find(name=name)
-        ip = server.interface_list()[0].fixed_ips[0]['ip_address']
-        print(info("This machine already exists ... skipping"))
-        hosts[name] = (ip)
-        return
-    except NovaNotFound:
-        print(info("Okay, launching %s" % name))
-    except IndexError:
-        LOGGER.debug("Server found in weired state witout IP ... recreating")
-        server.delete()
+        if vol.bootable != 'true':
+            vol.update(bootable=True)
+            # wait for mark as bootable
+            await asyncio.sleep(2)
 
-    volume_data = await create_volume(cinder, image, zone, volume_klass)
+        volume_data = copy.deepcopy(bdm_v2)
+        volume_data['uuid'] = vol.id
 
-    try:
-        print("Creating instance %s... " % name)
-        instance = nova.servers.create(name=name,
-                                       availability_zone=zone,
-                                       image=None,
-                                       key_name=keypair.name,
-                                       flavor=flavor,
-                                       nics=nics, security_groups=secgroups,
-                                       block_device_mapping_v2=[volume_data],
-                                       userdata=userdata,
-                                       )
-    except (Exception) as err:
-        print(info(red("Something weired happend, I so I didn't create %s" %
-                       name)))
-        print(info(red("Removing cluser ...")))
-        print(info(yellow("The exception is", str((err)))))
-        raise BuilderError(str(err))
+        return volume_data
 
-    inst_status = instance.status
-    print("waiting for 5 seconds for the machine to be launched ... ")
-    await asyncio.sleep(5)
+    async def create(self, flavor, secgroups, keypair, userdata):  # pragma: no coverage
+        """
+        Boot the instance on openstack
+        """
+        try:
+            print(que("Checking if %s does not already exist" % self.name))
+            server = self.nova.servers.find(name=self.name)
+            print(info("This machine already exists ... skipping"))
+        except NovaNotFound:
+            print(info("Okay, launching %s" % self.name))
+        except IndexError:
+            LOGGER.debug("Server found in weired state witout IP ... recreating")
+            server.delete()
 
-    while inst_status == 'BUILD':
-        print("Instance: " + instance.name + " is in " + inst_status +
-              " state, sleeping for 5 seconds more...")
-        await asyncio.sleep(5)
-        instance = nova.servers.get(instance.id)
+        volume_data = await self._create_volume()
+
+        try:
+            LOGGER.info("Creating instance %s... ", self.name)
+            instance = self.nova.servers.create(
+                name=self.name,
+                availability_zone=self.zone,
+                image=None,
+                key_name=keypair.name,
+                flavor=flavor,
+                nics=self.nics, security_groups=secgroups,
+                block_device_mapping_v2=[volume_data],
+                userdata=userdata
+            )
+        except (Exception) as err:
+            print(info(red("Something weired happend, I so I didn't create %s" %
+                           self.name)))
+            print(info(red("Removing cluser ...")))
+            print(info(yellow("The exception is", str((err)))))
+            raise BuilderError(str(err))
+
         inst_status = instance.status
+        print("waiting for 5 seconds for the machine to be launched ... ")
+        await asyncio.sleep(5)
 
-    print("Instance: " + instance.name + " is in " + inst_status + " state")
+        while inst_status == 'BUILD':
+            print("Instance: " + instance.name + " is in " + inst_status +
+                  " state, sleeping for 5 seconds more...")
+            await asyncio.sleep(5)
+            instance = self.nova.servers.get(instance.id)
+            inst_status = instance.status
 
-    ip = instance.interface_list()[0].fixed_ips[0]['ip_address']
-    print("Instance booted! Name: " + instance.name + " Status: " +
-          instance.status + ", IP: " + ip)
+        print("Instance: " + instance.name + " is in " + inst_status + " state")
 
-    hosts[name] = (ip)
+        self._ip_address = instance.interface_list()[0].fixed_ips[0]['ip_address']
+        print("Instance booted! Name: " + instance.name + " Status: " +
+              instance.status + ", IP: " + self._ip_address)
+
+    def delete(self):
+        """stop and terminate an instance"""
+        pass
 
 
-class LoadBalancer:
+class LoadBalancer:  # pragma: no coverage
 
     """
     A class to create a LoadBalancer in OpenStack.
@@ -344,12 +365,12 @@ class LoadBalancer:
               "name": "%s-health" % self.name}})
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
-    def _add_member(self, client, pool_id, ip):
+    def _add_member(self, client, pool_id, ip_addr):
         client.create_lbaas_member(pool_id,
                                    {'member':
                                     {'subnet_id': self._subnet_id,
                                      'protocol_port': 6443,
-                                     'address': ip,
+                                     'address': ip_addr,
                                      }})
 
     @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
@@ -442,8 +463,7 @@ def get_or_create_sec_group(neutron, name):
         return secgroup[0]
 
     return neutron.create_security_group(
-        {'security_group': {'name':
-                            name}})['security_group']
+        {'security_group': {'name': name}})['security_group']
 
 
 def config_sec_group(neutron, sec_group_id, subnet=None):
@@ -603,19 +623,41 @@ class OSCloudConfig:
         return base64.b64encode(str(self).encode())
 
 
+def distribute_host_zones(hosts, zones):
+    """
+    this divides the lists of hosts into zones
+    >>> hosts
+    >>> ['host1', 'host2', 'host3', 'host4', 'host5']
+    >>> zones
+    >>> ['A', 'B']
+    >>> list(zip([hosts[i:i + n] for i in range(0, len(hosts), n)], zones)) # noqa
+    >>> [(['host1', 'host2', 'host3'], 'A'), (['host4', 'host5'], 'B')]  # noqa
+    """
+
+    if len(zones) == len(hosts):
+        return list(zip(hosts, zones))
+
+    end = len(zones) + 1 if len(zones) % 2 else len(zones)
+    host_zones = list(zip([hosts[i:i + end] for i in
+                           range(0, len(hosts), end)],
+                          zones))
+    return host_zones
+
+
 class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     """
     collect various information on the cluster
 
     """
-    def __init__(self, nova_client, neutron_client, config):
+    def __init__(self, nova_client, neutron_client,
+                 cinder_client,
+                 config):
 
         self.keypair = nova_client.keypairs.get(config['keypair'])
         self.image = nova_client.glance.find_image(config['image'])
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-
         secgroup = get_or_create_sec_group(neutron_client,
                                            config['cluster-name'])
         self.secgroup = secgroup
@@ -637,39 +679,43 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
         self._novaclient = nova_client
         self._neutronclient = neutron_client
+        self._cinderclient = cinder_client
 
-    def _status(self, names):
+    @lru_cache()
+    def _get_or_create(self, hostname, zone, role):
         """
-        Finds if all mahcines in the group exists, if the don't exist create
-        a network port for the machine
-        """
-        for name in names:
-            try:
-                _server = self._novaclient.servers.find(name=name)
-                yield Server(_server.name, _server.interface_list(),
-                             server=_server)
+        Find if a instance exists Openstack.
 
-            except NovaNotFound:
-                port = self._neutronclient.create_port(
-                    {"port": {"admin_state_up": True,
-                              "network_id": self.net['id'],
-                              "security_groups": self.secgroups}})
+        If instance is found return Instance instance with the info.
+        If not found create a NIC and assign it to an Instance instance.
+        """
+        volume_config = {'image': self.image, 'class': self.storage_class}
+        try:
+            _server = self._novaclient.servers.find(name=hostname)
+            return Instance(self._cinderclient,
+                            self._novaclient,
+                            _server.name,
+                            self.net,
+                            zone,
+                            role,
+                            volume_config)
 
-                yield Server(name, [port])
+        except NovaNotFound:
+            port = self._neutronclient.create_port(
+                {"port": {"admin_state_up": True,
+                          "network_id": self.net['id'],
+                          "security_groups": self.secgroups}})
 
-    @property
-    def nodes_status(self):
-        """
-        Finds if all work nodes exists
-        """
-        return list(self._status(self.nodes_names))
+            inst = Instance(self._cinderclient,
+                            self._novaclient,
+                            hostname,
+                            self.net,
+                            zone,
+                            role,
+                            volume_config)
 
-    @property
-    def management_status(self):
-        """
-        Finds if all mangament nodes exists
-        """
-        return list(self._status(self.management_names))
+            inst._ports = [port, ]
+            return inst
 
     @property
     def nodes_names(self):
@@ -681,44 +727,20 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         """get the host names of all control plane nodes"""
         return host_names("master", self.n_masters, self.name)
 
-    def master_args_builder(self, user_data, hosts):
-        """return a list containing all args for building a master task"""
-        return [self.master_flavor, self.image, self.keypair, self.secgroups,
-                user_data, hosts]
-
-    def node_args_builder(self, user_data, hosts):
-        """return a list containing all args for building a worker node task"""
-
-        return [self.node_flavor, self.image, self.keypair, self.secgroups,
-                user_data, hosts]
-
     def distribute_management(self):
         """
         distribute control plane nodes in the different availability zones
         """
-        return list(get_host_zones(self.management_names, self.azones))
+        mz = list(distribute_host_zones(self.management_names, self.azones))
+        for hosts, zone in mz:
+            for host in hosts:
+                yield self._get_or_create(host, zone, 'master')
 
     def distribute_nodes(self):
         """
         distribute worker nodes in the different availability zones
         """
-        return list(get_host_zones(self.nodes_names, self.azones))
-
-    def assign_nics_to_management(self, management_zones, nics):
-        """
-        assign network interfaces to control plane nodes
-        """
-        for idx, nic in enumerate(nics):
-            management_zones[idx].nic = [{'net-id': self.net['id'],
-                                          'port-id': nic['port']['id']}]
-
-    def assign_nics_to_nodes(self, nodes_zones, nics):
-        """
-        assign network interfaces to worker nodes
-        """
-        for idx, nic in enumerate(nics):
-            try:
-                nodes_zones[idx].nic = [{'net-id': self.net['id'],
-                                         'port-id': nic['port']['id']}]
-            except IndexError:
-                LOGGER.debug("I got more nics then servers ...")
+        hz = list(distribute_host_zones(self.nodes_names, self.azones))
+        for hosts, zone in hz:
+            for host in hosts:
+                yield self._get_or_create(host, zone, 'node')

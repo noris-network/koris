@@ -75,13 +75,13 @@ class Kolt:
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        builder = ClusterBuilder()
+        builder = ClusterBuilder(config)
         try:
             builder.run(config)
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))
-            delete_cluster(config['cluster-name'], self.nova, self.neutron,
+            delete_cluster(config, self.nova, self.neutron,
                            True)
 
     def kubespray(self, config, inventory=None):  # pylint: disable=no-self-use

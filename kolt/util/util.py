@@ -7,7 +7,6 @@ import time
 from configparser import ConfigParser
 from functools import lru_cache
 from functools import wraps
-from ipaddress import IPv4Address
 
 import yaml
 
@@ -82,42 +81,6 @@ def get_host_zones(hosts, zones):
                                range(0, len(hosts), end)],
                               zones))
         return NodeZoneNic.hosts_distributor(host_zones)
-
-
-class Server:
-
-    def __init__(self, name, nics, server=None):
-
-        self.name = name
-        self._interface_list = nics
-        self._nova_server = server
-
-    def interface_list(self):
-        return self._interface_list
-
-    @property
-    def ip_address(self):
-        try:
-            return self._interface_list[0].fixed_ips[0]['ip_address']
-        except AttributeError:
-            return self._interface_list[0]['port']['fixed_ips'][0]['ip_address']  # noqa
-
-    def connection_uri(self, port, protocol="https"):
-        return "%s://%s:%d" % (protocol, self.ip_address, port)
-
-
-class EtcdHost:
-
-    def __init__(self, name, ip_address, port=2380):
-        self.name = name
-        self.ip_address = IPv4Address(ip_address)
-        self.port = port
-
-    def _connection_uri(self):
-        return "%s=https://%s:%d" % (self.name, self.ip_address, self.port)
-
-    def __str__(self):
-        return self._connection_uri()
 
 
 encryption_config_tmpl = """
