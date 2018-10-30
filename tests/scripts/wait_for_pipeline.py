@@ -23,8 +23,9 @@ def is_another_job_running():
 
 
 while is_another_job_running() or cinder.volumes.list():
-    print("Woha, another job is running, or there are some volumes left behined ...")
-    print("In any case I'm waiting ... ")
+    print("Woha, another job is running, or there are some volumes left "
+          "behined ...", flush=True)
+    print("In any case I'm waiting ... ", flush=True)
     time.sleep(60)
 
 print("Awesome !!! no jobs and no volume found!")
