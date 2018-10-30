@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 .PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait
 .DEFAULT_GOAL := help
 
