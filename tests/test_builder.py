@@ -13,6 +13,12 @@ from kolt.cloud.builder import NodeBuilder
 from kolt.ssl import create_certs
 
 
+DUMMYPORT = {"port": {"admin_state_up": True,
+                      "network_id": 'acedfr3c4223ee21',
+                      "id": "abcdefg12345678",
+                      "fixed_ips": [{"ip_address": "192.168.1.101"}]}}
+
+
 class DummyServer:  # pylint: disable=too-few-public-methods
     """
     Mock an OpenStack server
@@ -21,6 +27,10 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 
         self.name = name
         self.ip_address = ip_address
+        self._exists = False
+
+    def interface_list(self):
+        return [DUMMYPORT, ]
 
 
 NOVA = mock.Mock()
@@ -47,10 +57,7 @@ NOVA.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 NOVA.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
 NEUTRON.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
 NEUTRON.create_port = mock.MagicMock(
-    return_value={"port": {"admin_state_up": True,
-                           "network_id": 'acedfr3c4223ee21',
-                           "id": "abcdefg12345678",
-                           "fixed_ips": [{"ip_address": "192.168.1.101"}]}})
+    return_value=DUMMYPORT)
 NEUTRON.list_security_groups = mock.MagicMock(
     return_value=iter([{"security_groups": []}]))
 
@@ -66,7 +73,7 @@ def test_node_builder():
     """ test the node builder class"""
     nb = NodeBuilder(NOVA, NEUTRON, CINDER, CONFIG)
     nodes = nb.get_nodes()
-
+    list(map(lambda x: setattr(x, "_exists", False), nodes))
     assert isinstance(nodes[0], kolt.cloud.openstack.Instance)
     assert nodes[0].name == 'node-1-test'
 
@@ -78,7 +85,6 @@ def test_node_builder():
     lb_ip = '212.58.134.78'
     test_cluster = [DummyServer("master-%d-test",
                                 "10.32.192.10%d" % i) for i in range(1, 4)]
-
     node_tasks = nb.create_nodes_tasks(certs, kubelet_token,
                                        calico_token, test_cluster,
                                        lb_ip)
@@ -94,7 +100,7 @@ def test_node_builder():
     userdata = call_args['userdata']
 
     se = re.search(
-        "calico_config.*\n.*\n.*\n\s+content: (?P<file>.*==)", userdata)
+        r"calico_config.*\n.*\n.*\n\s+content: (?P<file>.*==)", userdata)
 
     calico_config = json.loads(base64.b64decode(se.groupdict()['file']))
     assert calico_config['etcd_endpoints'] == (
