@@ -23,40 +23,26 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from kolt.cloud import OpenStackAPI
-from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
-                           yellow)  # pylint: disable=no-name-in-module
+from kolt.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, host_names,
                             retry)
 LOGGER = get_logger(__name__)
 
 
-def remove_cluster(config, nova, neutron):
+def remove_cluster(config, nova, neutron, cinder):
     """
     Delete a cluster from OpenStack
 
     TODO: explicitly search for volumes and remove them.
     """
-    cluster_suffix = "-%s" % config['cluster-name']
-    servers = [server for server in nova.servers.list() if
-               server.name.endswith(cluster_suffix)]
+    cluster_info = OSClusterInfo(nova, neutron, cinder, config)
+    cp_hosts = cluster_info.distribute_management()
+    workers = cluster_info.distribute_nodes()
 
-    if not servers:
-        print(red("No servers were found ..."))
-    else:
-        print("Scheduling the deletion of ", servers)
-
-    async def del_server(server):
-        await asyncio.sleep(1)
-        nics = [nic for nic in server.interface_list()]
-        server.delete()
-        list(neutron.delete_port(nic.id) for nic in nics)
-        print("deleted %s ..." % server.name)
-
+    tasks = [host.delete(neutron) for host in cp_hosts]
+    tasks += [host.delete(neutron) for host in workers]
     loop = asyncio.get_event_loop()
-    tasks = [loop.create_task(del_server(server)) for server in servers]
-
-    if tasks:
-        loop.run_until_complete(asyncio.wait(tasks))
+    loop.run_until_complete(asyncio.wait(tasks))
     lbinst = LoadBalancer(config)
     lbinst.delete(neutron)
     connection = OpenStackAPI.connect()
@@ -98,6 +84,7 @@ class Instance:
         self.role = role
         self._ports = []
         self._ip_address = None
+        self._exists = False
 
     @property
     def nics(self):
@@ -110,6 +97,8 @@ class Instance:
         """return the IP address of the first NIC"""
         try:
             return self._ports[0]['port']['fixed_ips'][0]['ip_address']
+        except TypeError:
+            return self._ports[0].fixed_ips[0]['ip_address']
         except IndexError:
             raise AttributeError("Instance has no ports attached")
 
@@ -154,15 +143,8 @@ class Instance:
         """
         Boot the instance on openstack
         """
-        try:
-            print(que("Checking if %s does not already exist" % self.name))
-            server = self.nova.servers.find(name=self.name)
-            print(info("This machine already exists ... skipping"))
-        except NovaNotFound:
-            print(info("Okay, launching %s" % self.name))
-        except IndexError:
-            LOGGER.debug("Server found in weired state witout IP ... recreating")
-            server.delete()
+        if self._exists:
+            return
 
         volume_data = await self._create_volume()
 
@@ -206,12 +188,15 @@ class Instance:
 
     async def delete(self, netclient):
         """stop and terminate an instance"""
-        server = self.nova.servers.find(name=self.name)
-        server.delete()
-        nics = [nic for nic in server.interface_list()]
-        server.delete()
-        list(netclient.delete_port(nic.id) for nic in nics)
-        LOGGER.info("deleted %s ..." % server.name)
+        try:
+            server = self.nova.servers.find(name=self.name)
+            server.delete()
+            nics = [nic for nic in server.interface_list()]
+            server.delete()
+            list(netclient.delete_port(nic.id) for nic in nics)
+            LOGGER.info("deleted %s ..." % server.name)
+        except NovaNotFound:
+            pass
 
 
 class LoadBalancer:  # pragma: no coverage
@@ -709,14 +694,15 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         volume_config = {'image': self.image, 'class': self.storage_class}
         try:
             _server = self._novaclient.servers.find(name=hostname)
-            return Instance(self._cinderclient,
+            inst = Instance(self._cinderclient,
                             self._novaclient,
                             _server.name,
                             self.net,
                             zone,
                             role,
                             volume_config)
-
+            inst._ports.append(_server.interface_list()[0])
+            inst._exists = True
         except NovaNotFound:
             inst = Instance(self._cinderclient,
                             self._novaclient,
@@ -728,7 +714,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             inst.attach_port(self._neutronclient,
                              self.net['id'],
                              self.secgroups)
-            return inst
+        return inst
 
     @property
     def nodes_names(self):

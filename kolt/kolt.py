@@ -115,7 +115,7 @@ class Kolt:
             "You are about to destroy your cluster '{}'!!!".format(
                 config['cluster-name'])))
 
-        delete_cluster(config, self.nova, self.neutron, force)
+        delete_cluster(config, self.nova, self.neutron, self.cinder, force)
         sys.exit(0)
 
 
