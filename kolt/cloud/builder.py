@@ -112,7 +112,7 @@ class NodeBuilder:
                         self._info.secgroups,
                         self._info.keypair,
                         user_data
-                        )) for node in nodes]
+                        )) for node in nodes if not node._exists]
 
         return tasks
 
@@ -205,7 +205,7 @@ class ControlPlaneBuilder:
                           self._info.secgroups,
                           self._info.keypair,
                           user_data
-                          )) for master in masters]
+                          )) for master in masters if not master._exists]
 
         return tasks
 
@@ -261,6 +261,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         config_sec_group(NEUTRON, cluster_info.secgroup['id'])
 
+        # TODO: check if loadbalancer does not already exists !!!
         lbinst = LoadBalancer(config)
 
         lb, floatingip = lbinst.create(NEUTRON)
@@ -292,7 +293,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                                                              admin_t)  # noqa
 
         LOGGER.debug(info("Done creating control plane tasks"))
-
         tasks = cp_tasks + tasks
 
         if tasks:

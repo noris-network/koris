@@ -23,8 +23,7 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from kolt.cloud import OpenStackAPI
-from kolt.util.hue import (red, info, que,  # pylint: disable=no-name-in-module
-                           yellow)  # pylint: disable=no-name-in-module
+from kolt.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, host_names,
                             retry)
 LOGGER = get_logger(__name__)
@@ -85,6 +84,7 @@ class Instance:
         self.role = role
         self._ports = []
         self._ip_address = None
+        self._exists = False
 
     @property
     def nics(self):
@@ -143,15 +143,8 @@ class Instance:
         """
         Boot the instance on openstack
         """
-        try:
-            print(que("Checking if %s does not already exist" % self.name))
-            server = self.nova.servers.find(name=self.name)
-            print(info("This machine already exists ... skipping"))
-        except NovaNotFound:
-            print(info("Okay, launching %s" % self.name))
-        except IndexError:
-            LOGGER.debug("Server found in weired state witout IP ... recreating")
-            server.delete()
+        if self._exists:
+            return
 
         volume_data = await self._create_volume()
 
@@ -709,6 +702,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             role,
                             volume_config)
             inst._ports.append(_server.interface_list()[0])
+            inst._exists = True
         except NovaNotFound:
             inst = Instance(self._cinderclient,
                             self._novaclient,
