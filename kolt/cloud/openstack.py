@@ -96,7 +96,7 @@ class Instance:
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
         self.role = role
-        self._ports = None
+        self._ports = []
         self._ip_address = None
 
     @property
@@ -108,7 +108,17 @@ class Instance:
     @property
     def ip_address(self):
         """return the IP address of the first NIC"""
-        return self._ports[0]['port']['fixed_ips'][0]['ip_address']
+        try:
+            return self._ports[0]['port']['fixed_ips'][0]['ip_address']
+        except IndexError:
+            raise AttributeError("Instance has no ports attached")
+
+    def attach_port(self, netclient, net, secgroups):
+        """associate a network port with an instance"""
+        port = netclient.create_port({"port": {"admin_state_up": True,
+                                               "network_id": net['id'],
+                                               "security_groups": secgroups}})
+        self._ports.append(port)
 
     async def _create_volume(self):  # pragma: no coverage
         bdm_v2 = {
@@ -192,9 +202,14 @@ class Instance:
         print("Instance booted! Name: " + instance.name + " Status: " +
               instance.status + ", IP: " + self._ip_address)
 
-    def delete(self):
+    async def delete(self, netclient):
         """stop and terminate an instance"""
-        pass
+        server = self.nova.servers.find(name=self.name)
+        server.delete()
+        nics = [nic for nic in server.interface_list()]
+        server.delete()
+        list(netclient.delete_port(nic.id) for nic in nics)
+        LOGGER.info("deleted %s ..." % server.name)
 
 
 class LoadBalancer:  # pragma: no coverage
@@ -701,11 +716,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             volume_config)
 
         except NovaNotFound:
-            port = self._neutronclient.create_port(
-                {"port": {"admin_state_up": True,
-                          "network_id": self.net['id'],
-                          "security_groups": self.secgroups}})
-
             inst = Instance(self._cinderclient,
                             self._novaclient,
                             hostname,
@@ -713,8 +723,9 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             zone,
                             role,
                             volume_config)
-
-            inst._ports = [port, ]
+            inst.attach_port(self._neutronclient,
+                             self.net['id'],
+                             self.secgroups)
             return inst
 
     @property
