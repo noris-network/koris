@@ -120,6 +120,7 @@ integration-test: \
 	integration-expose \
 	expose-wait \
 	curl-run \
+	aquasec-security-checks \
 	clean-after-integration-test
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
@@ -198,6 +199,15 @@ curl-run:
 	done
 
 
+aquasec-security-checks:
+	echo "Running security checks for K8S master nodes..."
+	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
+	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
+	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+	echo "Running security checks for K8S worker nodes..."
+	kubectl run --kubeconfig=${KUBECONFIG} --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+
 clean-lb:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
@@ -225,17 +235,6 @@ clean-all-after-integration-test: clean-lb
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
 	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
-	
-master-security-checks: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
-master-security-checks:
-	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
-	#kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
-	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
-
-node-security-checks: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
-node-security-checks:
-	kubectl run --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
-		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
