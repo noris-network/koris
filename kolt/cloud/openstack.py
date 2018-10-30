@@ -116,7 +116,7 @@ class Instance:
     def attach_port(self, netclient, net, secgroups):
         """associate a network port with an instance"""
         port = netclient.create_port({"port": {"admin_state_up": True,
-                                               "network_id": net['id'],
+                                               "network_id": net,
                                                "security_groups": secgroups}})
         self._ports.append(port)
 

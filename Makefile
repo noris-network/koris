@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 .PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait
 .DEFAULT_GOAL := help
 
@@ -87,12 +88,13 @@ docker-alpine:
 	docker build -t $(ORG)/koris-alpine:$(TAG) -f docker/Dockerfile.alpine .
 
 docker-ubuntu:
-	docker build -t $(ORG)/koris:$(TAG) -f docker/Dockerfile.ubuntu .
+	docker build -t $(ORG)/koris-ubuntu:$(TAG) -f docker/Dockerfile.ubuntu .
 
 docker-push-alpine:
 	docker push $(ORG)/koris-alpine:$(TAG)
-docker-push:
-	docker push $(ORG)/koris:$(TAG)
+	
+docker-push-ubuntu:
+	docker push $(ORG)/koris-ubuntu:$(TAG)
 
 
 servedocs: docs ## compile the docs watching for changes
