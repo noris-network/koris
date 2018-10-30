@@ -48,17 +48,15 @@ build-cluster:
     paths:
       - "certs-koris-pipe-line-*"
       - "koris-pipe-line-*-admin.conf"
+      - "tests/koris_test.yml"
+      expire_in: 1 week
 
 integration-test:
   stage: integration-test
   image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  artifacts:
-    paths:
-    - tests/koris_test.yml
-    expire_in: 1 week
+    LANG: "C.UTF-8"    
   script:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
@@ -80,7 +78,6 @@ security-checks:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - "make update-config"
   - "make security-checks"
 
 cleanup:
@@ -93,7 +90,6 @@ cleanup:
   - apk add make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make update-config
   - make clean-all
   when: always
 
