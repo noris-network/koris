@@ -49,7 +49,7 @@ build-cluster:
       - "certs-koris-pipe-line-*"
       - "koris-pipe-line-*-admin.conf"
       - "tests/koris_test.yml"
-      expire_in: 1 week
+    expire_in: 1 week
 
 integration-test:
   stage: integration-test
