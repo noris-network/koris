@@ -94,7 +94,7 @@ def test_node_builder():
     userdata = call_args['userdata']
 
     se = re.search(
-        "calico_config.*\n.*\n.*\n\s+content: (?P<file>.*==)", userdata)
+        "calico_config.*\n.*\n.*\n\\s+content: (?P<file>.*==)", userdata)
 
     calico_config = json.loads(base64.b64decode(se.groupdict()['file']))
     assert calico_config['etcd_endpoints'] == (
