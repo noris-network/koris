@@ -231,11 +231,12 @@ clean-cluster: update-config
 	kolt destroy tests/koris_test.yml --force
 
 
+HASH = $(shell git rev-parse --short $(REV))
 clean-all:
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
-	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
+	rm -R certs-koris-pipe-line-${HASH}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
