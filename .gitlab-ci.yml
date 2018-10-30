@@ -69,7 +69,6 @@ integration-test:
   - make integration-expose
   - make expose-wait
   - make curl-run
-  - make clean-lb
 
 security-checks:
   stage: security-checks
@@ -78,10 +77,11 @@ security-checks:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
-  - apk add make
-  - "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && mv kubectl /usr/local/bin/kubectl  && chmod  777  /usr/local/bin/kubectl"
-  - make master-security-checks
-  - make node-security-checks
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - "make update-config"
+  - "make security-checks"
 
 cleanup:
   stage: cleanup
@@ -94,7 +94,7 @@ cleanup:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - make update-config
-  - make clean-cluster
+  - make clean-all
   when: always
 
 dev-docs:
@@ -132,4 +132,3 @@ pages:
     - tags
     - triggers
     - master
-

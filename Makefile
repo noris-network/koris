@@ -121,9 +121,7 @@ integration-test: \
 	integration-patch \
 	integration-expose \
 	expose-wait \
-	curl-run \
-	aquasec-security-checks \
-	clean-after-integration-test
+	curl-run
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
@@ -200,8 +198,7 @@ curl-run:
 		sleep 2; \
 	done
 
-
-aquasec-security-checks:
+security-checks:
 	echo "Running security checks for K8S master nodes..."
 	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
 	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
@@ -232,7 +229,7 @@ clean-cluster: update-config
 	kolt destroy tests/koris_test.yml --force
 
 
-clean-all-after-integration-test: clean-lb
+clean-all: clean-lb
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
