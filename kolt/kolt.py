@@ -7,6 +7,7 @@ Don't use it directly, instead install the package with setup.py.
 It automatically creates an executable in your path.
 
 """
+import argparse
 import sys
 import yaml
 
@@ -46,7 +47,8 @@ class Kolt:
         self.neutron = neutron
         self.cinder = cinder
         self.parser.add_argument("--version", action="store_true",
-                                 help="show version and exit")
+                                 help="show version and exit",
+                                 default=argparse.SUPPRESS)
 
     def _get_version(self):
         print("Kolt version:", __version__)
@@ -73,13 +75,13 @@ class Kolt:
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        builder = ClusterBuilder()
+        builder = ClusterBuilder(config)
         try:
             builder.run(config)
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))
-            delete_cluster(config['cluster-name'], self.nova, self.neutron,
+            delete_cluster(config, self.nova, self.neutron,
                            True)
 
     def kubespray(self, config, inventory=None):  # pylint: disable=no-self-use
@@ -113,7 +115,7 @@ class Kolt:
             "You are about to destroy your cluster '{}'!!!".format(
                 config['cluster-name'])))
 
-        delete_cluster(config["cluster-name"], self.nova, self.neutron, force)
+        delete_cluster(config, self.nova, self.neutron, force)
         sys.exit(0)
 
 

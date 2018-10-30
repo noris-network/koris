@@ -93,7 +93,7 @@ class BaseInit:
 
 class MasterInit(BaseInit):
 
-    def __init__(self, cluster_info,
+    def __init__(self, etcds,
                  cert_bundle=None, encryption_key=None,
                  cloud_provider=None,
                  token_csv_data="",
@@ -105,7 +105,7 @@ class MasterInit(BaseInit):
         """
         self.combined_message = MIMEMultipart()
         self.role = 'master'
-        self.cluster_info = cluster_info
+        self.etcds = etcds
         if cert_bundle:
             self.ca_cert_bundle = cert_bundle[0]
             self.etcd_cert_bundle = cert_bundle[1]
@@ -116,12 +116,13 @@ class MasterInit(BaseInit):
         self.cloud_provider = cloud_provider
         self.token_csv_data = token_csv_data
 
-    def _etcd_cluster_info(self):
+    def _etcd_cluster_info(self, port=2380):
         """
         Write the etcd cluster info to /etc/systemd/system/etcd.env
         """
-
+        tmpl = "%s=https://%s:%d"
         cluster_info_part = """
+
         # systemd env
          - path: /etc/systemd/system/etcd.env
            owner: root:root
@@ -131,10 +132,11 @@ class MasterInit(BaseInit):
              NODE02_IP={}
              NODE03_IP={}
              INITIAL_CLUSTER={}
-        """.format(self.cluster_info[0].ip_address,
-                   self.cluster_info[1].ip_address,
-                   self.cluster_info[2].ip_address,
-                   ",".join(str(etcd_host) for etcd_host in self.cluster_info))
+        """.format(self.etcds[0].ip_address,
+                   self.etcds[1].ip_address,
+                   self.etcds[2].ip_address,
+                   ",".join(
+                       tmpl % (etcd.name, etcd.ip_address, port) for etcd in self.etcds))
         return textwrap.dedent(cluster_info_part)
 
     def _get_token_csv(self):
@@ -306,9 +308,9 @@ class NodeInit(BaseInit):
 
         return textwrap.dedent(kubeproxy_part).lstrip()
 
-    def _get_calico_config(self):
+    def _get_calico_config(self, port=2739):
         calicoconfig['etcd_endpoints'] = ",".join(
-            "https://%s:%d" % (etcd_host.ip_address, int(etcd_host.port) - 1)
+            "https://%s:%d" % (etcd_host.ip_address, port)
             for etcd_host in self.etcd_cluster_info)
 
         cc = json.dumps(calicoconfig, indent=2).encode()

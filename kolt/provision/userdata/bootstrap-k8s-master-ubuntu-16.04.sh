@@ -54,7 +54,7 @@ done
 function version_found() {  return $($1 $2 | grep -qi $3); }
 
 # download a file and set +x on a file
-function curlx() { curl $1 -o $2 && chmod -v +x $2 ; }
+function curlx() { curl -s $1 -o $2 && chmod -v +x $2 ; }
 
 for item in apiserver controller-manager scheduler; do
     version_found kube-${item} --version $K8S_VERSION || curlx ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/kube-${item} ${BIN_PATH}/kube-${item}
@@ -64,7 +64,7 @@ done
 if [ "$(version_found etcd --version ${ETCD_VERSION:1}; echo $?)" -eq 1 ]; then
     echo "etcd version did not match ..."
     cd /tmp
-    curl -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
+    curl -s -L ${ETCD_URL}/${ETCD_VERSION}/etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz -O
     tar -xvf etcd-${ETCD_VERSION}-${OS}-${ARCH}.tar.gz
     cd etcd-${ETCD_VERSION}-${OS}-${ARCH}
 

@@ -1,6 +1,7 @@
 stages:
  - static-analysis
  - unittest
+ - wait-for-resources
  - build-cluster
  - integration-test
  - security-checks
@@ -25,6 +26,14 @@ unittest:
     - pip3 install -e .
     - make coverage PY=python3
 
+wait-for-resources:
+  stage: wait-for-resources
+  image: oz123/koris-alpine:0.1.1
+  script:
+   - pip3 install python-gitlab
+   - pip3 install -e .
+   - python3 tests/scripts/wait_for_pipeline.py
+
 build-cluster:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.1
@@ -33,8 +42,8 @@ build-cluster:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - make launch-cluster
-  - kubectl get nodes --kubeconfig=koris-pipe-line-$(git rev-parse --short HEAD)-admin.conf
   - ls -l
+  - make show-nodes
   artifacts:
     paths:
       - "certs-koris-pipe-line-*"
@@ -88,6 +97,26 @@ cleanup:
   - make clean-cluster
   when: always
 
+dev-docs:
+  stage: pages
+  image: oz123/koris-alpine:0.1.1
+  script:
+  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+  - which sphinx-build
+  - git checkout master
+  - make -C docs html
+  - mv docs/_build/html/ public/
+  - git checkout $CI_COMMIT_REF_NAME
+  - git pull origin
+  - make -C docs html
+  - mv docs/_build/html/ public/dev/
+  artifacts:
+    paths:
+    - public
+  only:
+    variables:
+      - $CI_COMMIT_REF_NAME == "dev"
+
 pages:
   stage: pages
   image: oz123/koris-alpine:0.1.1
@@ -100,4 +129,7 @@ pages:
     paths:
     - public
   only:
-  - master
+    - tags
+    - triggers
+    - master
+

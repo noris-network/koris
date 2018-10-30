@@ -24,12 +24,20 @@ for line in sys.stdin:
 endef
 export PRINT_HELP_PYSCRIPT
 
-PY ?= python
-BROWSER := python -c "$$BROWSER_PYSCRIPT"
+
+PY ?= python3
 REV ?= HEAD
+BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
+REV_NUMBER = $(shell git rev-parse --short ${REV})
+CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
+KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
+
+BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
+
+
 
 help:
-	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
+	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
 clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
 
@@ -94,12 +102,12 @@ release: dist ## package and upload a release
 	twine upload dist/*
 
 dist: clean ## builds source and wheel package
-	python setup.py sdist
-	python setup.py bdist_wheel
+	$(PY) setup.py sdist
+	$(PY) setup.py bdist_wheel
 	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
-	python setup.py install
+	$(PY) setup.py install
 
 integration-test: ## run the complete integration test from you local machine
 integration-test: \
@@ -119,14 +127,15 @@ launch-cluster: update-config
 	kolt k8s tests/koris_test.yml
 
 
-integration-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
+show-nodes:
+	kubectl get nodes -o wide --kubeconfig=${KUBECONFIG}
+
 integration-run:
 	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
 	@echo "started"
 
 
-integration-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-wait:
 	until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
 		do \
@@ -137,7 +146,6 @@ integration-wait:
 	echo "The pod is scheduled"
 
 
-integration-patch-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-patch-wait:
 	STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 	while true; do \
@@ -151,18 +159,15 @@ integration-patch-wait:
 	done ; \
 
 
-integration-patch: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 integration-patch:
 	kubectl patch deployment.apps nginx -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
 
-integration-expose: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 integration-expose:
 	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
 
-expose-wait: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 expose-wait:
 	while true; do \
 		IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
@@ -181,7 +186,6 @@ reset-config:
 	git checkout tests/koris_test.yml
 
 
-curl-run: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short ${REV})-admin.conf
 curl-run:
 	IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
 	echo $${IP}; \
@@ -194,7 +198,6 @@ curl-run:
 	done
 
 
-clean-lb: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 clean-lb:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
@@ -206,18 +209,17 @@ clean-lb:
 	done;
 	sleep 90
 
-
 update-config:
-	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$$(git rev-parse --short ${REV})/g" tests/koris_test.yml
+	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
 	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
+	cat tests/koris_test.yml
 
 
 clean-cluster: update-config
 	kolt destroy tests/koris_test.yml --force
 
 
-clean-all-after-integration-test: KUBECONFIG := koris-pipe-line-$$(git rev-parse --short $(REV))-admin.conf
 clean-all-after-integration-test: clean-lb
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
