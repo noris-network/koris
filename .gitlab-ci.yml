@@ -61,13 +61,13 @@ integration-test:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make update
-  - make integration-run
-  - make integration-wait
-  - make integration-patch-wait
-  - make integration-expose
-  - make expose-wait
-  - make curl-run
+  - "make integration-run"
+  - "make integration-wait"
+  - "make integration-patch-wait"
+  - "make integration-expose"
+  - "make expose-wait"
+  - "make curl-run"
+  - "make clean-lb"
   artifacts:
     paths:
       - "certs-koris-pipe-line-*"
