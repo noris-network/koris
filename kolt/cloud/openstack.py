@@ -190,8 +190,9 @@ class Instance:
         await asyncio.sleep(5)
 
         while inst_status == 'BUILD':
-            print("Instance: " + instance.name + " is in " + inst_status +
-                  " state, sleeping for 5 seconds more...")
+            LOGGER.info(
+                "Instance: %s is in in %s state, sleeping for 5 more seconds",
+                instance.name, inst_status)
             await asyncio.sleep(5)
             instance = self.nova.servers.get(instance.id)
             inst_status = instance.status
@@ -199,8 +200,9 @@ class Instance:
         print("Instance: " + instance.name + " is in " + inst_status + " state")
 
         self._ip_address = instance.interface_list()[0].fixed_ips[0]['ip_address']
-        print("Instance booted! Name: " + instance.name + " Status: " +
-              instance.status + ", IP: " + self._ip_address)
+        LOGGER.info(
+            "Instance booted! Name: %s, IP: %s, Status : %s",
+            self.name, instance.status, self._ip_address)
 
     async def delete(self, netclient):
         """stop and terminate an instance"""
