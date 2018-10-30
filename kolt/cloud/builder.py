@@ -24,7 +24,6 @@ from kolt.util.util import (get_logger,
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
-                        config_sec_group,
                         )
 
 LOGGER = get_logger(__name__)
@@ -42,11 +41,11 @@ class NodeBuilder:
         neutron (neutron client instance) - to create a network interface
         config (dict) - the parsed configuration file
     """
-    def __init__(self, nova, neutron, cinder, config):
+    def __init__(self, nova, neutron, cinder, config, osinfo):
         LOGGER.info(info(cyan(
             "gathering node information from openstack ...")))
-        self._info = OSClusterInfo(nova, neutron, cinder, config)
         self.config = config
+        self._info = osinfo
 
     def create_userdata(self, etcd_cluster_info,
                         cert_bundle, **kwargs):
@@ -131,12 +130,12 @@ class ControlPlaneBuilder:
         config (dict) - the parsed configuration file
     """
 
-    def __init__(self, nova, neutron, cinder, config):
+    def __init__(self, nova, neutron, cinder, config, osinfo):
 
         LOGGER.info(info(cyan(
             "gathering control plane information from openstack ...")))
-        self._info = OSClusterInfo(nova, neutron, cinder, config)
         self._config = config
+        self._info = info
 
     def create_userdata(self,
                         etcds,
@@ -220,9 +219,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             print(red("You must have an odd number (>1) of etcd machines!"))
             sys.exit(2)
 
-        self.nodes_builder = NodeBuilder(NOVA, NEUTRON, CINDER, config)
-        self.masters_builder = ControlPlaneBuilder(NOVA, NEUTRON, CINDER, config)
+        self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
         LOGGER.debug(info("Done collecting infromation from OpenStack"))
+        self.nodes_builder = NodeBuilder(NOVA, NEUTRON, CINDER, config,
+                                         self.info)
+        self.masters_builder = ControlPlaneBuilder(NOVA, NEUTRON, CINDER,
+                                                   config, self.info)
 
     @staticmethod
     def _create_tokes():
@@ -259,7 +261,14 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         loop = asyncio.get_event_loop()
         cluster_info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
 
-        config_sec_group(NEUTRON, cluster_info.secgroup['id'])
+        if cluster_info.secgroup._exists:
+            LOGGER.info(info(red(
+                "A Security group named %s-sec-group already exists" % config[
+                    'cluster-name'])))
+            LOGGER.info(
+                info(red("I will add my own rules, please manually review all others")))  # noqa
+
+        cluster_info.secgroup.configure()
 
         # TODO: check if loadbalancer does not already exists !!!
         lbinst = LoadBalancer(config)

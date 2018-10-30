@@ -388,7 +388,7 @@ class LoadBalancer:  # pragma: no coverage
         delete a LB health monitor
         """
         client.delete_lbaas_healthmonitor(id_)
-        LOGGER.info("Deleted healthmonitor ...")
+        LOGGER.info("deleted healthmonitor ...")
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
@@ -425,113 +425,105 @@ class LoadBalancer:  # pragma: no coverage
         LOGGER.info("Deleted loadbalancer...")
 
 
-def add_sec_rule(neutron, sec_gr_id, **kwargs):
-    """
-    add a security group rule
-    """
-    try:
-        kwargs.update({'security_group_id': sec_gr_id})
-        neutron.create_security_group_rule({'security_group_rule': kwargs})
-    except NeutronConflict:
-        kwargs.pop('security_group_id')
-        print(info("Rule with %s already exists" % str(kwargs)))
+class SecurityGroup:
 
+    def __init__(self, neutron_client, name, subnet=None):
+        self.client = neutron_client
+        self.name = name
+        self.subnet = subnet
+        self._id = None
+        self._exists = False
 
-async def del_sec_rule(connection, _id):
-    """
-    delete security rule
-    """
-    connection.delete_security_group_rule(_id)
+    def add_sec_rule(self, **kwargs):
+        """
+        add a security group rule
+        """
+        try:
+            kwargs.update({'security_group_id': self._id})
+            self.client.create_security_group_rule({'security_group_rule': kwargs})
+        except NeutronConflict:
+            kwargs.pop('security_group_id')
+            print(info("Rule with %s already exists" % str(kwargs)))
 
+    async def del_sec_rule(self, connection):
+        """
+        delete security rule
+        """
+        connection.delete_security_group_rule(self._id)
 
-@lru_cache()
-def get_or_create_sec_group(neutron, name):
-    """
-    Create a security group for all machines
+    @lru_cache()
+    def get_or_create_sec_group(self, name):
+        """
+        Create a security group for all machines
 
-    Args:
-        neutron (neutron client)
-        name (str) - the cluster name
+        Args:
+            neutron (neutron client)
+            name (str) - the cluster name
 
-    Return:
-        a security group dict
-    """
-    name = "%s-sec-group" % name
-    secgroup = next(neutron.list_security_groups(
-        retrieve_all=False, **{'name': name}))['security_groups']
-    if secgroup:
-        print(info(red("A Security group named %s already exists" % name)))
-        print(info(red("I will add my own rules, please manually review all others")))  # noqa
-        return secgroup[0]
+        Return:
+            a security group dict
+        """
+        name = "%s-sec-group" % name
+        secgroup = next(self.client.list_security_groups(
+            retrieve_all=False, **{'name': name}))['security_groups']
 
-    return neutron.create_security_group(
-        {'security_group': {'name': name}})['security_group']
+        if secgroup:
+            self._exists = True
+            self._id = secgroup[0]['id']
+            return secgroup[0]
 
+        secgroup = self.client.create_security_group(
+            {'security_group': {'name': name}})['security_group']
 
-def config_sec_group(neutron, sec_group_id, subnet=None):
-    """
-    Create futures for configuring the security group ``name``
+        self._id = secgroup['id']
+        return
 
-    Args:
-        neutron (neutron client)
-        sec_group (dict) the sec. group info dict (Munch)
-        subnet (str): the subnet name
-    """
+    def configure(self):
+        """
+        Create a future for configuring the security group ``name``
 
-    if not subnet:
-        cidr = neutron.list_subnets()['subnets'][-1]['cidr']
-    else:
-        cidr = neutron.find_resource('subnet', subnet)['cidr']
+        Args:
+            neutron (neutron client)
+            sec_group (dict) the sec. group info dict (Munch)
+        """
+        if self.subnet:
+            cidr = self.client.find_resource('subnet', self.subnet)['cidr']
+        else:
+            cidr = self.client.list_subnets()['subnets'][-1]['cidr']
 
-    LOGGER.debug("configuring security group ...")
-    # allow communication to the API server from within the cluster
-    # on port 80
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='TCP',
-                 port_range_max=80, port_range_min=80,
-                 remote_ip_prefix=cidr)
-    # Allow all incoming TCP/UDP inside the cluster range
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='UDP',
-                 remote_ip_prefix=cidr)
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='TCP',
-                 remote_ip_prefix=cidr)
-    # allow all outgoing
-    # we are behind a physical firewall anyway
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='UDP',
-                 )
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='TCP',
-                 )
-    # Allow IPIP communication
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol=4,
-                 remote_ip_prefix=cidr)
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol=4,
-                 remote_ip_prefix=cidr)
-    # allow accessing the API server
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='TCP',
-                 port_range_max=6443, port_range_min=6443)
-    # allow node ports
-    # OpenStack load balancer talks to these too
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='TCP',
-                 port_range_max=32767, port_range_min=30000)
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='TCP',
-                 port_range_max=32767, port_range_min=30000)
-    # allow SSH
-    add_sec_rule(neutron, sec_group_id,
-                 direction='egress', protocol='TCP',
-                 port_range_max=22, port_range_min=22,
-                 remote_ip_prefix=cidr)
-    add_sec_rule(neutron, sec_group_id,
-                 direction='ingress', protocol='TCP',
-                 port_range_max=22, port_range_min=22)
+        LOGGER.debug("configuring security group ...")
+        # allow communication to the API server from within the cluster
+        # on port 80
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=80, port_range_min=80,
+                          remote_ip_prefix=cidr)
+        # Allow all incoming TCP/UDP inside the cluster range
+        self.add_sec_rule(direction='ingress', protocol='UDP',
+                          remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          remote_ip_prefix=cidr)
+        # allow all outgoing
+        # we are behind a physical firewall anyway
+        self.add_sec_rule(direction='egress', protocol='UDP')
+        self.add_sec_rule(direction='egress', protocol='TCP')
+        # Allow IPIP communication
+        self.add_sec_rule(direction='egress', protocol=4, remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol=4, remote_ip_prefix=cidr)
+        # allow accessing the API server
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=6443, port_range_min=6443)
+        # allow node ports
+        # OpenStack load balancer talks to these too
+        self.add_sec_rule(direction='egress', protocol='TCP',
+                          port_range_max=32767, port_range_min=30000)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=32767, port_range_min=30000)
+        # allow SSH
+        self.add_sec_rule(direction='egress', protocol='TCP',
+                          port_range_max=22, port_range_min=22,
+                          remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=22, port_range_min=22)
 
 
 def read_os_auth_variables(trim=True):
@@ -660,13 +652,15 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-        secgroup = get_or_create_sec_group(neutron_client,
-                                           config['cluster-name'])
+
+        secgroup = SecurityGroup(neutron_client, config['cluster-name'],
+                                 subnet=config.get('subnet'))
+
+        secgroup.get_or_create_sec_group(config['cluster-name'])
         self.secgroup = secgroup
-        self.secgroups = [secgroup['id']]
+        self.secgroups = [secgroup._id]
 
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
-
         if 'subnet' in config:
             self.subnet_id = neutron_client.find_resource('subnet',
                                                           config['subnet'])['id']  # noqa
