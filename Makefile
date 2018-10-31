@@ -1,6 +1,11 @@
 SHELL := /bin/bash
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait
+.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
+	clean-lb-after-integration-test \
+	clean-lb
+
 .DEFAULT_GOAL := help
+
+ndef = $(if $(value $(1)),,$(error $(1) not set))
 
 define BROWSER_PYSCRIPT
 import os, webbrowser, sys
@@ -91,7 +96,7 @@ docker-ubuntu:
 
 docker-push-alpine:
 	docker push $(ORG)/koris-alpine:$(TAG)
-	
+
 docker-push-ubuntu:
 	docker push $(ORG)/koris-ubuntu:$(TAG)
 
@@ -121,7 +126,8 @@ integration-test: \
 	integration-expose \
 	expose-wait \
 	curl-run \
-	clean-lb
+	clean-lb-after-integration-test
+
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
@@ -198,7 +204,7 @@ curl-run:
 		sleep 2; \
 	done
 
-clean-lb:
+clean-lb-after-integration-test:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
@@ -208,6 +214,11 @@ clean-lb:
 		fi; \
 	done;
 	sleep 90
+
+
+clean-lb: ## delete a loadbalancer with all it's components
+	$(call ndef,LOADBALANCER_NAME)
+	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy
 
 security-checks:
 	echo "Running security checks for K8S master nodes..."
