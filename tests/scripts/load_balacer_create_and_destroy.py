@@ -46,7 +46,6 @@ if __name__ == '__main__':
         create_and_configure()
         sys.exit(0)
     if action == 1:
-        import pdb; pdb.set_trace()
         LB.delete(CLIENT)
         sys.exit(0)
     if action == 2:
