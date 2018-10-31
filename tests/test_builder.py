@@ -9,6 +9,7 @@ from unittest import mock
 
 import kolt.cloud.openstack
 
+from kolt.cloud.openstack import OSClusterInfo
 from kolt.cloud.builder import NodeBuilder
 from kolt.ssl import create_certs
 
@@ -71,7 +72,8 @@ NEUTRON.list_subnets = mock.MagicMock(
 
 def test_node_builder():
     """ test the node builder class"""
-    nb = NodeBuilder(NOVA, NEUTRON, CINDER, CONFIG)
+    osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
+    nb = NodeBuilder(CONFIG, osinfo)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "_exists", False), nodes))
     assert isinstance(nodes[0], kolt.cloud.openstack.Instance)
