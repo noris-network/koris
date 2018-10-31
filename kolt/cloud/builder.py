@@ -41,7 +41,7 @@ class NodeBuilder:
         neutron (neutron client instance) - to create a network interface
         config (dict) - the parsed configuration file
     """
-    def __init__(self, nova, neutron, cinder, config, osinfo):
+    def __init__(self, config, osinfo):
         LOGGER.info(info(cyan(
             "gathering node information from openstack ...")))
         self.config = config
@@ -130,12 +130,12 @@ class ControlPlaneBuilder:
         config (dict) - the parsed configuration file
     """
 
-    def __init__(self, nova, neutron, cinder, config, osinfo):
+    def __init__(self, config, osinfo):
 
         LOGGER.info(info(cyan(
             "gathering control plane information from openstack ...")))
         self._config = config
-        self._info = info
+        self._info = osinfo
 
     def create_userdata(self,
                         etcds,
@@ -174,7 +174,6 @@ class ControlPlaneBuilder:
         Return:
             list [openstack.Instance, openstack.Instance, ...]
         """
-
         return list(self._info.distribute_management())
 
     def create_masters_tasks(self, certs,
@@ -221,10 +220,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
         LOGGER.debug(info("Done collecting infromation from OpenStack"))
-        self.nodes_builder = NodeBuilder(NOVA, NEUTRON, CINDER, config,
-                                         self.info)
-        self.masters_builder = ControlPlaneBuilder(NOVA, NEUTRON, CINDER,
-                                                   config, self.info)
+
+        self.nodes_builder = NodeBuilder(config, self.info)
+        self.masters_builder = ControlPlaneBuilder(config, self.info)
 
     @staticmethod
     def _create_tokes():
