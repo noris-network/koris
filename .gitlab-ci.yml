@@ -4,6 +4,7 @@ stages:
  - wait-for-resources
  - build-cluster
  - integration-test
+ - security-checks
  - cleanup
  - pages
 
@@ -47,9 +48,35 @@ build-cluster:
     paths:
       - "certs-koris-pipe-line-*"
       - "koris-pipe-line-*-admin.conf"
+      - "tests/koris_test.yml"
+    expire_in: 1 week
 
 integration-test:
   stage: integration-test
+  image: oz123/koris-alpine:0.1.1
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"    
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - "make integration-run"
+  - "make integration-wait"
+  - "make integration-patch-wait"
+  - "make integration-expose"
+  - "make expose-wait"
+  - "make curl-run"
+  - "make clean-lb"
+  artifacts:
+    paths:
+      - "certs-koris-pipe-line-*"
+      - "koris-pipe-line-*-admin.conf"
+      - "tests/koris_test.yml"
+    expire_in: 1 week
+
+security-checks:
+  stage: security-checks
   image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
@@ -58,13 +85,13 @@ integration-test:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make integration-run
-  - make integration-wait
-  - make integration-patch-wait
-  - make integration-expose
-  - make expose-wait
-  - make curl-run
-  - make clean-lb
+  - "make security-checks"
+  artifacts:
+    paths:
+      - "certs-koris-pipe-line-*"
+      - "koris-pipe-line-*-admin.conf"
+      - "tests/koris_test.yml"
+    expire_in: 1 week
 
 cleanup:
   stage: cleanup
@@ -76,8 +103,7 @@ cleanup:
   - apk add make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make update-config
-  - make clean-cluster
+  - make clean-all
   when: always
 
 dev-docs:
@@ -115,4 +141,3 @@ pages:
     - tags
     - triggers
     - master
-
