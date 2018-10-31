@@ -36,7 +36,6 @@ KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
 
-
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
@@ -122,7 +121,7 @@ integration-test: \
 	integration-expose \
 	expose-wait \
 	curl-run \
-	clean-after-integration-test
+	clean-lb
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
@@ -199,7 +198,6 @@ curl-run:
 		sleep 2; \
 	done
 
-
 clean-lb:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
@@ -211,6 +209,16 @@ clean-lb:
 	done;
 	sleep 90
 
+security-checks:
+	echo "Running security checks for K8S master nodes..."
+	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
+	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
+	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+	echo "Running security checks for K8S worker nodes..."
+	kubectl run --kubeconfig=${KUBECONFIG} --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+
+
 update-config:
 	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
@@ -221,13 +229,11 @@ update-config:
 clean-cluster: update-config
 	kolt destroy tests/koris_test.yml --force
 
-
-clean-all-after-integration-test: clean-lb
+clean-all:
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm ${KUBECONFIG}
-	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
-
+	rm -R certs-koris-pipe-line-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
