@@ -8,6 +8,10 @@ kolt
 .. image:: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
   :target: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
 
+.. image:: https://img.shields.io/badge/docs-passed-green.svg
+  :target: https://pi.docs.noris.net/kolt/
+
+
 Launch kubernetes clusters on OpenStack.
 Kolt supports two work modes:
 
