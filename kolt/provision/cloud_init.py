@@ -10,30 +10,35 @@ import re
 import textwrap
 
 
-from pkg_resources import (Requirement, resource_filename)
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pkg_resources import (Requirement, resource_filename)
 
 from kolt.ssl import (b64_key, b64_cert)
 from kolt.util.util import (encryption_config_tmpl,
                             calicoconfig, get_kubeconfig_yaml,
                             get_logger)
 
-logger = get_logger(__name__)
+LOGGER = get_logger(__name__)
 
 
 BOOTSTRAP_SCRIPTS_DIR = "/kolt/provision/userdata/"
 
 
 class BaseInit:
+    """
+    Base class for cloud inits
+    """
 
-    def format_file(self, part_name, path_name, content,
-                    encoder=lambda x: base64.b64encode(x),
-                    owner='root',
-                    group='root',
-                    permissions='0600'):
+    @staticmethod
+    def format_file(
+            part_name, path_name, content,
+            encoder=lambda x: base64.b64encode(x),  # pylint: disable=unnecessary-lambda
+            owner='root',
+            group='root',
+            permissions='0600'):
         """
-
+        format a file to the correct section in cloud init
         """
         part = """
         # {part_name}
@@ -57,11 +62,10 @@ class BaseInit:
         sub_message = MIMEText(self.get_files_config(),
                                _subtype='text/cloud-config')
         sub_message.add_header('Content-Disposition', 'attachment')
-        self.combined_message.attach(sub_message)
+        self.combined_message.attach(sub_message)  # pylint: disable=no-member
 
-        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (self.role,
-                                                       self.os_type,
-                                                       self.os_version)
+        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (
+            self.role, self.os_type, self.os_version)  # pylint: disable=no-member
 
         # process bootstrap script and generic cloud-init file
         for item in ['generic', k8s_bootstrap]:
@@ -79,22 +83,32 @@ class BaseInit:
             sub_message = MIMEText(fh.read(), _subtype=_subtype)
             sub_message.add_header('Content-Disposition',
                                    'attachment', filename="%s" % item)
-            self.combined_message.attach(sub_message)
+            self.combined_message.attach(sub_message)  # pylint: disable=no-member
             fh.close()
 
-        return self.combined_message.as_string()
+        return self.combined_message.as_string()  # pylint: disable=no-member
 
     def _get_cloud_provider(self):
-        return self.format_file('cloud_config',
-                                '/etc/kubernetes/cloud.conf',
-                                self.cloud_provider,
-                                encoder=lambda x: bytes(x))
+        return self.format_file(
+            'cloud_config',
+            '/etc/kubernetes/cloud.conf',
+            self.cloud_provider,  # pylint: disable=no-member
+            encoder=lambda x: bytes(x))  # pylint: disable=unnecessary-lambda
+
+    def get_files_config(self):
+        """
+        join all parts of the cloud-init
+        """
+        raise NotImplementedError
 
 
 class MasterInit(BaseInit):
+    """
+    Create a cloud  init config for a master node
+    """
 
     def __init__(self, etcds,
-                 cert_bundle=None, encryption_key=None,
+                 certs=None, encryption_key=None,
                  cloud_provider=None,
                  token_csv_data="",
                  os_type='ubuntu',
@@ -106,10 +120,7 @@ class MasterInit(BaseInit):
         self.combined_message = MIMEMultipart()
         self.role = 'master'
         self.etcds = etcds
-        if cert_bundle:
-            self.ca_cert_bundle = cert_bundle[0]
-            self.etcd_cert_bundle = cert_bundle[1]
-            self.svc_accnt_cert_bundle = cert_bundle[2]
+        self.certs = certs
         self.os_type = os_type
         self.os_version = os_version
         self.encryption_key = encryption_key
@@ -152,23 +163,39 @@ class MasterInit(BaseInit):
 
         ca = self.format_file("ca",
                               "/etc/ssl/kubernetes/ca.pem",
-                              self.ca_cert_bundle.cert,
+                              self.certs['ca'].cert,
                               encoder=lambda x: b64_cert(x).encode())
+
+        etcd_ca = self.format_file("etcd_ca",
+                                   "/etc/kubernetes/pki/etcd/ca.crt",
+                                   self.certs['etcd_ca'].cert,
+                                   encoder=lambda x: b64_cert(x).encode())
+
+        etcd_ca_key = self.format_file("etcd_ca_key",
+                                       "/etc/kubernetes/pki/etcd/ca.key",
+                                       self.certs['etcd_ca'].key,
+                                       encoder=lambda x: b64_key(x).encode())
 
         ca_key = self.format_file("ca-key",
                                   "/etc/ssl/kubernetes/ca-key.pem",
-                                  self.ca_cert_bundle.key,
+                                  self.certs['ca'].key,
                                   encoder=lambda x: b64_key(x).encode())
 
         k8s_key = self.format_file("k8s-key",
                                    "/etc/ssl/kubernetes/kubernetes-key.pem",
-                                   self.etcd_cert_bundle.key,
+                                   self.certs['k8s'].key,
                                    encoder=lambda x: b64_key(x).encode())
         k8s_cert = self.format_file("k8s-cert",
                                     "/etc/ssl/kubernetes/kubernetes.pem",
-                                    self.etcd_cert_bundle.cert,
+                                    self.certs['k8s'].cert,
                                     encoder=lambda x: b64_cert(x).encode())
-        return ca + ca_key + k8s_key + k8s_cert
+
+        k8s_cert = self.format_file("k8s-cert",
+                                    "/etc/ssl/kubernetes/kubernetes.pem",
+                                    self.certs['k8s'].cert,
+                                    encoder=lambda x: b64_cert(x).encode())
+
+        return ca + etcd_ca + ca_key + etcd_ca_key + k8s_key + k8s_cert
 
     def _get_encryption_config(self):
         encryption_config = re.sub("%%ENCRYPTION_KEY%%",
@@ -185,13 +212,13 @@ class MasterInit(BaseInit):
         svc_accnt_key = self.format_file(
             "svc-account-key",
             "/etc/ssl/kubernetes/service-accounts-key.pem",
-            self.svc_accnt_cert_bundle.key,
+            self.certs['service-account'].key,
             encoder=lambda x: b64_key(x).encode())
 
         svc_accnt_cert = self.format_file(
             "svc-account-cert",
             "/etc/ssl/kubernetes/service-accounts.pem",
-            self.svc_accnt_cert_bundle.cert,
+            self.certs['service-account'].cert,
             encoder=lambda x: b64_cert(x).encode())
 
         return svc_accnt_key + svc_accnt_cert
@@ -213,9 +240,11 @@ class MasterInit(BaseInit):
         return config
 
 
-class NodeInit(BaseInit):
-
-    def __init__(self, token,
+class NodeInit(BaseInit):  # pylint: disable=too-many-instance-attributes
+    """
+    create a cloud_init file for nodes
+    """
+    def __init__(self, token,  # pylint: disable=too-many-arguments
                  ca_cert_bundle,
                  etcd_cert_bundle,
                  svc_account_bundle,
@@ -303,7 +332,7 @@ class NodeInit(BaseInit):
            permissions: '0600'
         """.format(
             base64.b64encode(("LB_IP=%s" %
-                             self.lb_ip_address).encode()).decode()  # noqa
+                              self.lb_ip_address).encode()).decode()  # noqa
             )
 
         return textwrap.dedent(kubeproxy_part).lstrip()
@@ -319,7 +348,7 @@ class NodeInit(BaseInit):
             'calico_config',
             '/etc/cni/net.d/10-calico.conf',
             cc,
-            encoder=lambda x: base64.b64encode(x))
+            encoder=lambda x: base64.b64encode(x))  # pylint: disable=unnecessary-lambda
 
     def get_files_config(self):
         """
