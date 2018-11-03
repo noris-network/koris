@@ -107,7 +107,7 @@ class MasterInit(BaseInit):
     Create a cloud  init config for a master node
     """
 
-    def __init__(self, etcds,
+    def __init__(self, hostname, etcds,
                  certs=None, encryption_key=None,
                  cloud_provider=None,
                  token_csv_data="",
@@ -118,6 +118,7 @@ class MasterInit(BaseInit):
         members
         """
         self.combined_message = MIMEMultipart()
+        self.hostname = hostname
         self.role = 'master'
         self.etcds = etcds
         self.certs = certs
@@ -195,7 +196,18 @@ class MasterInit(BaseInit):
                                     self.certs['k8s'].cert,
                                     encoder=lambda x: b64_cert(x).encode())
 
-        return ca + etcd_ca + ca_key + etcd_ca_key + k8s_key + k8s_cert
+        etcd_peer = self.format_file('peer.crt',
+                                     "/etc/kubernetes/pki/etcd/peer.crt",
+                                     self.certs["%s-peer" % self.hostname].cert,  # noqa
+                                     encoder=lambda x: b64_cert(x).encode())
+
+        etcd_peer_key = self.format_file('peer.key',
+                                         "/etc/kubernetes/pki/etcd/peer.crt",
+                                         self.certs["%s-peer" % self.hostname].key,  # noqa
+                                         encoder=lambda x: b64_key(x).encode())
+
+        return "".join((ca, etcd_ca, ca_key, etcd_ca_key, k8s_key, k8s_cert,
+                       etcd_peer, etcd_peer_key))
 
     def _get_encryption_config(self):
         encryption_config = re.sub("%%ENCRYPTION_KEY%%",

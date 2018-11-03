@@ -102,7 +102,7 @@ token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 @pytest.fixture
 def ci_master():
-    ci = MasterInit(test_cluster,
+    ci = MasterInit('master-1-test', test_cluster,
                     certs,
                     encryption_key=encryption_key,
                     cloud_provider=cloud_config)
@@ -153,7 +153,7 @@ def test_certificate_info(ci_master):
 
     certs_config = ci_master._get_certificate_info()
 
-    assert 6 == len(yaml.safe_load(certs_config))
+    assert 8 == len(yaml.safe_load(certs_config))
 
 
 def test_cloud_init(ci_master):
@@ -161,7 +161,7 @@ def test_cloud_init(ci_master):
     config = ci_master.get_files_config()
     config = yaml.safe_load(config)
 
-    assert len(config['write_files']) == 12
+    assert len(config['write_files']) == 14
 
     etcd_host = test_cluster[0]
 
