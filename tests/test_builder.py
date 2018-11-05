@@ -60,7 +60,6 @@ NOVA.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
 NEUTRON.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
 NEUTRON.create_port = mock.MagicMock(
     return_value=DUMMYPORT)
-NEUTRON.list_security_groups = mock.MagicMock(return_value=iter([{"security_groups": []}]))
 
 NEUTRON.create_security_group = mock.MagicMock(
     return_value={"security_group": {'id':
@@ -72,13 +71,15 @@ NEUTRON.list_subnets = mock.MagicMock(
 
 @pytest.fixture
 def os_info():
+    NEUTRON.list_security_groups = mock.MagicMock(
+        return_value=iter([{"security_groups": []}]))
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
     return osinfo
 
 
 def test_node_builder(os_info):
     """ test the node builder class """
-    """nb = NodeBuilder(CONFIG, os_info)
+    nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "_exists", False), nodes))
     assert isinstance(nodes[0], kolt.cloud.openstack.Instance)
@@ -112,7 +113,7 @@ def test_node_builder(os_info):
     calico_config = json.loads(base64.b64decode(se.groupdict()['file']))
     assert calico_config['etcd_endpoints'] == (
         'https://10.32.192.101:2739,'
-        'https://10.32.192.102:2739,https://10.32.192.103:2739')"""
+        'https://10.32.192.102:2739,https://10.32.192.103:2739')
 
 
 def test_controlplane_builder(os_info):
