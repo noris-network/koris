@@ -207,7 +207,7 @@ class MasterInit(BaseInit):
         api_etcd_client_key = self.format_file('apiserver-etcd-client_key',
                                      "/etc/kubernetes/pki/etcd/api-ectd-client.key", # noqa
                                      self.certs["apiserver-etcd-client"].key,  # noqa
-                                     encoder=lambda x: b64_cert(x).encode())
+                                     encoder=lambda x: b64_key(x).encode())
 
         # write certificates needed for K8s
         # this CA will be used to authenticate accesses to the K8S api-server.
@@ -222,7 +222,7 @@ class MasterInit(BaseInit):
                                   self.certs['ca'].key,
                                   encoder=lambda x: b64_key(x).encode())
 
-        # this certifcate is used
+        # this certifcate is used for communications within K8s
         k8s_key = self.format_file("k8s-key",
                                    "/etc/ssl/kubernetes/kubernetes-key.pem",
                                    self.certs['k8s'].key,

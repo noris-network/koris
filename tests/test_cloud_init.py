@@ -153,7 +153,7 @@ def test_certificate_info(ci_master):
 
     certs_config = ci_master._get_certificate_info()
 
-    assert 8 == len(yaml.safe_load(certs_config))
+    assert 12 == len(yaml.safe_load(certs_config))
 
 
 def test_cloud_init(ci_master):
@@ -161,7 +161,7 @@ def test_cloud_init(ci_master):
     config = ci_master.get_files_config()
     config = yaml.safe_load(config)
 
-    assert len(config['write_files']) == 14
+    assert len(config['write_files']) == 18
 
     etcd_host = test_cluster[0]
 
