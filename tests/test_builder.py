@@ -52,8 +52,6 @@ CONFIG = {
     'storage_class': "TestStorageClass"
 }
 
-NOVA.servers.find = mock.MagicMock(return_value=DummyServer("node-1-test",
-                                                            "10.32.192.101"))
 NOVA.keypairs.get = mock.MagicMock(return_value='otiram')
 NOVA.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 NOVA.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
@@ -79,6 +77,8 @@ def os_info():
 
 def test_node_builder(os_info):
     """ test the node builder class """
+    NOVA.servers.find = mock.MagicMock(return_value=DummyServer("node-1-test",
+                                                                "10.32.192.101")) # noqa
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "_exists", False), nodes))
@@ -118,8 +118,9 @@ def test_node_builder(os_info):
 
 def test_controlplane_builder(os_info):
     """ test the control plane builder class """
-    # cpb = ControlPlaneBuilder(CONFIG, os_info)
-
-    # masters = cpb.get_masters()
-    # assert isinstance(masters[0], kolt.cloud.openstack.Instance)
-    pass
+    NOVA.servers.find = mock.MagicMock(return_value=DummyServer("master-1-test", # noqa
+                                                                "10.32.192.102")) # noqa
+    cpb = ControlPlaneBuilder(CONFIG, os_info)
+    masters = cpb.get_masters()
+    assert isinstance(masters[0], kolt.cloud.openstack.Instance)
+    assert masters[0].name == 'master-1-test'
