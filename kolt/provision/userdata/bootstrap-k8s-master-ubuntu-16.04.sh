@@ -101,21 +101,21 @@ Documentation=https://github.com/coreos
 EnvironmentFile=/etc/systemd/system/etcd.env
 ExecStart=/usr/bin/etcd --name=${HOSTNAME} \\
         --data-dir=/var/lib/etcd \\
-        --cert-file=/etc/ssl/kubernetes/kubernetes.pem \\
-        --key-file=/etc/ssl/kubernetes/kubernetes-key.pem \\
-        --peer-cert-file=/etc/ssl/kubernetes/kubernetes.pem \\
-        --peer-key-file=/etc/ssl/kubernetes/kubernetes-key.pem  \\
-        --trusted-ca-file=/etc/ssl/kubernetes/ca.pem \\
-        --peer-trusted-ca-file=/etc/ssl/kubernetes/ca.pem \\
+        --cert-file=/etc/kubernetes/pki/etcd/server.crt \\
+        --key-file=/etc/kubernetes/pki/etcd/server.key \\
+        --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt \\
+        --client-cert-auth \\
+        --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt \\
+        --peer-key-file=/etc/kubernetes/pki/etcd/peer.key  \\
+        --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt \\
+        --peer-client-cert-auth \\
         --listen-client-urls https://${CURRENT_IP}:2379,http://127.0.0.1:2379 \\
         --advertise-client-urls https://${CURRENT_IP}:2379 \\
         --listen-peer-urls https://${CURRENT_IP}:2380 \\
         --initial-advertise-peer-urls https://${CURRENT_IP}:2380 \\
         --initial-cluster-token kubernetes-cluster \\
         --initial-cluster \${INITIAL_CLUSTER} \\
-        --initial-cluster-state new \\
-        --peer-client-cert-auth \\
-        --client-cert-auth
+        --initial-cluster-state new
 
 Restart=on-failure
 RestartSec=5
@@ -163,9 +163,9 @@ ExecStart=/usr/bin/kube-apiserver \\
   --enable-admission-plugins=NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
   --enable-swagger-ui=true \\
   --enable-bootstrap-token-auth \\
-  --etcd-cafile=/var/lib/kubernetes/ca.pem \\
-  --etcd-certfile=/var/lib/kubernetes/kubernetes.pem \\
-  --etcd-keyfile=/var/lib/kubernetes/kubernetes-key.pem \\
+  --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt \\
+  --etcd-certfile=/etc/kubernetes/pki/etcd/api-ectd-client.crt \\
+  --etcd-keyfile=/etc/kubernetes/pki/etcd/api-ectd-client.key \\
   --etcd-servers=https://\${NODE01_IP}:2379,https://\${NODE02_IP}:2379,https://\${NODE03_IP}:2379 \\
   --event-ttl=1h \\
   --experimental-encryption-provider-config=/var/lib/kubernetes/encryption-config.yaml \\

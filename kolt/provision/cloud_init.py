@@ -161,11 +161,7 @@ class MasterInit(BaseInit):
                                 encoder=lambda x: x.encode())
 
     def _get_certificate_info(self):
-        ca = self.format_file("ca",
-                              "/etc/ssl/kubernetes/ca.pem",
-                              self.certs['ca'].cert,
-                              encoder=lambda x: b64_cert(x).encode())
-
+        # write data for CA for the etcds
         etcd_ca = self.format_file("etcd_ca",
                                    "/etc/kubernetes/pki/etcd/ca.crt",
                                    self.certs['etcd_ca'].cert,
@@ -176,11 +172,57 @@ class MasterInit(BaseInit):
                                        self.certs['etcd_ca'].key,
                                        encoder=lambda x: b64_key(x).encode())
 
+        # write data for this host as etcd peer, this certificate is used
+        # for opening up connections to peers and for validating incoming
+        # connections from peers
+        etcd_peer = self.format_file('peer',
+                                     "/etc/kubernetes/pki/etcd/peer.crt",
+                                     self.certs["%s-peer" % self.hostname].cert,  # noqa
+                                     encoder=lambda x: b64_cert(x).encode())
+
+        etcd_peer_key = self.format_file('peer_key',
+                                         "/etc/kubernetes/pki/etcd/peer.key",
+                                         self.certs["%s-peer" % self.hostname].key,  # noqa
+                                         encoder=lambda x: b64_key(x).encode())
+
+        # write data for this host as etcd server, this certificate is used
+        # for validating incoming client connections (from K8s)
+        etcd_server = self.format_file('server',
+                                     "/etc/kubernetes/pki/etcd/server.crt",
+                                     self.certs["%s-server" % self.hostname].cert,  # noqa
+                                     encoder=lambda x: b64_cert(x).encode())
+
+        etcd_server_key = self.format_file('server_key',
+                                         "/etc/kubernetes/pki/etcd/server.key",
+                                         self.certs["%s-server" % self.hostname].key,  # noqa
+                                         encoder=lambda x: b64_key(x).encode())
+
+        # write out certificate data so that the api-server running on this
+        # host is able to access the etcd cluster
+        api_etcd_client = self.format_file('apiserver-etcd-client',
+                                     "/etc/kubernetes/pki/etcd/api-ectd-client.crt", # noqa
+                                     self.certs["apiserver-etcd-client"].cert,  # noqa
+                                     encoder=lambda x: b64_cert(x).encode())
+
+        api_etcd_client_key = self.format_file('apiserver-etcd-client_key',
+                                     "/etc/kubernetes/pki/etcd/api-ectd-client.key", # noqa
+                                     self.certs["apiserver-etcd-client"].key,  # noqa
+                                     encoder=lambda x: b64_cert(x).encode())
+
+        # write certificates needed for K8s
+        # this CA will be used to authenticate accesses to the K8S api-server.
+        # It is _not_ the same as the CA for etcd!
+        ca = self.format_file("ca",
+                              "/etc/ssl/kubernetes/ca.pem",
+                              self.certs['ca'].cert,
+                              encoder=lambda x: b64_cert(x).encode())
+
         ca_key = self.format_file("ca-key",
                                   "/etc/ssl/kubernetes/ca-key.pem",
                                   self.certs['ca'].key,
                                   encoder=lambda x: b64_key(x).encode())
 
+        # this certifcate is used
         k8s_key = self.format_file("k8s-key",
                                    "/etc/ssl/kubernetes/kubernetes-key.pem",
                                    self.certs['k8s'].key,
@@ -190,23 +232,10 @@ class MasterInit(BaseInit):
                                     self.certs['k8s'].cert,
                                     encoder=lambda x: b64_cert(x).encode())
 
-        k8s_cert = self.format_file("k8s-cert",
-                                    "/etc/ssl/kubernetes/kubernetes.pem",
-                                    self.certs['k8s'].cert,
-                                    encoder=lambda x: b64_cert(x).encode())
-
-        etcd_peer = self.format_file('peer.crt',
-                                     "/etc/kubernetes/pki/etcd/peer.crt",
-                                     self.certs["%s-peer" % self.hostname].cert,  # noqa
-                                     encoder=lambda x: b64_cert(x).encode())
-
-        etcd_peer_key = self.format_file('peer.key',
-                                         "/etc/kubernetes/pki/etcd/peer.crt",
-                                         self.certs["%s-peer" % self.hostname].key,  # noqa
-                                         encoder=lambda x: b64_key(x).encode())
-
-        return "".join((ca, etcd_ca, ca_key, etcd_ca_key, k8s_key, k8s_cert,
-                       etcd_peer, etcd_peer_key))
+        return "".join((etcd_ca, etcd_ca_key, etcd_peer, etcd_peer_key,
+                        etcd_server, etcd_server_key, api_etcd_client,
+                        api_etcd_client_key, ca, ca_key, k8s_key,
+                        k8s_cert, ))
 
     def _get_encryption_config(self):
         encryption_config = re.sub("%%ENCRYPTION_KEY%%",
