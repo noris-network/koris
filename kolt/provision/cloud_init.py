@@ -108,7 +108,7 @@ class MasterInit(BaseInit):
     """
 
     def __init__(self, hostname, etcds,
-                 certs=None, encryption_key=None,
+                 certs, encryption_key=None,
                  cloud_provider=None,
                  token_csv_data="",
                  os_type='ubuntu',
@@ -161,7 +161,6 @@ class MasterInit(BaseInit):
                                 encoder=lambda x: x.encode())
 
     def _get_certificate_info(self):
-
         ca = self.format_file("ca",
                               "/etc/ssl/kubernetes/ca.pem",
                               self.certs['ca'].cert,

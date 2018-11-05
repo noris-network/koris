@@ -147,7 +147,7 @@ class ControlPlaneBuilder:
         create the userdata which is given to cloud init
 
         Args:
-            cloud_provider (OSCloudConfig) - used to write cloud.conf
+            etcds - a list of Instance instances
         """
         # generate a random string
         # this should be the equal of
@@ -161,11 +161,12 @@ class ControlPlaneBuilder:
                                        calico_token,
                                        kubelet_token)
 
-        userdata = str(MasterInit(etcds, certs,
-                                  encryption_key,
-                                  cloud_provider,
-                                  token_csv_data=token_csv_data))
-        return userdata
+        for host in etcds:
+            userdata = str(MasterInit(host.name, etcds, certs,
+                                      encryption_key,
+                                      cloud_provider,
+                                      token_csv_data=token_csv_data))
+            yield userdata
 
     def get_masters(self):
         """
@@ -199,8 +200,9 @@ class ControlPlaneBuilder:
             master.create(self._info.master_flavor,
                           self._info.secgroups,
                           self._info.keypair,
-                          user_data
-                          )) for master in masters if not master._exists]
+                          data
+                          )) for master, data in zip(masters, user_data) if
+                 not master._exists]
 
         return tasks
 
