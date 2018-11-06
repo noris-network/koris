@@ -1,25 +1,18 @@
-====
-kolt
-====
+=====
+koris
+=====
 
-.. image:: https://gitlab.noris.net/PI/kolt/badges/dev/pipeline.svg
-  :target: https://gitlab.noris.net/PI/kolt/badges/dev/pipeline.svg
+.. image:: https://gitlab.noris.net/PI/koris/badges/dev/pipeline.svg
+  :target: https://gitlab.noris.net/PI/koris/badges/dev/pipeline.svg
 
-.. image:: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
-  :target: https://gitlab.noris.net/PI/kolt/badges/dev/coverage.svg
+.. image:: https://gitlab.noris.net/PI/koris/badges/dev/coverage.svg
+  :target: https://gitlab.noris.net/PI/koris/badges/dev/coverage.svg
 
 .. image:: https://img.shields.io/badge/docs-passed-green.svg
-  :target: https://pi.docs.noris.net/kolt/
+  :target: https://pi.docs.noris.net/koris/
 
 
 Launch kubernetes clusters on OpenStack.
-Kolt supports two work modes:
-
-1. In the first mode you create an empty cluster on Openstack,
-   and recieve an inventory for usage with ansible-kubespray.
-
-2. In the second mode (still in alpha) you boot a cluster on openstack.
-   You then recieve a working `kubeconfig` file.
 
 
 Features
@@ -29,8 +22,8 @@ Features
 
 Demo:
 
-.. image:: https://gitlab.noris.net/PI/kolt/raw/dev/docs/static/_imgs/kolt-demo.gif
-   :target: https://gitlab.noris.net/PI/kolt/raw/dev/docs/static/_imgs/kolt-demo.gif
+.. image:: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/kolt-demo.gif
+   :target: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/kolt-demo.gif
    :scale: 12%
 
 Usage
@@ -84,10 +77,10 @@ Get started
    .. code:: shell
 
       $ kolt -h
-      usage: kolt [-h] {certs,destroy,k8s,kubespray,oc} ...
+      usage: kolt [-h] {certs,destroy,k8s} ...
 
       positional arguments:
-        {certs,destroy,k8s,kubespray,oc}
+        {certs,destroy,k8s}
                               commands
           certs               Create cluster certificates
           destroy             Delete the complete cluster stack
@@ -116,7 +109,7 @@ Get started
 
    .. code:: shell
 
-      curl https://gitlab.noris.net/PI/kolt/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
+      curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
       scp kolt-v<LATEST_TAG>.zip remotehost:~/
 
    repeat the steps to create and activate a virtual environment, and the install
@@ -124,7 +117,7 @@ Get started
 
    .. code:: shell
 
-      $ pip install kolt-v<LATEST_TAG>.zip
+      $ pip install koris-v<LATEST_TAG>.zip
 
 8. Koris creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
@@ -135,15 +128,15 @@ Get started
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-9. To create a cluster create a cluster configuration file (see `example <https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml>`_.
+9. To create a cluster create a cluster configuration file (see `example <https://gitlab.noris.net/PI/kolt/blob/dev/docs/example.yml>`_.
    Pass this file on the shell to the k8s subcommand
 
 .. code:: shell
 
-   $ kolt k8s <your-cluster-config.yml>
+   $ koris k8s <your-cluster-config.yml>
 
 
-The complete compiled `documentation of kolt can be found here <https://pi.docs.noris.net/kolt/>`_
+The complete compiled `documentation of koris can be found here <https://pi.docs.noris.net/koris/>`_
 
 Credits
 -------
