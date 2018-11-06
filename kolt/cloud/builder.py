@@ -271,12 +271,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # TODO: check if loadbalancer does not already exists !!!
         lbinst = LoadBalancer(config)
 
-        lb, floatingip = lbinst.create(NEUTRON)
+        lb, floatingip = lbinst.get_or_create(NEUTRON)
 
         configure_lb_task = loop.create_task(
             lbinst.configure(NEUTRON, [host.ip_address for host in cp_hosts]))
-
-        lb = lb['loadbalancer']
 
         if floatingip:
             lb_ip = floatingip
