@@ -104,7 +104,7 @@ cleanup:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - make reset-config
-  - make upadte-config
+  - make update-config
   - make clean-all
   when: always
 
