@@ -156,7 +156,9 @@ echo ${FRONT_PROXY_CA_KEY} | base64 -d > /etc/kubernetes/pki/front-proxy-ca.key
 
 curl -q https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml > /etc/kubernetes/rbac-kdd.yaml
 curl -q https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml > /etc/kubernetes/calico.yaml
-sed -i 's/"192.168.0.0\/16"/${POD_SUBNET}\/${POD_SUBNETMASK}/' /etc/kubernetes/calico.yaml
+sed -i 's/"192.168.0.0\/16"/\"'${POD_SUBNET}'\/'${POD_SUBNETMASK}'\"/' /etc/kubernetes/calico.yaml
+
+
 
 sudo kubeadm init --config=/etc/kubernetes/kubeadm-master.yaml
 #sudo kubectl apply -f rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
