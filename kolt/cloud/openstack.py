@@ -266,9 +266,8 @@ class LoadBalancer:  # pragma: no coverage
         else:
             LOGGER.info("Reusing an existing loadbalancer")
             self._existing_floating_ip = None
-
             fip_addr = self._floating_ip_address(client, lb[0])
-
+            LOGGER.info("Loadbalancer IP: ", fip_addr)
             lb = lb[0]
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
@@ -284,7 +283,6 @@ class LoadBalancer:  # pragma: no coverage
                 'floatingips'][0]['floating_ip_address']
             fip_addr = self._existing_floating_ip
         else:
-            import pdb; pdb.set_trace()
             fip_addr = self._associate_floating_ip(
                 client, lb)
         return fip_addr
