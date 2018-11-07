@@ -368,7 +368,7 @@ class LoadBalancer:  # pragma: no coverage
                 raise ValueError(
                     "Please create a floating ip and specify it in the configuration file")  # noqa
 
-            fnet_id = fip[0]['floating_network_id']
+            fnet_id = fips[0]['floating_network_id']
             fip = client.create_floatingip(
                 {'floatingip': {'project_id': loadbalancer['tenant_id'],
                                 'floating_network_id': fnet_id}})['floatingip']
