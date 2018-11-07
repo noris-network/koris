@@ -220,6 +220,7 @@ class LoadBalancer:  # pragma: no coverage
         self._id = None
         self._subnet_id = None
         self._data = None
+        self._existing_floating_ip = None
 
     async def configure(self, client, master_ips):
         """
@@ -267,7 +268,7 @@ class LoadBalancer:  # pragma: no coverage
             LOGGER.info("Reusing an existing loadbalancer")
             self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(client, lb[0])
-            LOGGER.info("Loadbalancer IP: ", fip_addr)
+            LOGGER.info("Loadbalancer IP: %s", fip_addr)
             lb = lb[0]
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
