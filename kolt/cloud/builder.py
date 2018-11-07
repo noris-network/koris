@@ -319,11 +319,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
             LOGGER.info("Kubernetes API Server is ready !!!")
 
-            etcd_endpoints = ",".join(
-                "https://%s:%d" % (host.ip_address, 2379)
-                for host in cp_hosts)
-            k8s.apply_calico(b64_key(certs["k8s"].key),
-                             b64_cert(certs["k8s"].cert),
-                             b64_cert(certs["ca"].cert),
-                             etcd_endpoints)
-            k8s.apply_kube_dns()
+            #etcd_endpoints = ",".join(
+            #    "https://%s:%d" % (host.ip_address, 2379)
+            #    for host in cp_hosts)
+            #k8s.apply_calico(b64_key(certs["k8s"].key),
+            #                 b64_cert(certs["k8s"].cert),
+            #                 b64_cert(certs["ca"].cert),
+            #                 etcd_endpoints)
+            # k8s.apply_kube_dns()
