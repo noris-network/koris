@@ -23,6 +23,7 @@ sudo apt-get update
 sudo apt-get -y install docker-ce
 
 sudo mkdir -p /etc/kubernetes/pki/etcd
+iptables -P FORWARD ACCEPT
 
 # TODO: extend and correct this
 cat << EOF > /etc/kubernetes/kubeadm-node.yaml

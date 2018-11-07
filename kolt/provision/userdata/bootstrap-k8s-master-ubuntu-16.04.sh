@@ -10,7 +10,6 @@ text/x-shellscript
 # trap read debug
 
 LOAD_BALANCER_DNS=k8s.oz.noris.de
-
 LOAD_BALANCER_PORT=6443
 POD_SUBNET="10.233.0.0"
 POD_SUBNETMASK="16"
@@ -24,6 +23,7 @@ HOSTS=( "master-1-test2" "master-2-test2" "master-3-test2" )
 declare -A HOST_IPS
 
 for h in ${HOSTS[@]}; do HOST_IPS[$h]=$(dig  +short $h); done
+
 
 CLUSTER=$(for item in ${!HOST_IPS[@]}; do (printf "%s=https://%s:2380," $item ${HOST_IPS[$item]}); done)
 # remove that last comma
@@ -54,6 +54,8 @@ sudo "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update
 sudo apt-get -y install docker-ce
+
+sudo iptables -P FORWARD ACCEPT
 
 sudo mkdir -p /etc/kubernetes/pki/etcd
 
