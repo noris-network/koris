@@ -7,13 +7,15 @@ text/x-shellscript
 # --------------------------------------------------------------------------------------------------------------
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
+KUBE_VERSION="1.11.4"
 
 sudo apt-get update
 sudo apt-get install -y software-properties-common
 sudo swapoff -a
 sudo curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-sudo apt install -y --allow-downgrades kubeadm=1.11.4-00 kubelet=1.11.4-00
+sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 \
+	kubelet=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
 
 sudo "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -"
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
