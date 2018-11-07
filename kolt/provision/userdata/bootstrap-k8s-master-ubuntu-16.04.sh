@@ -109,6 +109,14 @@ etcd:
 networking:
     podSubnet: "${POD_SUBNET}/${POD_SUBNETMASK}"
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: foobar.fedcba9876543210
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
 EOF
 
 echo ${CA_KEY_ETCD} | base64 -d > /etc/kubernetes/pki/etcd/ca.key
