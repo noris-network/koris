@@ -307,7 +307,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             kubeconfig = write_kubeconfig(config, lb_ip,
                                           admin_t,
                                           True)
-
+            kubeconfig = "test2-admin.conf"
             LOGGER.info("Waiting for K8S API server to launch")
 
             manifest_path = os.path.join("kolt", "deploy", "manifests")

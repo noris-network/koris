@@ -31,6 +31,8 @@ loadbalancer:
 # set this to if you want to add this name to SAN certificates
 # this is not yet implemented
 # domain-name: foo.bar.noris.de
+# reuse an existing floating ip from your pool
+#  floatingip: 213.95.155.145
 
 #storage_class: "BSS-Performance-Storage"
 storage_class: "PI-Storage-Class"
