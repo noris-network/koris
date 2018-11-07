@@ -243,7 +243,7 @@ clean-cluster: update-config
 clean-all:
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
-	test -w ${KUBECONFIG} && rm -v ${KUBECONFIG}
+	rm -fv ${KUBECONFIG}
 	rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
