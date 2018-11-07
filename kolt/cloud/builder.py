@@ -304,9 +304,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.gather(*tasks))
-            kubeconfig = write_kubeconfig(config, lb_ip,
-                                          admin_t,
-                                          True)
+            #kubeconfig = write_kubeconfig(config, lb_ip,
+            #                              admin_t,
+            #                              True)
             kubeconfig = "test2-admin.conf"
             LOGGER.info("Waiting for K8S API server to launch")
 
