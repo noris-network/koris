@@ -10,11 +10,11 @@ text/x-shellscript
 # trap read debug
 
 LOAD_BALANCER_DNS=k8s.oz.noris.de
-
 LOAD_BALANCER_PORT=6443
 POD_SUBNET="10.233.0.0"
 POD_SUBNETMASK="16"
 BOOTSTRAP_TOKEN="3z9m9i.2vkoev9par1r1vca"
+KUBE_VERSION="1.11.4"
 
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 sudo apt install -y dnsutils
@@ -23,6 +23,7 @@ HOSTS=( "master-1-test2" "master-2-test2" "master-3-test2" )
 declare -A HOST_IPS
 
 for h in ${HOSTS[@]}; do HOST_IPS[$h]=$(dig  +short $h); done
+
 
 CLUSTER=$(for item in ${!HOST_IPS[@]}; do (printf "%s=https://%s:2380," $item ${HOST_IPS[$item]}); done)
 # remove that last comma
@@ -47,12 +48,14 @@ sudo apt-get install -y software-properties-common
 sudo swapoff -a
 sudo curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-sudo apt install -y --allow-downgrades kubeadm=1.11.4-00 kubelet=1.11.4-00
+sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
 
 sudo "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -"
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update
 sudo apt-get -y install docker-ce
+
+sudo iptables -P FORWARD ACCEPT
 
 sudo mkdir -p /etc/kubernetes/pki/etcd
 
@@ -78,10 +81,10 @@ users:
     client-key-data: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBdWloYUpvZURKNE5IbEM4S3gvT1B5RG5vREN0QUxCMkE3Rm5EU2RNblBhUUJmZmZ2Cm14MjErTTQwTDRSNWZ5NVRnQTN0YkVxNlJZTmM5ZjZPVUsxMmpyVlp3dW9vY2k2VkZlSnpzMTlHSmZYbXE1SUoKZXMyQjVnTTRQTnQ0OW5sTFY4Uyt3RjgyT3c2RXhNeWU1Ry9YTzQzNW5PM2RtSmdiVW9ZMmxweGRUNTlXUWtMWQpDQVJYMkhiMVYzRUNnZ3JuZjcxdlQ1TGF0S0p5VjRoWXVqeTJXeXlveHlYS0lzeTVXalVhTXpkREVLZWNucU4yCjU1ejFnQ1RwaGh5TmZNVEhqRFRUQ1dvN2w1Y2llZ2YvalEydHdzenpiTTI3eWN5dGhIcmI4ZTFRZVM5OGxDS2QKY2xYNzJrQ2RDdk1xa3RZbDBlU2JyVE81OFY1bG1OVGVLL1pUMlFJREFRQUJBb0lCQUhTQ050SHdkRFJ4cElYbwozMDEvY1ppMkxUWVloNlJVbnRETjZUeTJLOVFYWmx1cHBrdWx6N00xazFHK0RyQjdsUVVMTW5KWlhyV00zc3lUCkVnMEtVNjVEY0RkZWlBdldmYlpoc1ZvdEllRTJRclZVeEJ3WXJOa0JZTnd0M0VvZVpmbzdoOHNzaSt0d1RjWkIKN3B3NEp6UDl5cURkK3BlN2N6WTJDOG85ZU9VUVdoQ01OaGNQK1JmaHBMb0RQRG9UVTZ0ZnIxUE9XQjlIcWs0Rwp4MTcybUZYMUtJeHhnZDdvaUVHTFZqSytZRnFzYWMvWlVaWE5kV0xKNTFWYW1GeFhkbDNYblA4TnFUYmpjYno3CjUrV1dzMlIvaUdwWExOdmM0YlQ1T2c0ZlA2SUt5Mzh2Q0Z6bVBNbnA0SHo3d2U0cEwwdTJrRUVza1BkYmVjRjIKemZtMXNCVUNnWUVBMnhNUURyOThqVUc0eWdDNDBZVjlZZEhZUCt6LytobmlncG5KdE9wcjRvU2laYk82N3Y0agpwTUdEV1hJWldlM2ZtOFdBcU5oaDBoUGRRRzFxWk9EZVhzemUvNlU5SkxMU0pDMUY1L0wxVUhQc0Q4cjdreWIyClpwVzNrSzg1SmtrWjZ5VC9FMkQwMXkyNUxKbXVYRGVJNUJVQW5sK01ZWnYwaFlLZndzWndya2NDZ1lFQTJZankKWHpYaGlNVFMrVnF0UGhxVkkxL0xwQ25KTzhGSFdjT3F5OWhkMWV6cGdGWTY5dWJvQ1JzUXdvVW93RkUrT1NmYgpXZ1V0RFBDeG4vT0t0WVVBY3lNbGdCRExWN0FCNzVZZFZCYjBodWU5d0VuUWtPSndDTmhRTXA0ZjZQN1lCbjhSCjBSdGhhM2wyOTBTcEdzTnBsVkRoRi95UlVZNVpyMFlYODNyclhOOENnWUJKcDRVVWtFaTk3VVRGbGF5TnRRWE0KcDVLL0cxMk1wcnRERVpXQlgvZFp0eUlxYzF6OEVUSEdxTkVTZDR3U2NpbGw0K2MzM1ZnMkd6dWQ5NnQzc3lyUQpVSzBBNG50R0pXRUZqTHNlR3M5amR6WDhzVkFYejFlMGNjMi90VW5QbDNCQllMVHB2UVZVZXlqdzE5S0phcHA1CnBKNEtvVEUvZUFHa0NhRFJDWXJFN1FLQmdGY1BwUmtQNG15dmdWUkV3ek1veG1sNjdIQ09QTGlLbVRqR3c3T0QKcThKelo5eHlKblVzWXM5S0lzSUhNeEVOTXQ4RElabjhtbFFrZktKc2dTWTJ6Y0JHMzdwS2ZtZGd6TldMZWI5dQoxSHl0Z05iVmRBQ1liNGhLc29ZZm5Odk9LcjBtM0FXWmRMcmp5UVliVjZhYmNNVk9zbGU4UUppb1pTSnQ1aVlQCkd1VjNBb0dCQUxHYW5iQU1yeUZ4b0JTQlhRNDVONjN1Q0NiWm1DUldLZ0JoUStZQnlUdXZmVktRRDJTY2kyM0kKcTFrdnUrTUplYjFSUFRFYUEzMTRoMTM1aFBGdTJMWmF5bmdXalBnN2hHbVBCL0NVMEZrRHY4TTNqL0ZQUm9wQwozM1RBR053RzNRS0R4VWZZTHVrV25JdlJXWEY3cG9xUTgxZDFMNlZFYklqMkpmSmk4ZHU0Ci0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg==
 EOF
 
-cat << EOF > kubeadm-master.yaml
+cat << EOF > /etc/kubernetes/kubeadm-master.yaml
 apiVersion: kubeadm.k8s.io/v1alpha2
 kind: MasterConfiguration
-kubernetesVersion: v1.11.4
+kubernetesVersion: v${KUBE_VERSION}
 apiServerCertSANs:
 - "k8s.oz.noris.de"
 api:
@@ -108,6 +111,14 @@ etcd:
 networking:
     podSubnet: "${POD_SUBNET}/${POD_SUBNETMASK}"
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: foobar.fedcba9876543210
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
 EOF
 
 echo ${CA_KEY_ETCD} | base64 -d > /etc/kubernetes/pki/etcd/ca.key
@@ -120,16 +131,16 @@ echo ${FRONT_PROXY_CA_CRT} | base64 -d > /etc/kubernetes/pki/front-proxy-ca.crt
 echo ${FRONT_PROXY_CA_KEY} | base64 -d > /etc/kubernetes/pki/front-proxy-ca.key
 
 
-sudo kubeadm -v=8 alpha phase certs all --config  kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase kubelet config write-to-disk --config  kubeadm-master.yaml
-sudo kubeadm -v=6 alpha phase kubelet write-env-file --config  kubeadm-master.yaml
-sudo kubeadm -v=6 alpha phase kubelet config upload  --config kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase kubeconfig kubelet --config  kubeadm-master.yaml
-sudo systemctl start kubelet
-sudo kubeadm -v=8 alpha phase etcd local --config  kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase kubeconfig all --config  kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase controlplane all --config   kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase mark-master --config  kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase certs all --config  kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase kubelet config write-to-disk --config  kubeadm-master.yaml
+#sudo kubeadm -v=6 alpha phase kubelet write-env-file --config  kubeadm-master.yaml
+#sudo kubeadm -v=6 alpha phase kubelet config upload  --config kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase kubeconfig kubelet --config  kubeadm-master.yaml
+#sudo systemctl start kubelet
+#sudo kubeadm -v=8 alpha phase etcd local --config  kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase kubeconfig all --config  kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase controlplane all --config   kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase mark-master --config  kubeadm-master.yaml
 
 # task to integrate in kolt
 
@@ -145,13 +156,19 @@ sudo kubeadm -v=8 alpha phase mark-master --config  kubeadm-master.yaml
 
 #  O=system:masters CN=kuberenetes-admin
 
-curl -O https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-curl -O https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
-sed -i 's/"192.168.0.0\/16"/${POD_SUBNET}\/${POD_SUBNETMASK}/' calico.yaml
+curl -q https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml > /etc/kubernetes/rbac-kdd.yaml
+curl -q https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml > /etc/kubernetes/calico.yaml
+sed -i 's/"192.168.0.0\/16"/\"'${POD_SUBNET}'\/'${POD_SUBNETMASK}'\"/' /etc/kubernetes/calico.yaml
 
-sudo kubectl apply -f rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
-sudo kubectl apply -f calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
 
-sudo kubeadm -v=8 alpha phase addon kube-proxy --config  kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase addon coredns --config  kubeadm-master.yaml
-sudo kubeadm alpha phase bootstrap-token all --token ${BOOTSTRAP_TOKEN}
+
+sudo kubeadm init --config=/etc/kubernetes/kubeadm-master.yaml
+#sudo kubectl apply -f rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
+#sudo kubectl apply -f calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
+
+#sudo kubeadm -v=8 alpha phase addon kube-proxy --config  kubeadm-master.yaml
+#sudo kubeadm -v=8 alpha phase addon coredns --config  kubeadm-master.yaml
+#sudo kubeadm alpha phase bootstrap-token all --token ${BOOTSTRAP_TOKEN}
+
+# discoverHash:
+# sha256:fe3c078b230624ec2297133933314b9a2821fa12c80226957ea716546d0cc1a9
