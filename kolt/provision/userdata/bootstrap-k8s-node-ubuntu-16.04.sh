@@ -23,3 +23,22 @@ sudo apt-get update
 sudo apt-get -y install docker-ce
 
 sudo mkdir -p /etc/kubernetes/pki/etcd
+
+# TODO: extend and correct this
+cat << EOF > /etc/kubernetes/kubeadm-node.yaml
+apiVersion: kubeadm.k8s.io/v1alpha1
+kind: NodeConfiguration
+caCertPath: <path|string>
+discoveryFile: <path|string>
+discoveryToken: <string>
+discoveryTokenAPIServers:
+- <address|string>
+- <address|string>
+nodeName: <string>
+tlsBootstrapToken: <string>
+token: <string>
+discoveryTokenCACertHashes:
+- <SHA-256 hash|string>
+- <SHA-256 hash|string>
+discoveryTokenUnsafeSkipCAVerification: <bool>
+EOF
