@@ -15,7 +15,9 @@ LOAD_BALANCER_IP="213.95.155.145"
 POD_SUBNET="10.233.0.0"
 POD_SUBNETMASK="16"
 BOOTSTRAP_TOKEN="3z9m9i.2vkoev9par1r1vca"
-KUBE_VERSION="1.11.4"
+# choose one of
+KUBE_VERSION="1.12.2"
+# KUBE_VERSION="1.11.4"
 CALICO_VERSION="3.3"
 
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
@@ -159,7 +161,7 @@ function bootstrap_with_phases() {
    kubeadm -v=8 alpha phase addon coredns --config /etc/kubernetes/kubeadm-master.yaml
    kubeadm alpha phase bootstrap-token all --config /etc/kubernetes/kubeadm-master.yaml
    # this only works if the api is available
-   until curl -k --connect-timeout 3  https://10.96.0.1/api/v1/nodes/foo;
+   until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
        do echo "api server is not up! trying again ...";
    done
    kubeadm -v=6 alpha phase kubelet config upload  --config /etc/kubernetes/kubeadm-master.yaml
