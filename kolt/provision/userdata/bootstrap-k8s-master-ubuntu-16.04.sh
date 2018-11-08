@@ -137,7 +137,6 @@ echo ${FRONT_PROXY_CA_KEY} | base64 -d > /etc/kubernetes/pki/front-proxy-ca.key
 sudo kubeadm -v=8 alpha phase certs all --config /etc/kubernetes/kubeadm-master.yaml
 sudo kubeadm -v=8 alpha phase kubelet config write-to-disk --config /etc/kubernetes/kubeadm-master.yaml
 sudo kubeadm -v=6 alpha phase kubelet write-env-file --config /etc/kubernetes/kubeadm-master.yaml
-sudo kubeadm -v=6 alpha phase kubelet config upload  --config /etc/kubernetes/kubeadm-master.yaml
 sudo kubeadm -v=8 alpha phase kubeconfig kubelet --config /etc/kubernetes/kubeadm-master.yaml
 sudo systemctl start kubelet
 sudo kubeadm -v=8 alpha phase etcd local --config /etc/kubernetes/kubeadm-master.yaml
@@ -159,12 +158,14 @@ sudo kubeadm -v=8 alpha phase mark-master --config /etc/kubernetes/kubeadm-maste
 
 #  O=system:masters CN=kuberenetes-admin
 
+# alpha phase init?
 curl -q https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml > /etc/kubernetes/rbac-kdd.yaml
 curl -q https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml > /etc/kubernetes/calico.yaml
 sed -i 's/"192.168.0.0\/16"/\"'${POD_SUBNET}'\/'${POD_SUBNETMASK}'\"/' /etc/kubernetes/calico.yaml
 # wait for api to start
 sleep 45
 #sudo kubeadm init --config=/etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=6 alpha phase kubelet config upload  --config /etc/kubernetes/kubeadm-master.yaml
 sudo kubectl apply -f /etc/kubernetes/rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
 sudo kubectl apply -f /etc/kubernetes/calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
 sudo kubeadm -v=8 alpha phase addon kube-proxy --config /etc/kubernetes/kubeadm-master.yaml
