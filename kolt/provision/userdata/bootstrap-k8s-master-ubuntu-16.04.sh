@@ -90,6 +90,8 @@ apiServerCertSANs:
 - "213.95.155.145"
 api:
     controlPlaneEndpoint: "k8s.oz.noris.de:6443"
+    apiServerExtraArgs:
+      apiserver-count: 3
 etcd:
   local:
     image: quay.io/coreos/etcd:v3.3.10
@@ -133,15 +135,15 @@ echo ${FRONT_PROXY_CA_KEY} | base64 -d > /etc/kubernetes/pki/front-proxy-ca.key
 
 
 sudo kubeadm -v=8 alpha phase certs all --config  /etc/kubernetes/kubeadm-master.yaml
-sudo kubeadm -v=8 alpha phase kubelet config write-to-disk --config  /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=6 alpha phase kubelet write-env-file --config  /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=6 alpha phase kubelet config upload  --config /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=8 alpha phase kubeconfig kubelet --config  /etc/kubernetes/kubeadm-master.yml
+sudo kubeadm -v=8 alpha phase kubelet config write-to-disk --config  /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=6 alpha phase kubelet write-env-file --config  /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=6 alpha phase kubelet config upload  --config /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=8 alpha phase kubeconfig kubelet --config  /etc/kubernetes/kubeadm-master.yaml
 sudo systemctl start kubelet
-sudo kubeadm -v=8 alpha phase etcd local --config  /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=8 alpha phase kubeconfig all --config  /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=8 alpha phase controlplane all --config   /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=8 alpha phase mark-master --config  /etc/kubernetes/kubeadm-master.yml
+sudo kubeadm -v=8 alpha phase etcd local --config  /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=8 alpha phase kubeconfig all --config  /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=8 alpha phase controlplane all --config   /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=8 alpha phase mark-master --config  /etc/kubernetes/kubeadm-master.yaml
 
 # task to integrate in kolt
 
@@ -162,12 +164,12 @@ curl -q https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installat
 sed -i 's/"192.168.0.0\/16"/\"'${POD_SUBNET}'\/'${POD_SUBNETMASK}'\"/' /etc/kubernetes/calico.yaml
 
 #sudo kubeadm init --config=/etc/kubernetes/kubeadm-master.yaml
-sudo kubectl apply -f rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
-sudo kubectl apply -f calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
+sudo kubectl apply -f /etc/kubernetes/rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
+sudo kubectl apply -f /etc/kubernetes/calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
 
-sudo kubeadm -v=8 alpha phase addon kube-proxy --config  /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm -v=8 alpha phase addon coredns --config  /etc/kubernetes/kubeadm-master.yml
-sudo kubeadm alpha phase bootstrap-token all --config /etc/kubernetes/kubeadm-master.yml
+sudo kubeadm -v=8 alpha phase addon kube-proxy --config  /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm -v=8 alpha phase addon coredns --config  /etc/kubernetes/kubeadm-master.yaml
+sudo kubeadm alpha phase bootstrap-token all --config /etc/kubernetes/kubeadm-master.yaml
 
 # discoverHash:
 # sha256:fe3c078b230624ec2297133933314b9a2821fa12c80226957ea716546d0cc1a9
