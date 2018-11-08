@@ -58,12 +58,14 @@ function fetch_all() {
 
 iptables -P FORWARD ACCEPT
 swapoff -a
+fetch_all
+
+
 
 declare -A HOST_IPS
 
 for h in ${HOSTS[@]}; do HOST_IPS[$h]=$(dig  +short $h); done
 
-fetch_all
 
 CLUSTER=$(for item in ${!HOST_IPS[@]}; do (printf "%s=https://%s:2380," $item ${HOST_IPS[$item]}); done)
 # remove that last comma
@@ -188,8 +190,9 @@ write_keys
 bootstrap_with_phases
 
 # apply calico
-kubectl apply -f /etc/kubernetes/rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
-kubectl apply -f /etc/kubernetes/calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
+# we should re-apply those with the Python API, only here for development purposes
+# kubectl apply -f /etc/kubernetes/rbac-kdd.yaml --kubeconfig=/etc/kubernetes/admin.conf
+# kubectl apply -f /etc/kubernetes/calico.yaml --kubeconfig=/etc/kubernetes/admin.conf
 
 # discoverHash:
 # sha256:fe3c078b230624ec2297133933314b9a2821fa12c80226957ea716546d0cc1a9
