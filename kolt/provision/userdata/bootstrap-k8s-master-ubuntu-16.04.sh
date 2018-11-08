@@ -1,3 +1,4 @@
+text/x-shellscript
 #!/bin/bash
 # --------------------------------------------------------------------------------------------------------------
 # We are explicitly not using a templating language to inject the values as to encourage the user to limit their
