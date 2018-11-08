@@ -46,7 +46,16 @@ class K8S:
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
-    def apply_calico(self, etcd_key, etcd_cert, k8s_ca, lb_url):
+    def apply_calico(self):
+        """temp. override from the original method
+        """
+        import subprocess as sp
+        sp.call(["kubectl", "apply", "-f", "rbac-kdd.yaml",
+                 "--kubeconfig=test2-admin.conf"], shell=True)
+        sp.call(["kubectl", "apply", "-f", "calico.yaml",
+                 "--kubeconfig=test2-admin.conf"], shell=True)
+
+    def apply_calico_(self, etcd_key, etcd_cert, k8s_ca, lb_url):
         """
         start a daemon set for CNI
         """

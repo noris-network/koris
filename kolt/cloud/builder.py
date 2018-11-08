@@ -316,6 +316,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                 time.sleep(2)
 
             LOGGER.info("Kubernetes API Server is ready !!!")
+            k8s.apply_calico()
             """
             etcd_endpoints = ",".join(
                 "https://%s:%d" % (host.ip_address, 2379)
