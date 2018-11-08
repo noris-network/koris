@@ -268,7 +268,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         cluster_info.secgroup.configure()
 
-        # TODO: check if loadbalancer does not already exists !!!
         lbinst = LoadBalancer(config)
 
         lb, floatingip = lbinst.get_or_create(NEUTRON)
