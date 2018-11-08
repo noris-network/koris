@@ -220,6 +220,7 @@ class LoadBalancer:  # pragma: no coverage
         self._id = None
         self._subnet_id = None
         self._data = None
+        self._existing_floating_ip = None
 
     async def configure(self, client, master_ips):
         """
@@ -265,7 +266,9 @@ class LoadBalancer:  # pragma: no coverage
             lb, fip_addr = self.create(client, provider=provider)
         else:
             LOGGER.info("Reusing an existing loadbalancer")
+            self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(client, lb[0])
+            LOGGER.info("Loadbalancer IP: %s", fip_addr)
             lb = lb[0]
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
@@ -276,8 +279,14 @@ class LoadBalancer:  # pragma: no coverage
     def _floating_ip_address(self, client, lb):
         floatingips = client.list_floatingips(retrieve_all=True,
                                               port_id=lb['vip_port_id'])
-        if floatingips:
-            return floatingips['floatingips'][0]['floating_ip_address']
+        if floatingips['floatingips']:
+            self._existing_floating_ip = floatingips[
+                'floatingips'][0]['floating_ip_address']
+            fip_addr = self._existing_floating_ip
+        else:
+            fip_addr = self._associate_floating_ip(
+                client, lb)
+        return fip_addr
 
     def create(self, client, provider='octavia'):
         """
@@ -309,7 +318,6 @@ class LoadBalancer:  # pragma: no coverage
         LOGGER.info("created loadbalancer ...")
 
         fip_addr = None
-
         if self.floatingip:
             fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
@@ -344,31 +352,35 @@ class LoadBalancer:  # pragma: no coverage
         self._del_loadbalancer(client)
 
     def _associate_floating_ip(self, client, loadbalancer):
-
+        fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
             valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
                                 self.floatingip)
-            # TODO: allow re-using a floating IP
-            return None
+            if self._existing_floating_ip == self.floatingip:
+                return self._existing_floating_ip
 
-        fips = client.list_floatingips()['floatingips']
-        if fips:
-            fnet_id = fips[0]['floating_network_id']  # noqa
-        else:
-            raise ValueError(
-                "Please create a floating ip and specify it in the configuration file")  # noqa
-        new_fip = client.create_floatingip(
-            {'floatingip': {'project_id': loadbalancer['tenant_id'],
-                            'floating_network_id': fnet_id}})['floatingip']
+            fip = client.list_floatingips(
+                floating_ip_address=self.floatingip)['floatingips']
+            fip = fip[0]
+        if not fip:
+            fips = client.list_floatingips()['floatingips']
+            if not fips:
+                raise ValueError(
+                    "Please create a floating ip and specify it in the configuration file")  # noqa
 
-        client.update_floatingip(new_fip['id'],
+            fnet_id = fips[0]['floating_network_id']
+            fip = client.create_floatingip(
+                {'floatingip': {'project_id': loadbalancer['tenant_id'],
+                                'floating_network_id': fnet_id}})['floatingip']
+
+        client.update_floatingip(fip['id'],
                                  {'floatingip':
                                   {'port_id': loadbalancer['vip_port_id']}})
 
         LOGGER.info("Loadbalancer external IP: %s",
-                    new_fip['floating_ip_address'])
+                    fip['floating_ip_address'])
 
-        return new_fip['floating_ip_address']
+        return fip['floating_ip_address']
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=30, backoff=0.8)
     def _add_listener(self, client):
