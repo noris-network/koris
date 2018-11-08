@@ -1,38 +1,30 @@
 # Use this file to configure the type of machines you want to create
 # on OpenStack
 ---
-master_flavor: 'ECS.GP1.2-8'
-node_flavor: 'ECS.C1.4-8'
+master_flavor: 'ECS.C1.2-4'
+node_flavor: 'ECS.C1.2-4'
 private_net: 'k8s-network'
 # optionally specify the subnet
-# IF YOU INTENED TO create LoadBalancer with Kubernetes you __MUST__
-# specify the subnet ID.
 # subnet: foo
-cluster-name: 'test'
+cluster-name: 'test2'
 availibility-zones:
  - de-nbg6-1b
  - de-nbg6-1a
 n-masters: 3
 n-nodes: 3
-n-etcds: 3
-keypair: 'youruser'
+keypair: otiram
+#security_group: 'default'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
 # you should currently use kolt-base
 # this image includes all k8s binaries and a special kernel
 # optimized for KVM (this image is built from
 # ubuntu-16.04-minimal-cloudimg-amd64-disk1.img
-image: "ubuntu-16.04-kolt-base"
+image: "koris-2018-10-30"
 #image: "Ubuntu Xenial Server Cloudimg"
 loadbalancer:
 # set this to true if you
 # want the load balancer to have a floating IP
- floatingip: false
-# set this to if you want to add this name to SAN certificates
-# this is not yet implemented
-# domain-name: foo.bar.noris.de
-# reuse an existing floating ip from your pool
-#  floatingip: 213.95.155.145
-
+ floatingip: 213.95.155.145
 #storage_class: "BSS-Performance-Storage"
 storage_class: "PI-Storage-Class"
