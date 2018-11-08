@@ -28,7 +28,7 @@ sudo mkdir -p /etc/kubernetes/pki/etcd
 iptables -P FORWARD ACCEPT
 
 cat << EOF > /etc/kubernetes/cluster-info.yaml
- cluster-info.yaml
+---
 apiVersion: v1
 clusters:
 - cluster:
@@ -42,15 +42,31 @@ preferences: {}
 users: []
 EOF
 
-cat << EOF > /etc/kubernetes/kubeadm-node.yaml
+# config for 1.11.4
+cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
 apiVersion: kubeadm.k8s.io/v1alpha1
 kind: NodeConfiguration
 discoveryFile: /etc/kubernetes/cluster-info.yaml
 nodeName: node-1-test2
 tlsBootstrapToken: foobar.fedcba9876543210
-iscoveryTokenCACertHashes:
+discoveryTokenCACertHashes:
   sha256:fe3c078b230624ec2297133933314b9a2821fa12c80226957ea716546d0cc1a9
 EOF
 
+# config for 1.12.2
+cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
+---
+apiVersion: kubeadm.k8s.io/v1alpha2
+clusterName: kubernetes
+discoveryFile: /etc/kubernetes/cluster-info.yaml
+discoveryTimeout: 15m0s
+discoveryTokenUnsafeSkipCAVerification: true
+kind: NodeConfiguration
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  name: node-1-test2
+tlsBootstrapToken: foobar.fedcba9876543210
+EOF
+
 # join !
-kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node.yaml k8s.oz.noris.de:6443 
+kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml k8s.oz.noris.de:6443
