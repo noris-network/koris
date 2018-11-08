@@ -175,6 +175,8 @@ function bootstrap_with_phases() {
 #  Kubeadm uses the kubernetes-admin CN
 
 #  O=system:masters CN=kuberenetes-admin
+fetch_all
+write_keys
 
 # use either one of :
 # kubeadm init --config=/etc/kubernetes/kubeadm-master.yaml
