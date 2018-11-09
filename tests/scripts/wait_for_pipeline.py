@@ -30,6 +30,9 @@ while True:
     if cinder.volumes.list():
         print("There are some volumes left ...  ", flush=True)
         print("please delete all volumes", flush=True)
+        time.sleep(60)
+    else:
+        break
 
 print("Awesome !!! no jobs and no volume found!")
 print("I will run that integration test now!")
