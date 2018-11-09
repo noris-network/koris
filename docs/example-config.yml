@@ -3,20 +3,19 @@
 ---
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-private_net: 'k8s-nude'
+private_net: 'k8s-network'
 # optionally specify the subnet
 # IF YOU INTENED TO create LoadBalancer with Kubernetes you __MUST__
 # specify the subnet ID.
 # subnet: foo
-cluster-name: 'nude'
+cluster-name: 'test'
 availibility-zones:
  - de-nbg6-1b
  - de-nbg6-1a
 n-masters: 3
 n-nodes: 3
 n-etcds: 3
-keypair: 'otiram'
-security_group: 'k8s-nude-k8s-a0tp4t'
+keypair: 'youruser'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
 # you should currently use kolt-base
@@ -32,8 +31,8 @@ loadbalancer:
 # set this to if you want to add this name to SAN certificates
 # this is not yet implemented
 # domain-name: foo.bar.noris.de
+# reuse an existing floating ip from your pool
+#  floatingip: 213.95.155.145
 
-certificates:
-  expriry: 8760h
 #storage_class: "BSS-Performance-Storage"
 storage_class: "PI-Storage-Class"

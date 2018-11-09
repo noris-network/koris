@@ -1,5 +1,11 @@
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait
+SHELL := /bin/bash
+.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
+	clean-lb-after-integration-test \
+	clean-lb
+
 .DEFAULT_GOAL := help
+
+ndef = $(if $(value $(1)),,$(error $(1) not set))
 
 define BROWSER_PYSCRIPT
 import os, webbrowser, sys
@@ -33,7 +39,6 @@ CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
-
 
 
 help:
@@ -87,12 +92,13 @@ docker-alpine:
 	docker build -t $(ORG)/koris-alpine:$(TAG) -f docker/Dockerfile.alpine .
 
 docker-ubuntu:
-	docker build -t $(ORG)/koris:$(TAG) -f docker/Dockerfile.ubuntu .
+	docker build -t $(ORG)/koris-ubuntu:$(TAG) -f docker/Dockerfile.ubuntu .
 
 docker-push-alpine:
 	docker push $(ORG)/koris-alpine:$(TAG)
-docker-push:
-	docker push $(ORG)/koris:$(TAG)
+
+docker-push-ubuntu:
+	docker push $(ORG)/koris-ubuntu:$(TAG)
 
 
 servedocs: docs ## compile the docs watching for changes
@@ -120,7 +126,8 @@ integration-test: \
 	integration-expose \
 	expose-wait \
 	curl-run \
-	clean-after-integration-test
+	clean-lb-after-integration-test
+
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
@@ -197,8 +204,7 @@ curl-run:
 		sleep 2; \
 	done
 
-
-clean-lb:
+clean-lb-after-integration-test:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
@@ -209,6 +215,21 @@ clean-lb:
 	done;
 	sleep 90
 
+
+clean-lb: ## delete a loadbalancer with all it's components
+	$(call ndef,LOADBALANCER_NAME)
+	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy
+
+security-checks:
+	echo "Running security checks for K8S master nodes..."
+	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
+	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
+	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+	echo "Running security checks for K8S worker nodes..."
+	kubectl run --kubeconfig=${KUBECONFIG} --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+
+update-config: KEY ?= kube  ## create a test configuration file
 update-config:
 	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
@@ -219,13 +240,11 @@ update-config:
 clean-cluster: update-config
 	kolt destroy tests/koris_test.yml --force
 
-
-clean-all-after-integration-test: clean-lb
+clean-all:
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
-	rm ${KUBECONFIG}
-	rm -R certs-koris-pipe-line-$(git rev-parse --short ${REV})
-
+	rm -fv ${KUBECONFIG}
+	rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)

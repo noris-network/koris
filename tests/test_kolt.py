@@ -8,10 +8,9 @@ import yaml
 
 from kolt.util.util import host_names
 from kolt.util.util import get_kubeconfig_yaml
-from kolt.util.util import EtcdHost
 
-test_cluster = [EtcdHost("master-%d-k8s" % i,
-                         "10.32.192.10%d" % i) for i in range(1, 4)]
+test_cluster = [("master-%d-k8s" % i,
+                 "10.32.192.10%d" % i) for i in range(1, 4)]
 
 etcd_host_list = test_cluster
 

@@ -4,12 +4,14 @@ in OpenStack
 """
 
 import asyncio
+import os
+
 from kolt.cloud.builder import get_clients
 from kolt.cloud.openstack import LoadBalancer
 _, CLIENT, _ = get_clients()
 
 
-config = {'cluster-name': 'test'}
+config = {'cluster-name': os.getenv('LOADBALANCER_NAME', 'test')}
 
 LB = LoadBalancer(config)
 
@@ -41,7 +43,7 @@ if __name__ == '__main__':
         except ValueError:
             pass
     if action == 0:
-        create_and_configure('test')
+        create_and_configure()
         sys.exit(0)
     if action == 1:
         LB.delete(CLIENT)

@@ -9,12 +9,21 @@ import pytest
 from kolt.provision.cloud_init import MasterInit, NodeInit
 from kolt.ssl import create_certs
 from kolt.cloud.openstack import OSCloudConfig
-from kolt.util.util import (EtcdHost, get_kubeconfig_yaml,
+from kolt.util.util import (get_kubeconfig_yaml,
                             get_token_csv)
 
 
-test_cluster = [EtcdHost("master-%d-k8s" % i,
-                         "10.32.192.10%d" % i) for i in range(1, 4)]
+class DummyServer:  # pylint: disable=too-few-public-methods
+    """
+    Mock an OpenStack server
+    """
+    def __init__(self, name, ip_address):
+        self.name = name
+        self.ip_address = ip_address
+
+
+test_cluster = [DummyServer("master-%d-test" % i,
+                            "10.32.192.10%d" % i) for i in range(1, 4)]
 
 etcd_host_list = test_cluster
 
@@ -113,7 +122,7 @@ def test_cloud_init(ci_master):
                 i['path'] == '/etc/systemd/system/etcd.env'][0]
 
     assert re.findall("%s=https://%s:%s" % (
-        etcd_host.name, etcd_host.ip_address, etcd_host.port),
+        etcd_host.name, etcd_host.ip_address, 2380),
         etcd_env['content'])
 
 
