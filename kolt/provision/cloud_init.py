@@ -136,7 +136,8 @@ class MasterInit(BaseInit):
                    self.etcds[1].ip_address,
                    self.etcds[2].ip_address,
                    ",".join(
-                       tmpl % (etcd.name, etcd.ip_address, port) for etcd in self.etcds))
+                       tmpl % (etcd.name.lower(), etcd.ip_address, port) for
+                            etcd in self.etcds))
         return textwrap.dedent(cluster_info_part)
 
     def _get_token_csv(self):
