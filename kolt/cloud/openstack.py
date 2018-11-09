@@ -684,11 +684,10 @@ def distribute_host_zones(hosts, zones):
     if len(zones) == len(hosts):
         return list(zip(hosts, zones))
 
-    end = len(zones) + 1 if len(zones) % 2 else len(zones)
-    host_zones = list(zip([hosts[i:i + end] for i in
-                           range(0, len(hosts), end)],
-                          zones))
-    return host_zones
+    n = len(zones)
+    hosts = [hosts[start::len(zones)] for start in range(n)]
+
+    return list(zip(hosts, zones))
 
 
 class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
