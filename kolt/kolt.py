@@ -56,17 +56,6 @@ class Kolt:
         config - configuration file
         inventory - invetory file to write
         """
-        self.k8s(config)
-
-    def k8s(self, config):  # pylint: disable=no-self-use
-        """
-        Bootstrap a Kubernetes cluster (deprecated)
-
-        config - configuration file
-        inventory - invetory file to write
-        """
-        print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
-        print(yellow("Use `apply` instead."))
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
@@ -78,6 +67,17 @@ class Kolt:
             print(red(err))
             delete_cluster(config, self.nova, self.neutron,
                            True)
+
+    def k8s(self, config):  # pylint: disable=no-self-use
+        """
+        Bootstrap a Kubernetes cluster (deprecated)
+
+        config - configuration file
+        inventory - invetory file to write
+        """
+        print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
+        print(yellow("Use `apply` instead."))
+        self.apply(config)
 
     def destroy(self, config: str, force: bool = False):
         """
