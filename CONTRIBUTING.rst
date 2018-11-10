@@ -32,8 +32,8 @@ and "help wanted" is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-kolt could always use more documentation, whether as part of the
-official kolt docs, in docstrings, or even on the web in blog posts,
+koris could always use more documentation, whether as part of the
+official koris docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
 Submit Feedback
@@ -52,24 +52,24 @@ If you are proposing a feature:
 Get Started!
 ------------
 
-Ready to contribute? Here's how to set up `kolt` for local development.
+Ready to contribute? Here's how to set up `koris` for local development.
 
-1. Fork the `kolt` repo on gitlab.
+1. Fork the `koris` repo on gitlab.
 2. Clone your fork locally::
 
-    $ git clone git@gitlab.noris.net:PI/kolt.git
+    $ git clone git@gitlab.noris.net:PI/koris.git
 
 3. Install your local copy into a virtualenv.
    This is how you set up your fork for local development::
 
-    $ cd kolt/
+    $ cd koris/
     $ python3 -m venv myenv
     $ source myenv/bin/activate
-    $ pip install -r requirements_dev.txt
+    $ pip3 install -r requirements_dev.txt
 
 If you prefer to use `Pipenv` you can let Pipenv manage the virtual environment::
 
-    $ cd kolt
+    $ cd koris
     $ pipenv --python 3.6
     $ pipenv install --dev
 
@@ -116,7 +116,7 @@ Before you submit a pull request, check that it meets these guidelines:
 
 .. _dependencies:
 
-How we manage kolt's dependencies
+How we manage koris's dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Python loads modules and packages which are not in the standard library
@@ -129,7 +129,7 @@ packages. Hence, the Python community adopted a solution called
 interpreter and a set of scripts to change the environment variables such that
 Python loads modules and packages from a new location e.g.
 ``my-virtualenv/lib/python3.X/site-packages``. A virtual environment also has
-it's binaries installed in ``my-virtualenv/bin`` hence ``pip`` and other
+it's binaries installed in ``my-virtualenv/bin`` hence ``pip3`` and other
 python scripts will be found there.
 The standard library of ``Python3.X`` already contains a module to create virtual
 environments. These can be created with::
@@ -144,10 +144,10 @@ This environment can be activated with::
 Now one can installs packages in the new environment using the new environment
 ``pip`` installer::
 
-   $ which pip
-   <path-to-the-new-env>/bin/pip
+   $ which pip3
+   <path-to-the-new-env>/bin/pip3
 
-Using ``pip`` in a virtual environment still requires one to document which
+Using ``pip3`` in a virtual environment still requires one to document which
 packages are needed for a certain Python software to work. By convention
 these dependencies are documented in ``requirements.txt``. This file contains
 everything needed to run the software after installation. By convention also,
@@ -169,7 +169,7 @@ They where all more or less working, but not perfect. Recently, a new contender,
 entered the ring. This tool, ``pipenv`` aims not only to manage virtual
 environments but also to manage the dependencies documented in
 ``requirements.txt``. ``pipenv`` uses two files, ``Pipfile`` and ``Pipfile.lock``.
-When you install a new package needed for ``kolt`` this package will be recorded
+When you install a new package needed for ``koris`` this package will be recorded
 in ``Pipfile``.
 Usually, you don't want to change neither of this files. ``pipenv`` has built-in
 tools to help updating the dependencies and documenting changes in
@@ -178,7 +178,7 @@ tools to help updating the dependencies and documenting changes in
 Keeping requirements.txt updated
 ++++++++++++++++++++++++++++++++
 
-With every minor release of ``kolt`` (X.Y, but not X.Y.Z) we will check that
+With every minor release of ``koris`` (X.Y, but not X.Y.Z) we will check that
 all the dependencies are the latest, such that we won't have software rot, or
 older packages with CVEs in our dependencies. This is done with::
 
@@ -213,7 +213,7 @@ Run a single test
 
 To run a subset of tests::
 
-$ py.test tests.test_kolt
+$ py.test tests.test_koris
 
 Developer helper utils - Makefile
 +++++++++++++++++++++++++++++++++
