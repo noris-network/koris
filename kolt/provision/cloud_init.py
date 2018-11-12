@@ -281,11 +281,9 @@ class MasterInit(BaseInit):
         return config
 
 
-class NodeInit(BaseInit):  # pylint: disable=too-many-instance-attributes
-    """
-    create a cloud_init file for nodes
-    """
-    def __init__(self, token,  # pylint: disable=too-many-arguments
+class NodeInit(BaseInit):
+
+    def __init__(self, instance, token,
                  ca_cert_bundle,
                  etcd_cert_bundle,
                  svc_account_bundle,
@@ -294,6 +292,7 @@ class NodeInit(BaseInit):  # pylint: disable=too-many-instance-attributes
                  cloud_provider=None,
                  os_type='ubuntu', os_version="16.04"):
 
+        self.instance = instance
         self.role = 'node'
         self.token = token
         self.ca_cert_bundle = ca_cert_bundle
@@ -391,6 +390,21 @@ class NodeInit(BaseInit):  # pylint: disable=too-many-instance-attributes
             cc,
             encoder=lambda x: base64.b64encode(x))  # pylint: disable=unnecessary-lambda
 
+    def _get_kubelet_env_info(self):
+        """
+        Write the kubelet environment info to /etc/systemd/system/kubelet.env
+        """
+        kubelet_env_info_part = """
+
+        # systemd env
+         - path: /etc/systemd/system/kubelet.env
+           owner: root:root
+           permissions: '0644'
+           content: |
+             NODE_IP={}
+        """.format(self.instance.ip_address)
+        return textwrap.dedent(kubelet_env_info_part)
+
     def get_files_config(self):
         """
         write the section write_files into the cloud-config
@@ -404,5 +418,6 @@ class NodeInit(BaseInit):  # pylint: disable=too-many-instance-attributes
              + self._get_kubeproxy_info() \
              + self._get_cloud_provider().lstrip() \
              + self._get_calico_config() \
+             + self._get_kubelet_env_info()
 
         return config
