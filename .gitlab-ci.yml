@@ -106,7 +106,6 @@ compliance-checks:
   - "pip3 install -e ."
   - "make compliance-checks"
   only:
-  - KOLT-19-test-certified-kubernetes
   - master
 
 cleanup:
