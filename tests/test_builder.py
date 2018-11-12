@@ -3,6 +3,7 @@ Test kolt.cloud.builder
 """
 import base64
 import json
+import pytest
 import re
 import uuid
 from unittest import mock
@@ -10,7 +11,7 @@ from unittest import mock
 import kolt.cloud.openstack
 
 from kolt.cloud.openstack import OSClusterInfo
-from kolt.cloud.builder import NodeBuilder
+from kolt.cloud.builder import NodeBuilder, ControlPlaneBuilder
 from kolt.ssl import create_certs
 
 
@@ -48,19 +49,15 @@ CONFIG = {
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.2-4",
     "master_flavor": "ECS.C1.4-8",
-    'storage_class': "Tes tStorageClass"
+    'storage_class': "TestStorageClass"
 }
 
-NOVA.servers.find = mock.MagicMock(return_value=DummyServer("node-1-test",
-                                                            "10.32.192.101"))
 NOVA.keypairs.get = mock.MagicMock(return_value='otiram')
 NOVA.glance.find_image = mock.MagicMock(return_value='Ubuntu')
 NOVA.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
 NEUTRON.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
 NEUTRON.create_port = mock.MagicMock(
     return_value=DUMMYPORT)
-NEUTRON.list_security_groups = mock.MagicMock(
-    return_value=iter([{"security_groups": []}]))
 
 NEUTRON.create_security_group = mock.MagicMock(
     return_value={"security_group": {'id':
@@ -70,10 +67,19 @@ NEUTRON.list_subnets = mock.MagicMock(
     return_value={'subnets': [{'id': 'e6d899d9-b1bc-4b1c-96ba-c541b4b8e49c'}]})
 
 
-def test_node_builder():
-    """ test the node builder class"""
+@pytest.fixture
+def os_info():
+    NEUTRON.list_security_groups = mock.MagicMock(
+        return_value=iter([{"security_groups": []}]))
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
-    nb = NodeBuilder(CONFIG, osinfo)
+    return osinfo
+
+
+def test_node_builder(os_info):
+    """ test the node builder class """
+    NOVA.servers.find = mock.MagicMock(return_value=DummyServer("node-1-test",
+                                                                "10.32.192.101")) # noqa
+    nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "_exists", False), nodes))
     assert isinstance(nodes[0], kolt.cloud.openstack.Instance)
@@ -108,3 +114,13 @@ def test_node_builder():
     assert calico_config['etcd_endpoints'] == (
         'https://10.32.192.101:2739,'
         'https://10.32.192.102:2739,https://10.32.192.103:2739')
+
+
+def test_controlplane_builder(os_info):
+    """ test the control plane builder class """
+    NOVA.servers.find = mock.MagicMock(return_value=DummyServer("master-1-test", # noqa
+                                                                "10.32.192.102")) # noqa
+    cpb = ControlPlaneBuilder(CONFIG, os_info)
+    masters = cpb.get_masters()
+    assert isinstance(masters[0], kolt.cloud.openstack.Instance)
+    assert masters[0].name == 'master-1-test'

@@ -1,13 +1,13 @@
 import base64
 import re
 import uuid
+from unittest.mock import patch
 import yaml
 
-from unittest.mock import patch
 import pytest
 
 from kolt.provision.cloud_init import MasterInit, NodeInit
-from kolt.ssl import create_certs
+from kolt.ssl import create_certs, CertBundle, create_key, create_ca
 from kolt.cloud.openstack import OSCloudConfig
 from kolt.util.util import (get_kubeconfig_yaml,
                             get_token_csv)
@@ -41,7 +41,56 @@ with patch('kolt.cloud.openstack.read_os_auth_variables') as p:
 
     cloud_config = OSCloudConfig()
 
+
+def create_etcd_certs(names, ips):
+    _key = create_key(size=2048)
+    _ca = create_ca(_key, _key.public_key(),
+                    "DE", "BY", "NUE",
+                    "Kubernetes", "CDA-PI",
+                    "kubernetes")
+    ca_bundle = CertBundle(_key, _ca)
+
+    api_etcd_client = CertBundle.create_signed(ca_bundle=ca_bundle,
+                                               country="",  # country
+                                               state="",  # state
+                                               locality="",  # locality
+                                               orga="system:masters",  # orga
+                                               unit="",  # unit
+                                               name="kube-apiserver-etcd-client",
+                                               hosts=[],
+                                               ips=[])
+
+    for host, ip in zip(names, ips):
+        peer = CertBundle.create_signed(ca_bundle,
+                                        "",  # country
+                                        "",  # state
+                                        "",  # locality
+                                        "",  # orga
+                                        "",  # unit
+                                        "kubernetes",  # name
+                                        [host, 'localhost', host],
+                                        [ip, '127.0.0.1', ip]
+                                        )
+
+        server = CertBundle.create_signed(ca_bundle,
+                                          "",  # country
+                                          "",  # state
+                                          "",  # locality
+                                          "",  # orga
+                                          "",  # unit
+                                          host,  # name CN
+                                          [host, 'localhost', host],
+                                          [ip, '127.0.0.1', ip]
+                                          )
+        yield {'%s-server' % host: server, '%s-peer' % host: peer}
+
+        yield {'apiserver-etcd-client': api_etcd_client}
+        yield {'etcd_ca': ca_bundle}
+
+
 certs = create_certs({}, hostnames, ips, write=False)
+for item in create_etcd_certs(hostnames, ips):
+    certs.update(item)
 
 encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
 
@@ -53,10 +102,8 @@ token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 @pytest.fixture
 def ci_master():
-    ci = MasterInit(test_cluster,
-                    cert_bundle=(certs['ca'],
-                                 certs['k8s'],
-                                 certs['service-account']),
+    ci = MasterInit('master-1-test', test_cluster,
+                    certs,
                     encryption_key=encryption_key,
                     cloud_provider=cloud_config)
     return ci
@@ -106,7 +153,7 @@ def test_certificate_info(ci_master):
 
     certs_config = ci_master._get_certificate_info()
 
-    assert 4 == len(yaml.safe_load(certs_config))
+    assert 12 == len(yaml.safe_load(certs_config))
 
 
 def test_cloud_init(ci_master):
@@ -114,7 +161,7 @@ def test_cloud_init(ci_master):
     config = ci_master.get_files_config()
     config = yaml.safe_load(config)
 
-    assert len(config['write_files']) == 10
+    assert len(config['write_files']) == 18
 
     etcd_host = test_cluster[0]
 

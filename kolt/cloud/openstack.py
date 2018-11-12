@@ -517,8 +517,9 @@ class SecurityGroup:
             a security group dict
         """
         name = "%s-sec-group" % name
-        secgroup = next(self.client.list_security_groups(
-            retrieve_all=False, **{'name': name}))['security_groups']
+        secgroup = self.client.list_security_groups(
+            retrieve_all=False, **{'name': name})
+        secgroup = next(secgroup)['security_groups']
 
         if secgroup:
             self._exists = True

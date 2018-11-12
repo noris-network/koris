@@ -15,7 +15,7 @@ from kolt.deploy.k8s import K8S
 
 from kolt.cli import write_kubeconfig
 from kolt.provision.cloud_init import MasterInit, NodeInit
-from kolt.ssl import create_certs, b64_key, b64_cert
+from kolt.ssl import create_certs, b64_key, b64_cert, create_key, create_ca, CertBundle
 from kolt.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
@@ -142,12 +142,12 @@ class ControlPlaneBuilder:
                         admin_token,
                         calico_token,
                         kubelet_token,
-                        cert_bundle):
+                        certs):
         """
         create the userdata which is given to cloud init
 
         Args:
-            cloud_provider (OSCloudConfig) - used to write cloud.conf
+            etcds - a list of Instance instances
         """
         # generate a random string
         # this should be the equal of
@@ -161,11 +161,12 @@ class ControlPlaneBuilder:
                                        calico_token,
                                        kubelet_token)
 
-        userdata = str(MasterInit(etcds, cert_bundle,
-                                  encryption_key,
-                                  cloud_provider,
-                                  token_csv_data=token_csv_data))
-        return userdata
+        for host in etcds:
+            userdata = str(MasterInit(host.name, etcds, certs,
+                                      encryption_key,
+                                      cloud_provider,
+                                      token_csv_data=token_csv_data))
+            yield userdata
 
     def get_masters(self):
         """
@@ -185,9 +186,6 @@ class ControlPlaneBuilder:
         Create future tasks for creating the cluster control plane nodes
         """
 
-        cert_bundle = (certs['ca'], certs['k8s'],
-                       certs['service-account'])
-
         masters = self.get_masters()
 
         user_data = self.create_userdata(
@@ -195,15 +193,16 @@ class ControlPlaneBuilder:
             admin_token,
             calico_token,
             kubelet_token,
-            cert_bundle)
+            certs)
 
         loop = asyncio.get_event_loop()
         tasks = [loop.create_task(
             master.create(self._info.master_flavor,
                           self._info.secgroups,
                           self._info.keypair,
-                          user_data
-                          )) for master in masters if not master._exists]
+                          data
+                          )) for master, data in zip(masters, user_data) if
+                 not master._exists]
 
         return tasks
 
@@ -247,6 +246,75 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                       "kubernetes"]
         return all_hosts
 
+    @staticmethod
+    def create_ca():
+        """create a self signed CA"""
+        _key = create_key(size=2048)
+        _ca = create_ca(_key, _key.public_key(),
+                        "DE", "BY", "NUE",
+                        "Kubernetes", "CDA-PI",
+                        "kubernetes")
+        return CertBundle(_key, _ca)
+
+    def create_etcd_certs(self, names, ips):
+        """
+        create a certificate and key pair for each etcd host
+        """
+        ca_bundle = self.create_ca()
+
+        api_etcd_client = CertBundle.create_signed(ca_bundle=ca_bundle,
+                                                   country="",  # country
+                                                   state="",  # state
+                                                   locality="",  # locality
+                                                   orga="system:masters",  # orga
+                                                   unit="",  # unit
+                                                   name="kube-apiserver-etcd-client",
+                                                   hosts=[],
+                                                   ips=[])
+
+        # calico seems to want access to a key value store (etcd),so we need
+        # client certificates for nodes, too.
+        # TODO: do we want this for security reasons? Do we want to have
+        # ONE etcd with kubernetes information and calico onformation?
+        # What can a worker node read/write? Feels somewhat fishy...
+        calico_etcd_client = CertBundle.create_signed(ca_bundle=ca_bundle,
+                                                      country="",  # country
+                                                      state="",  # state
+                                                      locality="",  # locality
+                                                      orga="system:masters",  # orga
+                                                      unit="",  # unit
+                                                      name="calico-etcd-client",
+                                                      hosts=[],
+                                                      ips=[])
+
+        for host, ip in zip(names, ips):
+            peer = CertBundle.create_signed(ca_bundle,
+                                            "",  # country
+                                            "",  # state
+                                            "",  # locality
+                                            "",  # orga
+                                            "",  # unit
+                                            "kubernetes",  # name
+                                            [host, 'localhost', host],
+                                            [ip, '127.0.0.1', ip]
+                                            )
+
+            server = CertBundle.create_signed(ca_bundle,
+                                              "",  # country
+                                              "",  # state
+                                              "",  # locality
+                                              "",  # orga
+                                              "",  # unit
+                                              host,  # name CN
+                                              [host, 'localhost', host],
+                                              [ip, '127.0.0.1', ip]
+                                              )
+            yield {'%s-server' % host: server, '%s-peer' % host: peer}
+
+        yield {'apiserver-etcd-client': api_etcd_client}
+        yield {'calico_etcd_client': calico_etcd_client}
+        yield {'etcd_ca': ca_bundle}
+
     def run(self, config):  # pylint: disable=too-many-locals
         """
         execute the complete cluster build
@@ -282,6 +350,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         cluster_ips.append(lb_ip)
         certs = create_certs(config, cluster_host_names, cluster_ips)
+
+        # generate etcd certifcates for control plane
+        etcd_certs = list(self.create_etcd_certs([host.name for host in cp_hosts],
+                                                 [host.ip_address for host in
+                                                 cp_hosts]))
+
+        for item in etcd_certs:
+            certs.update(item)
+
         LOGGER.debug(info("Done creating nodes tasks"))
 
         calico_t, kubelet_t, admin_t = list(self._create_tokes())
@@ -320,8 +397,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             etcd_endpoints = ",".join(
                 "https://%s:%d" % (host.ip_address, 2379)
                 for host in cp_hosts)
-            k8s.apply_calico(b64_key(certs["k8s"].key),
-                             b64_cert(certs["k8s"].cert),
-                             b64_cert(certs["ca"].cert),
+            k8s.apply_calico(b64_key(certs["calico_etcd_client"].key),
+                             b64_cert(certs["calico_etcd_client"].cert),
+                             b64_cert(certs["etcd_ca"].cert),
                              etcd_endpoints)
             k8s.apply_kube_dns()
