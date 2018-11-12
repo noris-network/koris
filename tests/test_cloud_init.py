@@ -39,7 +39,7 @@ with patch('kolt.cloud.openstack.read_os_auth_variables') as p:
                           user_domain_name="noris.de",
                           region_name="de-nbg6-1")
 
-    cloud_config = OSCloudConfig()
+cloud_config = OSCloudConfig()
 
 
 def create_etcd_certs(names, ips):
@@ -111,15 +111,17 @@ def ci_master():
 
 @pytest.fixture
 def ci_node():
-    ci = NodeInit(kubelet_token,
-                  certs['ca'],
-                  certs['k8s'],
-                  certs['service-account'],
-                  test_cluster,
-                  calico_token,
-                  "10.32.192.121",
-                  cloud_provider=cloud_config
-                  )
+    ci = NodeInit(
+        test_cluster[0],
+        kubelet_token,
+        certs['ca'],
+        certs['k8s'],
+        certs['service-account'],
+        test_cluster,
+        calico_token,
+        "10.32.192.121",
+        cloud_provider=cloud_config
+    )
     return ci
 
 
@@ -177,7 +179,28 @@ def test_node_init(ci_node):
     config = ci_node.get_files_config()
     config = yaml.safe_load(config)
 
-    assert len(config['write_files']) == 9
+    assert len(config['write_files']) == 10
+
+    # KORIS-54 Ensure kubelet contains --node-ip
+    node_ip_var = 'NODE_IP'
+    kubelet_env_config = [cfg for cfg in config['write_files'] if
+                          cfg['path'] == '/etc/systemd/system/kubelet.env']
+
+    assert len(kubelet_env_config) == 1
+    assert re.match(r'.*?%s=\d+\.\d+\.\d+\.\d+\n.*' % (node_ip_var,),
+                    kubelet_env_config[0]['content'])
+
+    bootstrap_node = open('kolt/provision/userdata/bootstrap-k8s-node-ubuntu-16.04.sh',
+                          'r').read()
+    pat = re.compile(r'.*?cat << EOF > /etc/systemd/system/kubelet.service(.*?)EOF.*',
+                     flags=re.DOTALL)
+
+    kubelet_config_match = pat.match(bootstrap_node)
+
+    assert kubelet_config_match
+
+    assert re.match(r'.*?--node-ip=\\\${%s}.*' % (node_ip_var,),
+                    kubelet_config_match.groups()[0], flags=re.DOTALL)
 
 
 def test_get_kube_config():

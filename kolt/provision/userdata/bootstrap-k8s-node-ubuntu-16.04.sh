@@ -130,6 +130,7 @@ After=docker.service
 Requires=docker.service
 
 [Service]
+EnvironmentFile=/etc/systemd/system/kubelet.env
 ExecStart=/usr/bin/kubelet \\
   --allow-privileged=true \\
   --cluster-dns=10.32.0.10  \\
@@ -149,7 +150,8 @@ ExecStart=/usr/bin/kubelet \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
   --eviction-pressure-transition-period 30s \\
   --cert-dir=/var/lib/kubelet \\
-  --v=2
+  --v=2 \\
+  --node-ip=\${NODE_IP}
 
 Restart=on-failure
 RestartSec=5

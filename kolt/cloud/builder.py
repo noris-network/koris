@@ -47,12 +47,13 @@ class NodeBuilder:
         self.config = config
         self._info = osinfo
 
-    def create_userdata(self, etcd_cluster_info,
+    def create_userdata(self, nodes, etcd_cluster_info,
                         cert_bundle, **kwargs):
         """
         create the userdata which is given to cloud init
 
         Args:
+            nodes - a list of koris.cloud.openstack.Instance
             etcd_cluster_info - a list of EtcServer instances.
             This is need since calico communicates with etcd.
         """
@@ -63,11 +64,13 @@ class NodeBuilder:
         calico_token = kwargs.get('calico_token')
         service_account_bundle = kwargs.get('service_account_bundle')
         lb_ip = kwargs.get("lb_ip")
-        userdata = str(NodeInit(kubelet_token, ca_cert,
-                                cert_bundle, service_account_bundle,
-                                etcd_cluster_info, calico_token, lb_ip,
-                                cloud_provider=cloud_provider_info))
-        return userdata
+
+        for node in nodes:
+            userdata = str(NodeInit(node, kubelet_token, ca_cert,
+                                    cert_bundle, service_account_bundle,
+                                    etcd_cluster_info, calico_token, lb_ip,
+                                    cloud_provider=cloud_provider_info))
+            yield userdata
 
     def get_nodes(self):
         """
@@ -95,23 +98,26 @@ class NodeBuilder:
                      'calico_token': calico_token,
                      }
 
-        node_args.update({'ca_cert': certs['ca'],
-                          'service_account_bundle': certs[
-                              'service-account'],  # noqa
-                          'cert_bundle': certs['k8s'],
-                          'lb_ip': lb_ip,
-                          'cloud_provider': cloud_provider_info})
+        nodes = self.get_nodes()
+        node_args.update({
+            'nodes': nodes,
+            'ca_cert': certs['ca'],
+            'service_account_bundle': certs[
+                'service-account'],  # noqa
+            'cert_bundle': certs['k8s'],
+            'lb_ip': lb_ip,
+            'cloud_provider': cloud_provider_info})
 
         user_data = self.create_userdata(**node_args)
-        nodes = self.get_nodes()
 
         loop = asyncio.get_event_loop()
         tasks = [loop.create_task(
             node.create(self._info.node_flavor,
                         self._info.secgroups,
                         self._info.keypair,
-                        user_data
-                        )) for node in nodes if not node._exists]
+                        data
+                        )) for node, data in zip(nodes, user_data)
+                 if not node._exists]
 
         return tasks
 
