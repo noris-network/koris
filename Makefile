@@ -226,7 +226,10 @@ clean-lb-after-integration-test:
 	done;
 	sleep 90
 
-
+# to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
+# be set to the cluster's name. For example, if one want to delete the
+# loadbalancer koris-pipe-line-6e754fe-7008-lb one would need to set 
+# LOADBALANCER_NAME to koris-pipe-line-6e754fe-7008 (without the -lb)
 clean-lb: ## delete a loadbalancer with all it's components
 	$(call ndef,LOADBALANCER_NAME)
 	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy

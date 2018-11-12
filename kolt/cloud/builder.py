@@ -272,6 +272,21 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                                                    hosts=[],
                                                    ips=[])
 
+        # calico seems to want access to a key value store (etcd),so we need
+        # client certificates for nodes, too.
+        # TODO: do we want this for security reasons? Do we want to have
+        # ONE etcd with kubernetes information and calico onformation?
+        # What can a worker node read/write? Feels somewhat fishy...
+        calico_etcd_client = CertBundle.create_signed(ca_bundle=ca_bundle,
+                                                      country="",  # country
+                                                      state="",  # state
+                                                      locality="",  # locality
+                                                      orga="system:masters",  # orga
+                                                      unit="",  # unit
+                                                      name="calico-etcd-client",
+                                                      hosts=[],
+                                                      ips=[])
+
         for host, ip in zip(names, ips):
             peer = CertBundle.create_signed(ca_bundle,
                                             "",  # country
@@ -297,6 +312,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             yield {'%s-server' % host: server, '%s-peer' % host: peer}
 
         yield {'apiserver-etcd-client': api_etcd_client}
+        yield {'calico_etcd_client': calico_etcd_client}
         yield {'etcd_ca': ca_bundle}
 
     def run(self, config):  # pylint: disable=too-many-locals
@@ -334,9 +350,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         cluster_ips.append(lb_ip)
         certs = create_certs(config, cluster_host_names, cluster_ips)
+
+        # generate etcd certifcates for control plane
         etcd_certs = list(self.create_etcd_certs([host.name for host in cp_hosts],
                                                  [host.ip_address for host in
-                                                  cp_hosts]))
+                                                 cp_hosts]))
+
         for item in etcd_certs:
             certs.update(item)
 
@@ -378,8 +397,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             etcd_endpoints = ",".join(
                 "https://%s:%d" % (host.ip_address, 2379)
                 for host in cp_hosts)
-            k8s.apply_calico(b64_key(certs["k8s"].key),
-                             b64_cert(certs["k8s"].cert),
-                             b64_cert(certs["ca"].cert),
+            k8s.apply_calico(b64_key(certs["calico_etcd_client"].key),
+                             b64_cert(certs["calico_etcd_client"].cert),
+                             b64_cert(certs["etcd_ca"].cert),
                              etcd_endpoints)
             k8s.apply_kube_dns()
