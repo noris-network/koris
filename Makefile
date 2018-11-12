@@ -229,7 +229,7 @@ security-checks:
 	kubectl run --kubeconfig=${KUBECONFIG} --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
 		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
 
-
+update-config: KEY ?= kube  ## create a test configuration file
 update-config:
 	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
@@ -243,8 +243,8 @@ clean-cluster: update-config
 clean-all:
 	kolt destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
-	rm ${KUBECONFIG}
-	rm -R certs-koris-pipe-line-${CLUSTER_NAME}
+	rm -fv ${KUBECONFIG}
+	rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)

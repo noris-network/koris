@@ -26,7 +26,8 @@ from kolt.cloud import OpenStackAPI
 from kolt.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
 from kolt.util.util import (get_logger, host_names,
                             retry)
-LOGGER = get_logger(__name__)
+import logging
+LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
 def remove_cluster(config, nova, neutron, cinder):
@@ -190,7 +191,6 @@ class Instance:
         """stop and terminate an instance"""
         try:
             server = self.nova.servers.find(name=self.name)
-            server.delete()
             nics = [nic for nic in server.interface_list()]
             server.delete()
             list(netclient.delete_port(nic.id) for nic in nics)
@@ -219,6 +219,8 @@ class LoadBalancer:  # pragma: no coverage
         # these attributes are set after create
         self._id = None
         self._subnet_id = None
+        self._data = None
+        self._existing_floating_ip = None
 
     async def configure(self, client, master_ips):
         """
@@ -228,20 +230,63 @@ class LoadBalancer:  # pragma: no coverage
             master_ips (list): A list of the master IP addresses
 
         """
+        if not self._data['listeners']:
+            listener = self._add_listener(client)
+            listener_id = listener["listener"]['id']
+            LOGGER.info("Added listener ...")
+        else:
+            LOGGER.info("Reusing listener ...")
+            listener_id = self._data['listeners'][0]['id']
 
-        listener = self._add_listener(client)
-        LOGGER.info("added listener ...")
+        if not self._data['pools']:
+            pool = self._add_pool(client, listener_id)
+            LOGGER.info("Added pool ...")
+        else:
+            LOGGER.info("Reusing pool ...")
+            LOGGER.info("Removing all members ...")
+            pool = client.list_lbaas_pools(id=self._data['pools'][0]['id'])
+            pool = pool['pools'][0]
+            for member in pool['members']:
+                self._del_member(client, member['id'], pool['id'])
 
-        listener_id = listener["listener"]['id']
+        self._add_members(client, pool['id'], master_ips)
+        if pool.get('healthmonitor_id'):
+            LOGGER.info("Reusing existing health monitor ...")
+        else:
+            self._add_health_monitor(client, pool['id'])
+            LOGGER.info("Added health monitor ...")
 
-        pool = self._add_pool(client, listener_id)
+    def get_or_create(self, client, provider='octavia'):
+        """
+        find if a load balancer exists
+        """
+        lb = client.list_lbaas_loadbalancers(retrieve_all=True,
+                                             name=self.name)['loadbalancers']
+        if not lb or 'DELETE' in lb[0]['provisioning_status']:
+            lb, fip_addr = self.create(client, provider=provider)
+        else:
+            LOGGER.info("Reusing an existing loadbalancer")
+            self._existing_floating_ip = None
+            fip_addr = self._floating_ip_address(client, lb[0])
+            LOGGER.info("Loadbalancer IP: %s", fip_addr)
+            lb = lb[0]
+            self._id = lb['id']
+            self._subnet_id = lb['vip_subnet_id']
+            self._data = lb
 
-        LOGGER.info("added pool ...")
+        return lb, fip_addr
 
-        self._add_health_monitor(client, pool['pool']['id'])
-        LOGGER.info("added health monitor ...")
-
-        self._add_members(client, pool['pool']['id'], master_ips)
+    def _floating_ip_address(self, client, lb):
+        floatingips = client.list_floatingips(retrieve_all=True,
+                                              port_id=lb['vip_port_id'])
+        if floatingips['floatingips']:
+            self._existing_floating_ip = floatingips[
+                'floatingips'][0]['floating_ip_address']
+            fip_addr = self._existing_floating_ip
+        else:
+            fip_addr = self._associate_floating_ip(
+                client, lb)
+        return fip_addr
 
     def create(self, client, provider='octavia'):
         """
@@ -269,13 +314,13 @@ class LoadBalancer:  # pragma: no coverage
                                           }})
         self._id = lb['loadbalancer']['id']
         self._subnet_id = lb['loadbalancer']['vip_subnet_id']
+        self._data = lb['loadbalancer']
         LOGGER.info("created loadbalancer ...")
 
         fip_addr = None
-
         if self.floatingip:
             fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
-        return lb, fip_addr
+        return lb['loadbalancer'], fip_addr
 
     @retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
     def delete(self, client):
@@ -307,31 +352,35 @@ class LoadBalancer:  # pragma: no coverage
         self._del_loadbalancer(client)
 
     def _associate_floating_ip(self, client, loadbalancer):
-
+        fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
             valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
                                 self.floatingip)
-            # TODO: allow re-using a floating IP
-            return None
+            if self._existing_floating_ip == self.floatingip:
+                return self._existing_floating_ip
 
-        fips = client.list_floatingips()['floatingips']
-        if fips:
-            fnet_id = fips[0]['floating_network_id']  # noqa
-        else:
-            raise ValueError(
-                "Please create a floating ip and specify it in the configuration file")  # noqa
-        new_fip = client.create_floatingip(
-            {'floatingip': {'project_id': loadbalancer['tenant_id'],
-                            'floating_network_id': fnet_id}})['floatingip']
+            fip = client.list_floatingips(
+                floating_ip_address=self.floatingip)['floatingips']
+            fip = fip[0]
+        if not fip:
+            fips = client.list_floatingips()['floatingips']
+            if not fips:
+                raise ValueError(
+                    "Please create a floating ip and specify it in the configuration file")  # noqa
 
-        client.update_floatingip(new_fip['id'],
+            fnet_id = fips[0]['floating_network_id']
+            fip = client.create_floatingip(
+                {'floatingip': {'project_id': loadbalancer['tenant_id'],
+                                'floating_network_id': fnet_id}})['floatingip']
+
+        client.update_floatingip(fip['id'],
                                  {'floatingip':
                                   {'port_id': loadbalancer['vip_port_id']}})
 
         LOGGER.info("Loadbalancer external IP: %s",
-                    new_fip['floating_ip_address'])
+                    fip['floating_ip_address'])
 
-        return new_fip['floating_ip_address']
+        return fip['floating_ip_address']
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=30, backoff=0.8)
     def _add_listener(self, client):
@@ -355,7 +404,7 @@ class LoadBalancer:  # pragma: no coverage
                       "name": "%s-pool" % self.name},
              })
 
-        return pool
+        return pool['pool']
 
     @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1,
            logger=LOGGER.debug)
@@ -423,6 +472,10 @@ class LoadBalancer:  # pragma: no coverage
     def _del_loadbalancer(self, client):
         client.delete_loadbalancer(self._id)
         LOGGER.info("Deleted loadbalancer...")
+
+    @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10)
+    def _del_member(self, client, member_id, pool_id):
+        client.delete_lbaas_member(member_id, pool_id)
 
 
 class SecurityGroup:
@@ -632,11 +685,10 @@ def distribute_host_zones(hosts, zones):
     if len(zones) == len(hosts):
         return list(zip(hosts, zones))
 
-    end = len(zones) + 1 if len(zones) % 2 else len(zones)
-    host_zones = list(zip([hosts[i:i + end] for i in
-                           range(0, len(hosts), end)],
-                          zones))
-    return host_zones
+    n = len(zones)
+    hosts = [hosts[start::len(zones)] for start in range(n)]
+
+    return list(zip(hosts, zones))
 
 
 class OSClusterInfo:  # pylint: disable=too-many-instance-attributes

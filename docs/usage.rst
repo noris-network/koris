@@ -32,7 +32,7 @@ Get started
 
 .. code:: shell
 
-   $ pip install https://gitlab.noris.net/PI/kolt/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
+   $ pip3 install https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
 
 5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
    If you exist the virtual environment, you need to activate it again as described
