@@ -5,6 +5,7 @@ stages:
  - build-cluster
  - integration-test
  - security-checks
+ - compliance-checks
  - cleanup
  - pages
 
@@ -92,6 +93,21 @@ security-checks:
       - "koris-pipe-line-*-admin.conf"
       - "tests/koris_test.yml"
     expire_in: 1 week
+
+compliance-checks:
+  stage: compliance-checks
+  image: oz123/koris-alpine:0.1.1
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - "make compliance-checks"
+  only:
+  - KOLT-19-test-certified-kubernetes
+  - master
 
 cleanup:
   stage: cleanup
