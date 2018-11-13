@@ -230,6 +230,19 @@ You can run make tragets with::
    $ make clean-after-integration-test REV=HEAD~1
 
 
+Continous Integration
++++++++++++++++++++++
+
+With every ``git push`` a complete test suite is running in `gitlab.noris.net`_.
+This test suite builds a complete Kubernetes cluster in noris.cloud. To access
+the resources of this cluster you need an OpenStack account in noris.cloud, and
+your user has to be added to the project ``korispipeline``.
+Make sure you have your user added to the project, talk to the OpenStack team.
+
+
+
+
 .. _Kolt Channel: https://hipchat.noris.de/chat/room/664
 .. _JIRA Kolt: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KOLT
 .. _PBR: https://docs.openstack.org/pbr/latest/
+.. _gitlab.noris.net: https://gitlab.noris.net/PI/koris/pipelines
