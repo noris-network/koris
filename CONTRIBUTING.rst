@@ -15,7 +15,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at our `JIRA Kolt`_ project.
+Report bugs at our `JIRA Koris`_ project.
 
 If you are reporting a bug, please include:
 
@@ -243,6 +243,6 @@ Make sure you have your user added to the project, talk to the OpenStack team.
 
 
 .. _Kolt Channel: https://hipchat.noris.de/chat/room/664
-.. _JIRA Kolt: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KOLT
+.. _JIRA Koris: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KORIS
 .. _PBR: https://docs.openstack.org/pbr/latest/
 .. _gitlab.noris.net: https://gitlab.noris.net/PI/koris/pipelines
