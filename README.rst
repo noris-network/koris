@@ -128,7 +128,7 @@ Get started
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-9. To create a cluster create a cluster configuration file (see `example <https://gitlab.noris.net/PI/kolt/blob/dev/docs/example.yml>`_.
+9. To create a cluster create a cluster configuration file (see `example <https://gitlab.noris.net/PI/koris/blob/dev/docs/example-config.yml>`_.
    Pass this file on the shell to the k8s subcommand
 
 .. code:: shell
