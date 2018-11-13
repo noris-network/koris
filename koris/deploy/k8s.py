@@ -11,7 +11,7 @@ import yaml
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from pkg_resources import resource_filename, Requirement
 
-from kolt.util.util import (get_logger, retry)
+from koris.util.util import (get_logger, retry)
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
@@ -28,7 +28,7 @@ class K8S:
 
         self.config = config
         self.manifest_path = manifest_path
-        self.get_manifest = partial(resource_filename, Requirement('kolt'))
+        self.get_manifest = partial(resource_filename, Requirement('koris'))
         k8sconfig.load_kube_config(config)
         self.client = k8sclient.CoreV1Api()
 

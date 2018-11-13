@@ -18,11 +18,11 @@ n-etcds: 3
 keypair: 'youruser'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
-# you should currently use kolt-base
+# you should currently use koris-base
 # this image includes all k8s binaries and a special kernel
 # optimized for KVM (this image is built from
 # ubuntu-16.04-minimal-cloudimg-amd64-disk1.img
-image: "ubuntu-16.04-kolt-base"
+image: "ubuntu-16.04-koris-base"
 #image: "Ubuntu Xenial Server Cloudimg"
 loadbalancer:
 # set this to true if you

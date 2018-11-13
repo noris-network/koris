@@ -11,16 +11,16 @@ import uuid
 import sys
 import time
 
-from kolt.deploy.k8s import K8S
+from koris.deploy.k8s import K8S
 
-from kolt.cli import write_kubeconfig
-from kolt.provision.cloud_init import MasterInit, NodeInit
-from kolt.ssl import create_certs, b64_key, b64_cert, create_key, create_ca, CertBundle
-from kolt.util.hue import (  # pylint: disable=no-name-in-module
+from koris.cli import write_kubeconfig
+from koris.provision.cloud_init import MasterInit, NodeInit
+from koris.ssl import create_certs, b64_key, b64_cert, create_key, create_ca, CertBundle
+from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
-from kolt.util.util import (get_logger,
-                            get_token_csv)
+from koris.util.util import (get_logger,
+                             get_token_csv)
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
@@ -391,7 +391,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                                           True)
             LOGGER.info("Waiting for K8S API server to launch")
 
-            manifest_path = os.path.join("kolt", "deploy", "manifests")
+            manifest_path = os.path.join("koris", "deploy", "manifests")
             k8s = K8S(kubeconfig, manifest_path)
 
             while not k8s.is_ready:

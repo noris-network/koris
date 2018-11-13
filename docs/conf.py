@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# kolt documentation build configuration file, created by
+# koris documentation build configuration file, created by
 # sphinx-quickstart on Fri Jun  9 13:47:02 2017.
 #
 # This file is execfile()d with the current directory set to its
@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath('..'))
 
-import kolt
+import koris
 
 # -- General configuration ---------------------------------------------
 
@@ -49,7 +49,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'kolt'
+project = u'koris'
 copyright = u"2018, Oz Tiram"
 author = u"Oz Tiram"
 
@@ -58,7 +58,7 @@ author = u"Oz Tiram"
 # the built documents.
 #
 # The short X.Y version.
-version = kolt.__version__
+version = koris.__version__
 # The full version, including alpha/beta/rc tags.
 release = subprocess.check_output("git describe", shell=True).decode().strip()
 
@@ -103,7 +103,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'koltdoc'
+htmlhelp_basename = 'korisdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------
@@ -130,8 +130,8 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'kolt.tex',
-     u'kolt Documentation',
+    (master_doc, 'koris.tex',
+     u'koris Documentation',
      u'Oz Tiram', 'manual'),
 ]
 
@@ -141,8 +141,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'kolt',
-     u'kolt Documentation',
+    (master_doc, 'koris',
+     u'koris Documentation',
      [author], 1)
 ]
 
@@ -153,10 +153,10 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'kolt',
-     u'kolt Documentation',
+    (master_doc, 'koris',
+     u'koris Documentation',
      author,
-     'kolt',
+     'koris',
      'One line description of project.',
      'Miscellaneous'),
 ]

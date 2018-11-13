@@ -6,11 +6,11 @@ import yaml
 
 import pytest
 
-from kolt.provision.cloud_init import MasterInit, NodeInit
-from kolt.ssl import create_certs, CertBundle, create_key, create_ca
-from kolt.cloud.openstack import OSCloudConfig
-from kolt.util.util import (get_kubeconfig_yaml,
-                            get_token_csv)
+from koris.provision.cloud_init import MasterInit, NodeInit
+from koris.ssl import create_certs, CertBundle, create_key, create_ca
+from koris.cloud.openstack import OSCloudConfig
+from koris.util.util import (get_kubeconfig_yaml,
+                             get_token_csv)
 
 
 class DummyServer:  # pylint: disable=too-few-public-methods
@@ -31,7 +31,7 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in etcd_host_list]))
 
 
-with patch('kolt.cloud.openstack.read_os_auth_variables') as p:
+with patch('koris.cloud.openstack.read_os_auth_variables') as p:
     p.return_value = dict(username="kubepipeline", password="s9kr9t",
                           auth_url="keystone.myopenstack.de",
                           project_id="f4c0a6de561e487d8ba5d1cc3f1042e8",
@@ -190,7 +190,7 @@ def test_node_init(ci_node):
     assert re.match(r'.*?%s=\d+\.\d+\.\d+\.\d+\n.*' % (node_ip_var,),
                     kubelet_env_config[0]['content'])
 
-    bootstrap_node = open('kolt/provision/userdata/bootstrap-k8s-node-ubuntu-16.04.sh',
+    bootstrap_node = open('koris/provision/userdata/bootstrap-k8s-node-ubuntu-16.04.sh',
                           'r').read()
     pat = re.compile(r'.*?cat << EOF > /etc/systemd/system/kubelet.service(.*?)EOF.*',
                      flags=re.DOTALL)

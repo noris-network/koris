@@ -3,14 +3,14 @@ cli.py
 ======
 
 misc functions to interact with the cluster, usually called from
-``kolt.kolt.Kolt``.
+``koris.koris.Kolt``.
 
 Don't use directly
 """
 import sys
 
-from kolt.util.hue import red, yellow  # pylint: disable=no-name-in-module
-from kolt.cloud.openstack import remove_cluster
+from koris.util.hue import red, yellow  # pylint: disable=no-name-in-module
+from koris.cloud.openstack import remove_cluster
 from .util.util import get_kubeconfig_yaml, get_logger
 
 LOGGER = get_logger(__name__)

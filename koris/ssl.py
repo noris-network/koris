@@ -13,7 +13,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
-from kolt.util.util import get_logger
+from koris.util.util import get_logger
 
 LOGGER = get_logger(__name__)
 

@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 import gitlab
 
 
-from kolt.cloud.openstack import get_clients
+from koris.cloud.openstack import get_clients
 
 _, _, cinder = get_clients()
 

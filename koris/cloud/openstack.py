@@ -22,10 +22,10 @@ from neutronclient.common.exceptions import StateInvalidClient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from kolt.cloud import OpenStackAPI
-from kolt.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
-from kolt.util.util import (get_logger, host_names,
-                            retry)
+from koris.cloud import OpenStackAPI
+from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
+from koris.util.util import (get_logger, host_names,
+                             retry)
 import logging
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 

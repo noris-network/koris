@@ -1,5 +1,5 @@
 """
-kolt
+koris
 ====
 
 The main entry point for the kubernetes cluster build.
@@ -15,8 +15,8 @@ import pkg_resources
 
 from mach import mach1
 
-from kolt.cloud.openstack import get_clients
-from kolt.cloud.openstack import BuilderError
+from koris.cloud.openstack import get_clients
+from koris.cloud.openstack import BuilderError
 from .cli import delete_cluster
 
 from .util.hue import red, yellow  # pylint: disable=no-name-in-module
@@ -27,7 +27,7 @@ from .cloud.builder import ClusterBuilder
 LOGGER = get_logger(__name__)
 
 
-__version__ = pkg_resources.get_distribution('kolt').version
+__version__ = pkg_resources.get_distribution('koris').version
 
 
 @mach1()
@@ -96,7 +96,7 @@ class Kolt:
 
 def main():
     """
-    run and execute kolt
+    run and execute koris
     """
     k = Kolt()
     # pylint misses the fact that Kolt is decorater with mach.

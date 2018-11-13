@@ -14,15 +14,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pkg_resources import (Requirement, resource_filename)
 
-from kolt.ssl import (b64_key, b64_cert)
-from kolt.util.util import (encryption_config_tmpl,
-                            calicoconfig, get_kubeconfig_yaml,
-                            get_logger)
+from koris.ssl import (b64_key, b64_cert)
+from koris.util.util import (encryption_config_tmpl,
+                             calicoconfig, get_kubeconfig_yaml,
+                             get_logger)
 
 LOGGER = get_logger(__name__)
 
 
-BOOTSTRAP_SCRIPTS_DIR = "/kolt/provision/userdata/"
+BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 
 class BaseInit:
@@ -69,7 +69,7 @@ class BaseInit:
 
         # process bootstrap script and generic cloud-init file
         for item in ['generic', k8s_bootstrap]:
-            fh = open(resource_filename(Requirement('kolt'),
+            fh = open(resource_filename(Requirement('koris'),
                                         os.path.join(BOOTSTRAP_SCRIPTS_DIR,
                                                      item)))
             # we currently blindly assume the first line is a mimetype

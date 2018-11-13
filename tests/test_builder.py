@@ -1,5 +1,5 @@
 """
-Test kolt.cloud.builder
+Test koris.cloud.builder
 """
 import base64
 import json
@@ -8,11 +8,11 @@ import re
 import uuid
 from unittest import mock
 
-import kolt.cloud.openstack
+import koris.cloud.openstack
 
-from kolt.cloud.openstack import OSClusterInfo
-from kolt.cloud.builder import NodeBuilder, ControlPlaneBuilder
-from kolt.ssl import create_certs
+from koris.cloud.openstack import OSClusterInfo
+from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
+from koris.ssl import create_certs
 
 
 DUMMYPORT = {"port": {"admin_state_up": True,
@@ -82,7 +82,7 @@ def test_node_builder(os_info):
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "_exists", False), nodes))
-    assert isinstance(nodes[0], kolt.cloud.openstack.Instance)
+    assert isinstance(nodes[0], koris.cloud.openstack.Instance)
     assert nodes[0].name == 'node-1-test'
 
     certs = create_certs(CONFIG, ['node-1-test'], ['192.168.1.103'],
@@ -122,5 +122,5 @@ def test_controlplane_builder(os_info):
                                                                 "10.32.192.102")) # noqa
     cpb = ControlPlaneBuilder(CONFIG, os_info)
     masters = cpb.get_masters()
-    assert isinstance(masters[0], kolt.cloud.openstack.Instance)
+    assert isinstance(masters[0], koris.cloud.openstack.Instance)
     assert masters[0].name == 'master-1-test'

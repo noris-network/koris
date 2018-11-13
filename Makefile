@@ -72,10 +72,10 @@ clean-test: ## remove test and coverage artifacts
 lint: pylint flake8  ## check style with pylint and flake8
 
 pylint: ## check style with pylint
-	pylint --rcfile=.pylintrc kolt || pylint-exit $$?
+	pylint --rcfile=.pylintrc koris || pylint-exit $$?
 
 flake8: ## check style with flake8
-	flake8 kolt tests
+	flake8 koris tests
 
 test: ## run tests quickly with the default Python
 	py.test
@@ -87,7 +87,7 @@ coverage: ## check code coverage quickly with the default Python
 	#$(BROWSER) htmlcov/index.html
 
 docs: ## generate Sphinx HTML documentation, including API docs
-	sphinx-apidoc -o docs/ kolt
+	sphinx-apidoc -o docs/ koris
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
@@ -142,7 +142,7 @@ compliance-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
-	kolt k8s tests/koris_test.yml
+	koris k8s tests/koris_test.yml
 
 
 show-nodes:
@@ -253,10 +253,10 @@ update-config:
 
 
 clean-cluster: update-config
-	kolt destroy tests/koris_test.yml --force
+	koris destroy tests/koris_test.yml --force
 
 clean-all:
-	kolt destroy tests/koris_test.yml --force
+	koris destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm -fv ${KUBECONFIG}
 	rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}

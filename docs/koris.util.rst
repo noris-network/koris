@@ -1,21 +1,21 @@
-kolt\.util package
+koris\.util package
 ==================
 
 Submodules
 ----------
 
-kolt\.util\.hue module
+koris\.util\.hue module
 ----------------------
 
-.. automodule:: kolt.util.hue
+.. automodule:: koris.util.hue
     :members:
     :undoc-members:
     :show-inheritance:
 
-kolt\.util\.util module
+koris\.util\.util module
 -----------------------
 
-.. automodule:: kolt.util.util
+.. automodule:: koris.util.util
     :members:
     :undoc-members:
     :show-inheritance:
@@ -24,7 +24,7 @@ kolt\.util\.util module
 Module contents
 ---------------
 
-.. automodule:: kolt.util
+.. automodule:: koris.util
     :members:
     :undoc-members:
     :show-inheritance:

@@ -6,8 +6,8 @@
 import uuid
 import yaml
 
-from kolt.util.util import host_names
-from kolt.util.util import get_kubeconfig_yaml
+from koris.util.util import host_names
+from koris.util.util import get_kubeconfig_yaml
 
 test_cluster = [("master-%d-k8s" % i,
                  "10.32.192.10%d" % i) for i in range(1, 4)]
