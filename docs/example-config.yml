@@ -24,10 +24,7 @@ user_data: 'cloud-init-parts/generic'
 # ubuntu-16.04-minimal-cloudimg-amd64-disk1.img
 image: "ubuntu-16.04-koris-base"
 #image: "Ubuntu Xenial Server Cloudimg"
-loadbalancer:
-# set this to true if you
-# want the load balancer to have a floating IP
- floatingip: false
+# loadbalancer:
 # set this to if you want to add this name to SAN certificates
 # this is not yet implemented
 # domain-name: foo.bar.noris.de

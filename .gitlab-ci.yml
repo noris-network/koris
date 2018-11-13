@@ -129,7 +129,6 @@ dev-docs:
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
-  - git checkout master
   - make -C docs html
   - mv docs/_build/html/ public/
   - git checkout $CI_COMMIT_REF_NAME
@@ -156,5 +155,4 @@ pages:
     - public
   only:
     - tags
-    - triggers
     - master
