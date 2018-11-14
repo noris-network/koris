@@ -8,7 +8,7 @@ text/x-shellscript
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 
-K8S_VERSION=v1.10.4
+K8S_VERSION=v1.11.4
 # Specify the Kubernetes version to use.
 # can only use docker 17.03.X
 # https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md
