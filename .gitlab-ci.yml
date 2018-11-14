@@ -130,9 +130,6 @@ dev-docs:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
   - make -C docs html
-  - mv docs/_build/html/ public/
-  - git checkout -f $CI_COMMIT_REF_NAME
-  - make -C docs html
   - mv docs/_build/html/ public/dev/
   artifacts:
     paths:
