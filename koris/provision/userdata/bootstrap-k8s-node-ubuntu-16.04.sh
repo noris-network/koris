@@ -150,6 +150,7 @@ ExecStart=/usr/bin/kubelet \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
   --eviction-pressure-transition-period 30s \\
   --cert-dir=/var/lib/kubelet \\
+  --cluster-domain=cluster.local \\
   --v=2 \\
   --node-ip=\${NODE_IP}
 
