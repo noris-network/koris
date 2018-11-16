@@ -5,7 +5,7 @@ PY ?= python3
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = $(PY) -msphinx
-SPHINXPROJ    = kolt
+SPHINXPROJ    = koris
 SOURCEDIR     = .
 BUILDDIR      = _build
 

@@ -8,7 +8,7 @@ text/x-shellscript
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 
-K8S_VERSION=v1.10.4
+K8S_VERSION=v1.11.4
 # Specify the Kubernetes version to use.
 # can only use docker 17.03.X
 # https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md
@@ -130,6 +130,7 @@ After=docker.service
 Requires=docker.service
 
 [Service]
+EnvironmentFile=/etc/systemd/system/kubelet.env
 ExecStart=/usr/bin/kubelet \\
   --allow-privileged=true \\
   --cluster-dns=10.32.0.10  \\
@@ -149,7 +150,9 @@ ExecStart=/usr/bin/kubelet \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
   --eviction-pressure-transition-period 30s \\
   --cert-dir=/var/lib/kubelet \\
-  --v=2
+  --cluster-domain=cluster.local \\
+  --v=2 \\
+  --node-ip=\${NODE_IP}
 
 Restart=on-failure
 RestartSec=5

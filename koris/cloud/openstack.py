@@ -22,10 +22,10 @@ from neutronclient.common.exceptions import StateInvalidClient
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from kolt.cloud import OpenStackAPI
-from kolt.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
-from kolt.util.util import (get_logger, host_names,
-                            retry)
+from koris.cloud import OpenStackAPI
+from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
+from koris.util.util import (get_logger, host_names,
+                             retry)
 import logging
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
@@ -517,8 +517,9 @@ class SecurityGroup:
             a security group dict
         """
         name = "%s-sec-group" % name
-        secgroup = next(self.client.list_security_groups(
-            retrieve_all=False, **{'name': name}))['security_groups']
+        secgroup = self.client.list_security_groups(
+            retrieve_all=False, **{'name': name})
+        secgroup = next(secgroup)['security_groups']
 
         if secgroup:
             self._exists = True
@@ -684,11 +685,10 @@ def distribute_host_zones(hosts, zones):
     if len(zones) == len(hosts):
         return list(zip(hosts, zones))
 
-    end = len(zones) + 1 if len(zones) % 2 else len(zones)
-    host_zones = list(zip([hosts[i:i + end] for i in
-                           range(0, len(hosts), end)],
-                          zones))
-    return host_zones
+    n = len(zones)
+    hosts = [hosts[start::len(zones)] for start in range(n)]
+
+    return list(zip(hosts, zones))
 
 
 class OSClusterInfo:  # pylint: disable=too-many-instance-attributes

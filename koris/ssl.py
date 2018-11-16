@@ -13,7 +13,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
-from kolt.util.util import get_logger
+from koris.util.util import get_logger
 
 LOGGER = get_logger(__name__)
 
@@ -93,11 +93,11 @@ def create_ca(private_key, public_key, country,
         datetime.datetime.utcnow() + datetime.timedelta(days=1800))
 
     cert = cert.add_extension(
-        x509.KeyUsage(False, False, False, False, False, True,
-                      True, False, False),
+        x509.KeyUsage(True, False, True, False, False, True,
+                      False, False, False),
         critical=True)
 
-    cert = cert.add_extension(x509.BasicConstraints(True, 2), critical=True)
+    cert = cert.add_extension(x509.BasicConstraints(True, None), critical=True)
     cert = cert.add_extension(
         x509.SubjectKeyIdentifier.from_public_key(public_key),
         critical=False)
@@ -129,15 +129,24 @@ def create_certificate(ca_bundle, public_key, country,
     Return:
         ssl certificate object
     """
+    attributes = []
 
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_province),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-        x509.NameAttribute(NameOID.COMMON_NAME, name),
-    ])
+    if country:
+        attributes.append(x509.NameAttribute(NameOID.COUNTRY_NAME, country))
+    if state_province:
+        attributes.append(x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME,
+                                             state_province))
+    if locality:
+        attributes.append(x509.NameAttribute(NameOID.LOCALITY_NAME, locality))
+    if orga:
+        attributes.append(x509.NameAttribute(NameOID.ORGANIZATION_NAME, orga))
+    if unit:
+        attributes.append(x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME,
+                                             unit))
+    if name:
+        attributes.append(x509.NameAttribute(NameOID.COMMON_NAME, name))
+
+    subject = x509.Name(attributes)
 
     cert = x509.CertificateBuilder().subject_name(
         subject
@@ -288,13 +297,14 @@ class CertBundle:
         self.key = key
         self.cert = cert
 
-    def save(self, name, directory):
+    def save(self, name, directory, key_suffix="-key.pem",
+             cert_suffix=".pem"):
         """
         save a certificate bundle to the file system
         """
         write_key(self.key,
-                  filename=os.path.join(directory, name + "-key.pem"))
-        write_cert(self.cert, os.path.join(directory, name + ".pem"))
+                  filename=os.path.join(directory, name + key_suffix))
+        write_cert(self.cert, os.path.join(directory, name + cert_suffix))
 
 
 def read_cert(cert):  # pragma: no coverage

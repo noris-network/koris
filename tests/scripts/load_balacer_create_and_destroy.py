@@ -6,8 +6,8 @@ in OpenStack
 import asyncio
 import os
 
-from kolt.cloud.builder import get_clients
-from kolt.cloud.openstack import LoadBalancer
+from koris.cloud.builder import get_clients
+from koris.cloud.openstack import LoadBalancer
 _, CLIENT, _ = get_clients()
 
 

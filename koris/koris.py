@@ -1,5 +1,5 @@
 """
-kolt
+koris
 ====
 
 The main entry point for the kubernetes cluster build.
@@ -15,8 +15,8 @@ import pkg_resources
 
 from mach import mach1
 
-from kolt.cloud.openstack import get_clients
-from kolt.cloud.openstack import BuilderError
+from koris.cloud.openstack import get_clients
+from koris.cloud.openstack import BuilderError
 from .cli import delete_cluster
 
 from .util.hue import red, yellow  # pylint: disable=no-name-in-module
@@ -27,7 +27,7 @@ from .cloud.builder import ClusterBuilder
 LOGGER = get_logger(__name__)
 
 
-__version__ = pkg_resources.get_distribution('kolt').version
+__version__ = pkg_resources.get_distribution('koris').version
 
 
 @mach1()
@@ -56,17 +56,6 @@ class Kolt:
         config - configuration file
         inventory - invetory file to write
         """
-        self.k8s(config)
-
-    def k8s(self, config):  # pylint: disable=no-self-use
-        """
-        Bootstrap a Kubernetes cluster (deprecated)
-
-        config - configuration file
-        inventory - invetory file to write
-        """
-        print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
-        print(yellow("Use `apply` instead."))
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
@@ -78,6 +67,17 @@ class Kolt:
             print(red(err))
             delete_cluster(config, self.nova, self.neutron,
                            True)
+
+    def k8s(self, config):  # pylint: disable=no-self-use
+        """
+        Bootstrap a Kubernetes cluster (deprecated)
+
+        config - configuration file
+        inventory - invetory file to write
+        """
+        print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
+        print(yellow("Use `apply` instead."))
+        self.apply(config)
 
     def destroy(self, config: str, force: bool = False):
         """
@@ -96,7 +96,7 @@ class Kolt:
 
 def main():
     """
-    run and execute kolt
+    run and execute koris
     """
     k = Kolt()
     # pylint misses the fact that Kolt is decorater with mach.

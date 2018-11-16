@@ -1,9 +1,9 @@
-"""Tests for the kolt.ssl class functionality"""
+"""Tests for the koris.ssl class functionality"""
 
 from shutil import rmtree
 from cryptography.x509.oid import ExtensionOID
 from cryptography.x509 import DNSName, IPAddress
-from kolt.ssl import create_certs, read_cert
+from koris.ssl import create_certs, read_cert
 
 
 def test_sslcertcreation():

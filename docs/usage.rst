@@ -11,7 +11,7 @@ Pre-requisits
 
 Get started
 ~~~~~~~~~~~
-1. Create a local virtual environment for kolt (using your favorite tool),
+1. Create a local virtual environment for koris (using your favorite tool),
    for example the standard Python has a simple virtual environment tool:
 
 .. code:: shell
@@ -32,7 +32,7 @@ Get started
 
 .. code:: shell
 
-   $ pip install https://gitlab.noris.net/PI/kolt/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
+   $ pip3 install https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
 
 5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
    If you exist the virtual environment, you need to activate it again as described
@@ -50,8 +50,8 @@ Get started
 
    .. code:: shell
 
-      $ kolt -h
-      usage: kolt [-h] {certs,destroy,k8s,kubespray,oc} ...
+      $ koris -h
+      usage: koris [-h] {certs,destroy,k8s,kubespray,oc} ...
 
       positional arguments:
         {certs,destroy,k8s,kubespray,oc}
@@ -67,8 +67,8 @@ Get started
 
    .. code:: shell
 
-      $ kolt destroy -h
-      usage: kolt destroy [-h] config
+      $ koris destroy -h
+      usage: koris destroy [-h] config
 
       positional arguments:
       config
@@ -83,15 +83,15 @@ Get started
 
    .. code:: shell
 
-      curl https://gitlab.noris.net/PI/kolt/-/archive/v<LATEST_TAG>/kolt-v<LATEST_TAG>.zip
-      scp kolt-v<LATEST_TAG>.zip remotehost:~/
+      curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
+      scp koris-v<LATEST_TAG>.zip remotehost:~/
 
    repeat the steps to create and activate a virtual environment, and the install
    the package with pip directly:
 
    .. code:: shell
 
-      $ pip install kolt-v<LATEST_TAG>.zip
+      $ pip install koris-v<LATEST_TAG>.zip
 
 8. Koris creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
@@ -102,9 +102,9 @@ Get started
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
    neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-9. To create a cluster create a cluster configuration file (see [example](https://gitlab.noris.net/PI/kolt/blob/dev/docs/k8s-machines-config.yml).
+9. To create a cluster create a cluster configuration file (see [example](https://gitlab.noris.net/PI/koris/blob/dev/docs/k8s-machines-config.yml).
    Pass this file on the shell to the k8s subcommand
 
 .. code:: shell
 
-   $ kolt k8s <your-cluster-config.yml>
+   $ koris k8s <your-cluster-config.yml>

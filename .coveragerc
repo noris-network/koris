@@ -1,6 +1,6 @@
 [run]
-source = kolt
-omit = tests/*, examples/*, setup.py, *__init__.py, kolt/cli.py, \
-  kolt/cloud/builder.py, \
-  kolt/deploy/k8s.py, \
-  kolt/kolt.py
+source = koris
+omit = tests/*, examples/*, setup.py, *__init__.py, koris/cli.py, \
+  koris/cloud/builder.py, \
+  koris/deploy/k8s.py, \
+  koris/koris.py
