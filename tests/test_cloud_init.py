@@ -163,7 +163,7 @@ def test_cloud_init(ci_master):
     config = ci_master.get_files_config()
     config = yaml.safe_load(config)
 
-    assert len(config['write_files']) == 18
+    assert len(config['write_files']) == 19
 
     etcd_host = test_cluster[0]
 
@@ -173,6 +173,25 @@ def test_cloud_init(ci_master):
     assert re.findall("%s=https://%s:%s" % (
         etcd_host.name, etcd_host.ip_address, 2380),
         etcd_env['content'])
+
+    # KORIS-68 Ensure koris.conf contains creation_date and version
+    koris_conf = [i for i in config['write_files'] if
+                  i['path'] == '/etc/kubernetes/koris.conf']
+
+    assert len(koris_conf) == 1
+
+    version_match = re.search(r'^koris_version=(.+)',
+                              koris_conf[0]['content'], flags=re.MULTILINE)
+
+    assert version_match
+    assert version_match.groups()[0]
+
+    creation_date_match = re.search(r'^creation_date=(.+)',
+                                    koris_conf[0]['content'],
+                                    flags=re.MULTILINE)
+
+    assert creation_date_match
+    assert creation_date_match.groups()[0]
 
 
 def test_node_init(ci_node):
