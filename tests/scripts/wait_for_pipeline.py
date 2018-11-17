@@ -23,6 +23,25 @@ def another_job_running():
     return sum([1 for lin in project.pipelines.list() if lin.attributes['status'] == 'running']) > 1  # noqa
 
 
+def can_i_run():
+    """
+    check if other jobs are not in step:
+        'build-cluster', 'integration-test', 'security-checks',
+        'compliance-checks'
+    """
+    running_pipelines = [lin for lin in project.pipelines.list() if
+                         lin.attributes['status'] == 'running']
+
+    running_pipelines = sorted(running_pipelines, key=lambda x: x.id)
+    myID = int(os.getenv("CI_PIPELINE_ID"))
+    print(myID)
+
+    if myID == running_pipelines[0].id:
+        return True
+    else:
+        return False
+
+
 def clean_resources():
     """
     Check if there are resources left over.
