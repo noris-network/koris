@@ -34,7 +34,6 @@ def can_i_run():
 
     running_pipelines = sorted(running_pipelines, key=lambda x: x.id)
     myID = int(os.getenv("CI_PIPELINE_ID"))
-    print(myID)
 
     if myID == running_pipelines[0].id:
         return True
@@ -61,11 +60,12 @@ def clean_resources():
                    lin.attributes['status'] == 'running']
 
     volumes = cinder.volumes.list()
-
+    print(volumes)
     volumes = [vol for vol in cinder.volumes.list()
                if not vol.name.endswith(running_ids)]
 
     for vol in volumes:
+        print(vol, vol.status)
         if vol.status != 'in-use':
             vol.delete()
 
@@ -74,15 +74,11 @@ clean_resources()
 
 while True:
     if can_i_run():
+        clean_resources()
+    else:
         print("Woha, another job is running ...", flush=True)
         print("I'm waiting ... ", flush=True)
         time.sleep(60)
-    if cinder.volumes.list():
-        print("There are some volumes left ...  ", flush=True)
-        print("please delete all volumes", flush=True)
-        time.sleep(60)
-    else:
-        break
 
 print("Awesome !!! no jobs and no volume found!")
 print("I will run that integration test now!")
