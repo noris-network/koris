@@ -62,7 +62,7 @@ def clean_resources():
     volumes = cinder.volumes.list()
     print(volumes)
     volumes = [vol for vol in cinder.volumes.list()
-               if not vol.name.endswith(running_ids)]
+               if not vol.name.endswith(tuple(running_ids))]
 
     for vol in volumes:
         print(vol, vol.status)
