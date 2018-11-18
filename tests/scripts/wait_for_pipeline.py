@@ -3,6 +3,8 @@ import os
 import time
 
 from urllib.parse import urlparse
+
+from cinderclient.exceptions import BadRequest
 import gitlab
 
 
@@ -19,10 +21,6 @@ gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
 project = gl.projects.get(os.getenv("CI_PROJECT_ID", 1260))
 
 
-def another_job_running():
-    return sum([1 for lin in project.pipelines.list() if lin.attributes['status'] == 'running']) > 1  # noqa
-
-
 def can_i_run():
     """
     check if other jobs are not in step:
@@ -33,8 +31,9 @@ def can_i_run():
                          lin.attributes['status'] == 'running']
 
     running_pipelines = sorted(running_pipelines, key=lambda x: x.id)
+    # print(running_pipelines)
     myID = int(os.getenv("CI_PIPELINE_ID"))
-
+    # print(myID)
     if myID == running_pipelines[0].id:
         return True
     else:
@@ -64,10 +63,16 @@ def clean_resources():
     volumes = [vol for vol in cinder.volumes.list()
                if not vol.name.endswith(tuple(running_ids))]
 
+    # TODO: shall we also look for machines and delete them???
     for vol in volumes:
         print(vol, vol.status)
         if vol.status != 'in-use':
-            vol.delete()
+            try:
+                vol.delete()
+            except BadRequest:
+                continue
+
+    print("Clean resources finished ...")
 
 
 clean_resources()
@@ -75,10 +80,12 @@ clean_resources()
 while True:
     if can_i_run():
         clean_resources()
+        break
     else:
         print("Woha, another job is running ...", flush=True)
         print("I'm waiting ... ", flush=True)
-        time.sleep(60)
+        time.sleep(os.getenv("GITLAB_POLL_TIME", 30))
+
 
 print("Awesome !!! no jobs and no volume found!")
 print("I will run that integration test now!")
