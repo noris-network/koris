@@ -132,6 +132,8 @@ dev-docs:
   - which sphinx-build
   - make -C docs html
   - ls docs
+  - mkdir -pv public/dev
+  - ls docs/_build
   - mv docs/_build/html/ public/dev/
   artifacts:
     paths:
