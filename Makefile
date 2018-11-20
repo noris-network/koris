@@ -277,7 +277,7 @@ security-checks:
 	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
 	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
 	echo "Running security checks for K8S worker nodes..."
-	kubectl run --kubeconfig=${KUBECONFIG} --rm  -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+	kubectl run --kubeconfig=${KUBECONFIG} --rm  kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
 		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
 
 update-config: KEY ?= kube  ## create a test configuration file
