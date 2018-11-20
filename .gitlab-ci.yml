@@ -130,6 +130,7 @@ dev-docs:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
   - make -C docs html
+  - pwd && ls
   - mv docs/_build/html/ public/dev/
   artifacts:
     paths:
