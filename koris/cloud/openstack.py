@@ -33,8 +33,6 @@ LOGGER = get_logger(__name__, level=logging.DEBUG)
 def remove_cluster(config, nova, neutron, cinder):
     """
     Delete a cluster from OpenStack
-
-    TODO: explicitly search for volumes and remove them.
     """
     cluster_info = OSClusterInfo(nova, neutron, cinder, config)
     cp_hosts = cluster_info.distribute_management()
@@ -59,7 +57,15 @@ def remove_cluster(config, nova, neutron, cinder):
                     connection.delete_port(port.id)
     connection.delete_security_group(
         '%s-sec-group' % config['cluster-name'])
+
+    # delete volumes
+
     loop.close()
+    volumes = [vol for vol in cinder.volumes.list()
+               if config['cluster-name'] in vol.name]
+    for vol in volumes:
+        if vol.status != 'in-use':
+            vol.delete()
 
 
 class BuilderError(Exception):
