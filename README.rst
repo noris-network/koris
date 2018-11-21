@@ -54,11 +54,11 @@ Get started
 3. you are now inside a virtual environment to leave it type `exit`
 
 4. To install koris, use a machine which has access to gitlab.noris.net
-   replace <LATEST_TAG> with latest tag, for example 0.4.1.
+   replace <LATEST_TAG> with latest tag, for example 0.7.2.
 
 .. code:: shell
 
-   $ pip install  -e git+git@gitlab.noris.net:PI/kolt.git@v<LATEST_TAG>#egg=kolt
+   $ pip3 install  -e git+git@gitlab.noris.net:PI/koris.git@v<LATEST_TAG>#egg=koris
 
 5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
    If you exist the virtual environment, you need to activate it again as described
@@ -76,18 +76,19 @@ Get started
 
    .. code:: shell
 
-      $ kolt -h
-      usage: kolt [-h] {certs,destroy,k8s} ...
 
-      positional arguments:
-        {certs,destroy,k8s}
-                              commands
-          certs               Create cluster certificates
-          destroy             Delete the complete cluster stack
-          k8s                 Bootstrap a Kubernetes cluster
-          ...
-      optional arguments:
-        -h, --help            show this help message and exit
+   usage: koris [-h] [--version] {apply,destroy,k8s} ...
+
+   positional arguments:
+     {apply,destroy,k8s}  commands
+       apply              Bootstrap a Kubernetes cluster
+       destroy            Delete the complete cluster stack
+       k8s                Bootstrap a Kubernetes cluster (deprecated)
+
+   optional arguments:
+     -h, --help           show this help message and exit
+     --version            show version and exit
+
 
 7. To view the help of each subcommand
 

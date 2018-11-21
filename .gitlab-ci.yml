@@ -190,6 +190,8 @@ build:
   script:
    - python3 setup.py sdist
   artifacts:
+    # Gitlab has a weired bug that disables the downloads of artifcats
+    # from the tags page if we rename the artifacts
     #name: "$CI_COMMIT_REF_NAME"
     paths:
      - dist/

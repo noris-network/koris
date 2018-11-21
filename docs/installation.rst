@@ -4,31 +4,32 @@
 Installation
 ============
 
-
 Stable release
 --------------
 
-To install koris, first download the source package form:
+To install koris, first download the source package from the tags page in gitlab:
 
 .. code::
 
-   https://gitlab.noris.net/PI/koris/-/archive/v0.6.3/koris-v0.6.3.zip
+   https://gitlab.noris.net/PI/koris/-/jobs/artifacts/v0.7.2/download?job=build
 
-Replace 0.6.3 with the latest tag.
+Replace 0.7.2 with the latest tag. This will download a file called
+``artifacts.zip``.
 
-run this command in your terminal:
+run the following commands in your terminal:
 
 .. code-block:: console
 
     $ otiram@yoni:~/Software/tmp $ python3 -m venv korisenv
     otiram@yoni:~/Software/tmp $ source korisenv/bin/activate
-    otiram@yoni:~/Software/tmp |korisenv| $ pip3 install koris-0.6.3.tar.gz
-    Processing ./koris-0.6.3.dev88.tar.gz
-    Collecting adal==1.1.0 (from koris==0.6.3.dev88)
-    Using cached https://files.pythonhosted.org/packages/15/2b/8f674c2a20bb2a55f8f1c8fb7a458c9b513409b2cfc42f73e4cbc1ee757e/adal-1.1.0-py2.py3-none-any.whl
-    Collecting appdirs==1.4.3 (from koris==0.6.3.dev88)
-    Using cached https://files.pythonhosted.org/packages/56/eb/810e700ed1349edde4cbdc1b2a21e28cdf115f9faf263f6bbf8447c1abf3/appdirs-1.4.3-py2.py3-none-any.whl
-    Collecting asn1crypto==0.24.0 (from koris==0.6.3.dev88)
+    otiram@yoni:~/Software/tmp |korisenv| $ cp  artifacts.zip .
+    otiram@yoni:~/Software/tmp |korisenv| $ unzip artifacts.zip
+    Archive:  artifacts.zip
+    creating: dist/
+    inflating: dist/koris-0.7.2.tar.gz
+    otiram@yoni:~/Software/tmp |korisenv| $ pip install dist/koris-0.7.2.tar.gz
+    Processing ./dist/koris-0.7.2.tar.gz
+    Requirement already satisfied: adal==1.1.0 in /home/otiram/.local/share/virtualenvs/koris-ijrmZRy0/lib/python3.6/site-packages (from koris==0.7.2) (1.1.0)
     ...
 
  This is the preferred method to install kolt, as it will always install the most recent stable release.
