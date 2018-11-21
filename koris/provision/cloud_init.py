@@ -12,7 +12,8 @@ import textwrap
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pkg_resources import (Requirement, resource_filename)
+from pkg_resources import (Requirement, resource_filename, get_distribution)
+from datetime import datetime
 
 from koris.ssl import (b64_key, b64_cert)
 from koris.util.util import (encryption_config_tmpl,
@@ -264,6 +265,26 @@ class MasterInit(BaseInit):
 
         return svc_accnt_key + svc_accnt_cert
 
+    def _get_koris_info(self):
+        """
+        Write the koris.conf configuration file
+        """
+        koris_conf_info_part = """
+
+        # koris conf
+         - path: /etc/kubernetes/koris.conf
+           owner: root:root
+           permissions: '0644'
+           content: |
+             # This file contains meta information about koris
+
+             koris_version={}
+             creation_date={}
+        """.format(
+            get_distribution('koris').version,
+            datetime.strftime(datetime.now(), format="%c"))
+        return textwrap.dedent(koris_conf_info_part)
+
     def get_files_config(self):
         """
         write the section write_files into the cloud-config
@@ -276,7 +297,8 @@ class MasterInit(BaseInit):
              + self._get_svc_account_info().lstrip() \
              + self._get_encryption_config().lstrip() \
              + self._get_cloud_provider().lstrip() \
-             + self._get_token_csv().lstrip()
+             + self._get_token_csv().lstrip() \
+             + self._get_koris_info().lstrip()
 
         return config
 

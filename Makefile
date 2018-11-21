@@ -130,6 +130,7 @@ integration-test: \
 	integration-expose \
 	expose-wait \
 	curl-run \
+	check-cluster-dns \
 	clean-lb-after-integration-test
 
 
@@ -215,6 +216,42 @@ curl-run:
 		sleep 2; \
 	done
 
+check-cluster-dns:
+	dns_check_hostname="kubernetes"; \
+  dns_check_namespace="default"; \
+  dns_check_cluster_domain="svc.cluster.local"; \
+	dns_check_with_search_domains="$${dns_check_hostname}.$${dns_check_namespace}"; \
+	dns_check_fqdn="$${dns_check_with_search_domains}.$${dns_check_cluster_domain}"; \
+	dns_check="dig +noall +answer -q $${dns_check_fqdn} -t A"; \
+	dnscheck_pod='{"apiVersion":"v1","kind":"Pod","metadata":{"labels":{"k8s-app":"dnscheck"},"name":"dnscheck","namespace":"default"},"spec":{"containers":[{"image":"tutum/dnsutils","name":"dnscheck","command":["sleep"],"args":["86400"]}],"securityContext":{}}}'; \
+	echo $${dnscheck_pod} | kubectl --kubeconfig=${KUBECONFIG} apply -f -; \
+	echo -n "Waiting for dnscheck pod to start"; \
+	while [ $$(kubectl --kubeconfig=${KUBECONFIG} get pod -l k8s-app=dnscheck -o jsonpath='{.items[0].status.phase}') != "Running" ]; do \
+		echo -n "."; \
+	  sleep 2; \
+	done; \
+	echo -e "\nDnscheck pod is ready.";\
+	echo "First checking FQDN resolving with $${dns_check}..."; \
+	answer=`kubectl --kubeconfig=${KUBECONFIG} exec dnscheck -- $${dns_check}`; \
+	if [ -z "$${answer}" ]; then \
+		echo "Failed to resolve FQDN $${dns_check_fqdn} with check $${dns_check}. Answer: $${answer}"; \
+		kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck; \
+	  exit 1;	\
+	fi; \
+	echo "Successfully resolved FQDN $${dns_check_fqdn}: $${answer}"; \
+	dns_check="dig +noall +answer +search -q $${dns_check_with_search_domains} -t A"; \
+	echo "Now checking short name, using search domains, resolving with $${dns_check}..."; \
+	answer=`kubectl --kubeconfig=${KUBECONFIG} exec dnscheck -- $${dns_check}`; \
+	search_domains=`kubectl --kubeconfig=${KUBECONFIG} exec dnscheck -- cat /etc/resolv.conf`; \
+	if [ -z "$${answer}" ]; then \
+	  echo "Failed to resolve short name $${dns_check_with_search_domains} with check $${dns_check}. Answer: $${answer}"; \
+		echo "Content of /etc/resolv.conf was:"; \
+	  echo "$${search_domains}"; \
+	else \
+	  echo "Successfully resolved short name $${dns_check_with_search_domains}: $${answer}"; \
+	fi; \
+	#kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck
+
 clean-lb-after-integration-test:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
@@ -240,8 +277,10 @@ security-checks:
 	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
 	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
 	echo "Running security checks for K8S worker nodes..."
-	kubectl run --kubeconfig=${KUBECONFIG} --rm -i -t kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
 		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+	sleep 30
+	kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 
 update-config: KEY ?= kube  ## create a test configuration file
 update-config:

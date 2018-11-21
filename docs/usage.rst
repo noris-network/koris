@@ -107,4 +107,4 @@ Get started
 
 .. code:: shell
 
-   $ koris k8s <your-cluster-config.yml>
+   $ koris apply <your-cluster-config.yml>
