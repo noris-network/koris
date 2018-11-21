@@ -185,7 +185,7 @@ build:
    - pytho3 setup.py sdist
   artifacts:
     paths:
-      dist/koris-*.tar.gz
+     - dist/koris-*.tar.gz
   only:
     - tags
     - master
