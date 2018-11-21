@@ -190,7 +190,7 @@ build:
   script:
    - python3 setup.py sdist
   artifacts:
-    name: "$CI_COMMIT_REF_NAME"
+    #name: "$CI_COMMIT_REF_NAME"
     paths:
      - dist/
     expire_in: 1 year
