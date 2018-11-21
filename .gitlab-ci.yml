@@ -182,7 +182,7 @@ build:
   stage: build
   image: oz123/koris-alpine:0.1.1
   script:
-   - pytho3 setup.py sdist
+   - python3 setup.py sdist
   artifacts:
     paths:
      - dist/koris-*.tar.gz
