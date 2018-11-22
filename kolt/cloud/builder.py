@@ -8,14 +8,13 @@ import asyncio
 import base64
 import os
 import uuid
-import sys
 import time
 
 from kolt.deploy.k8s import K8S
 
-from kolt.cli import write_kubeconfig
+from kolt.cli import write_kubeconfig  # noqa
 from kolt.provision.cloud_init import MasterInit, NodeInit
-from kolt.ssl import create_certs, b64_key, b64_cert
+from kolt.ssl import create_certs, b64_key, b64_cert  # noqa
 from kolt.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
@@ -214,9 +213,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     Plan and build a kubernetes cluster in the cloud
     """
     def __init__(self, config):
-        if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
-            print(red("You must have an odd number (>1) of etcd machines!"))
-            sys.exit(2)
 
         self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
         LOGGER.debug(info("Done collecting infromation from OpenStack"))
@@ -304,9 +300,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             loop = asyncio.get_event_loop()
             tasks.append(configure_lb_task)
             loop.run_until_complete(asyncio.gather(*tasks))
-            #kubeconfig = write_kubeconfig(config, lb_ip,
-            #                              admin_t,
-            #                              True)
+            """
+            kubeconfig = write_kubeconfig(config, lb_ip,
+                                          admin_t,
+                                          True)
+            """
             kubeconfig = "test2-admin.conf"
             LOGGER.info("Waiting for K8S API server to launch")
 
@@ -318,12 +316,14 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                 time.sleep(2)
 
             LOGGER.info("Kubernetes API Server is ready !!!")
-
-            #etcd_endpoints = ",".join(
-            #    "https://%s:%d" % (host.ip_address, 2379)
-            #    for host in cp_hosts)
-            #k8s.apply_calico(b64_key(certs["k8s"].key),
-            #                 b64_cert(certs["k8s"].cert),
-            #                 b64_cert(certs["ca"].cert),
-            #                 etcd_endpoints)
-            # k8s.apply_kube_dns()
+            k8s.apply_calico()
+            """
+            etcd_endpoints = ",".join(
+                "https://%s:%d" % (host.ip_address, 2379)
+                for host in cp_hosts)
+            k8s.apply_calico(b64_key(certs["k8s"].key),
+                             b64_cert(certs["k8s"].cert),
+                             b64_cert(certs["ca"].cert),
+                             etcd_endpoints)
+            k8s.apply_kube_dns()
+            """
