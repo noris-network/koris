@@ -26,6 +26,8 @@ LOGGER = get_logger(__name__)
 BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 
+# TODO: fix this file, since I wanted to do it nicely but lost the overview...
+
 class BaseInit:
     """
     Base class for cloud inits
@@ -58,42 +60,41 @@ class BaseInit:
                            group=group,
                            permissions=permissions).lstrip()
 
-    def __str__(self):
+    def __init__(self, cloud_provider):
+        self.cloud_provider = cloud_provider
 
-        sub_message = MIMEText(self.get_files_config(),
-                               _subtype='text/cloud-config')
-        sub_message.add_header('Content-Disposition', 'attachment')
-        self.combined_message.attach(sub_message)  # pylint: disable=no-member
+    def _get_generic(self):
+        return self.format_file(
+            'cloud_config',
+            '/etc/kubernetes/cloud.conf',
+            self.cloud_provider,
+            encoder=lambda x: bytes(x))  # pylint: disable=unnecessary-lambda
+            
+        
+        # process generic cloud-init file
+        fh = open(resource_filename(Requirement('koris'),
+                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                 'generic')))
+        # we currently blindly assume the first line is a mimetype
+        # or a shebang
+        main_type, _subtype = fh.readline().strip().split("/", 1)
 
-        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (
-            self.role, self.os_type, self.os_version)  # pylint: disable=no-member
+        if '#!' in main_type:
+            _subtype = 'x-shellscript'
 
-        # process bootstrap script and generic cloud-init file
-        for item in ['generic', k8s_bootstrap]:
-            fh = open(resource_filename(Requirement('koris'),
-                                        os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                     item)))
-            # we currently blindly assume the first line is a mimetype
-            # or a shebang
-            main_type, _subtype = fh.readline().strip().split("/", 1)
+        sub_message = MIMEText(fh.read(), _subtype=_subtype)
+        sub_message.add_header('Content-Disposition', 'attachment',
+                               filename='generic')
+        self.combined_message.attach(sub_message)
+        fh.close()
 
-            if '#!' in main_type:
-                _subtype = 'x-shellscript'
-            #    fh.seek(0)
-
-            sub_message = MIMEText(fh.read(), _subtype=_subtype)
-            sub_message.add_header('Content-Disposition',
-                                   'attachment', filename="%s" % item)
-            self.combined_message.attach(sub_message)  # pylint: disable=no-member
-            fh.close()
-
-        return self.combined_message.as_string()  # pylint: disable=no-member
-
+        return self.combined_message.as_string()
+        
     def _get_cloud_provider(self):
         return self.format_file(
             'cloud_config',
             '/etc/kubernetes/cloud.conf',
-            self.cloud_provider,  # pylint: disable=no-member
+            self.cloud_provider,
             encoder=lambda x: bytes(x))  # pylint: disable=unnecessary-lambda
 
     def get_files_config(self):
@@ -103,9 +104,54 @@ class BaseInit:
         raise NotImplementedError
 
 
+class FirstMasterInit(BaseInit):
+    """
+    Create a cloud  init config for a master node (the first one)
+    """
+    def __init__(self, ssh_key):
+        super().__init__()
+        self.ssh_key = ssh_key
+        self.role = 'master'
+
+    def _get_bootstrap_script(self):
+        """
+        write bootstrap script to BOOTSTRAP_SCRIPTS_DIR
+        """
+        return self.format_file('', '/var/lib/kubernetes/token.csv',
+                                self.token_csv_data,
+                                encoder=lambda x: x.encode())
+
+        sub_message = MIMEText(self.get_files_config(),
+                               _subtype='text/cloud-config')
+        sub_message.add_header('Content-Disposition', 'attachment')
+        self.combined_message.attach(sub_message)  # pylint: disable=no-member
+
+        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (
+            self.role, self.os_type, self.os_version)  # pylint: disable=no-member
+
+
+
+    def get_files_config(self):
+        """
+        write the section write_files into the cloud-config
+        """
+        config = textwrap.dedent("""
+        #cloud-config
+        write_files:
+        """) + self._get_bootstrap_script().lstrip() \
+             + self._etcd_cluster_info().lstrip() \
+             + self._get_svc_account_info().lstrip() \
+             + self._get_encryption_config().lstrip() \
+             + self._get_cloud_provider().lstrip() \
+             + self._get_token_csv().lstrip() \
+             + self._get_koris_info().lstrip()
+
+        return config
+
+
 class MasterInit(BaseInit):
     """
-    Create a cloud  init config for a master node
+    Create a cloud  init config for a master node (not the first one)
     """
 
     def __init__(self, hostname, etcds,

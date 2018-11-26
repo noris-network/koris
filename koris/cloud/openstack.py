@@ -221,6 +221,10 @@ class LoadBalancer:  # pragma: no coverage
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
+
+        # TODO: maybe we can get the subnet ID automatically? It is posible
+        # on the command line via:
+        # neutron subnet-show k8s-subnet -f value -c id
         self.subnet = config.get('subnet')
         # these attributes are set after create
         self._id = None
