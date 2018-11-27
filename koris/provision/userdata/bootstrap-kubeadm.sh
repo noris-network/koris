@@ -178,6 +178,11 @@ function bootstrap_with_phases() {
    test -d .kube || mkdir .kube
    sudo cp /etc/kubernetes/admin.conf ~/.kube/config
    chown ubuntu:ubuntu ~/.kube/config
+   # this only works if the api is available
+   until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
+       do echo "api server is not up! trying again ...";
+   done
+   kubeadm -v=6 alpha phase kubelet config upload  --config $1
    kubectl get nodes
 }
 
