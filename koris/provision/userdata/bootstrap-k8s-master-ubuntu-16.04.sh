@@ -72,7 +72,7 @@ with open("cloud.conf", "w") as conf:
             _get_os_environ("OS_")).items()))
 END)
 
-python3 -c "$PYTHON_CODE"
+python3 -c "$PY_CODE"
 mv -v cloud.conf /etc/kubernetes/cloud.conf
 }
 
