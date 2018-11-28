@@ -344,3 +344,16 @@ sed "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
 
 kubectl apply -f rbac-kdd.yaml
 kubectl apply -f calico.yaml
+
+# keep this function here, although we don't use it really, it's usefull for
+# building bare metal cluster or vSphere clusters
+join_all_hosts() {
+   export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | \
+       openssl dgst -sha256 -hex | sed 's/^.* //')
+   export TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
+
+   for K in "${!HOSTS[@]}"; do
+       ssh ${K} sudo kubeadm reset -f
+       ssh ${K} sudo kubeadm join --token $TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
+   done
+}
