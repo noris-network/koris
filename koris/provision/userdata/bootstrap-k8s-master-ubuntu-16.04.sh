@@ -6,9 +6,6 @@
 
 set -e
 
-# TODO: add /etc/kubernetes/cloud.conf via cloud_init.py
-#       uncomment the appropriate section in each file
-
 # all the variables here should be writen to /etc/kubernetes/koris.env
 # via cloud_init.py
 
@@ -49,7 +46,7 @@ KUBE_VERSION=1.11.4
 
 ################################################################################
 
-# writes /etc/kubernetes/cloud.conf
+# writes /etc/kubernetes/cloud.config
 # we can throw this away once cloud_init.py is working again
 function write_cloud_conf() {
 
@@ -63,20 +60,20 @@ def env_to_cloud_conf(os_env_dict):
     d = {}
     d['domain-name'] = os_env_dict['user_domain_name']
     d['region'] = os_env_dict['region_name']
-    d['tennat-id'] = os_env_dict['project_id']
+    d['tenant-id'] = os_env_dict['project_id']
     d['auth-url'] = os_env_dict['auth_url']
     d['password'] = os_env_dict['password']
     d['username'] = os_env_dict['username']
     return d
 
-with open("cloud.conf", "w") as conf:
+with open("cloud.config", "w") as conf:
     conf.write("[Global]\n" + "\n".join(
         "%s=%s" % (k, v) for (k, v) in env_to_cloud_conf(
             _get_os_environ("OS_")).items()))
 END)
 
 python3 -c "$PY_CODE"
-install -m 600 cloud.conf /etc/kubernetes/cloud.conf
+install -m 600 cloud.config /etc/kubernetes/cloud.config
 }
 
 
@@ -109,7 +106,7 @@ networking:
 nodeRegistrationOptions:
   kubeletExtraArgs:
     cloud-provider: openstack
-    cloud-config: etc/kubernetes/cloud.conf
+    cloud-config: etc/kubernetes/cloud.config
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -119,21 +116,21 @@ bootstrapTokens:
   - signing
   - authentication
 apiServerExtraArgs:
-  cloud-provider: "openstack"
+  cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.conf"
-  hostPath: "/etc/kubernetes/cloud.conf"
-  mountPath: "/etc/kubernetes/cloud.conf"
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.conf"
-  hostPath: "/etc/kubernetes/cloud.conf"
-  mountPath: "/etc/kubernetes/cloud.conf"
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 EOF
@@ -167,24 +164,23 @@ networking:
 nodeRegistrationOptions:
   kubeletExtraArgs:
     cloud-provider: openstack
-    cloud-config: etc/kubernetes/cloud.conf
-bootstrapTokens:
-apiServerExtraArgs:
+    cloud-config: etc/kubernetes/cloud.config
+APIServerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.conf"
-  hostPath: "/etc/kubernetes/cloud.conf"
-  mountPath: "/etc/kubernetes/cloud.conf"
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.conf"
-  hostPath: "/etc/kubernetes/cloud.conf"
-  mountPath: "/etc/kubernetes/cloud.conf"
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 EOF
@@ -218,24 +214,23 @@ networking:
 nodeRegistrationOptions:
   kubeletExtraArgs:
     cloud-provider: openstack
-    cloud-config: etc/kubernetes/cloud.conf
-bootstrapTokens:
-apiServerExtraArgs:
+    cloud-config: etc/kubernetes/cloud.config
+APIServerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.conf"
-  hostPath: "/etc/kubernetes/cloud.conf"
-  mountPath: "/etc/kubernetes/cloud.conf"
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.conf"
-  hostPath: "/etc/kubernetes/cloud.conf"
-  mountPath: "/etc/kubernetes/cloud.conf"
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 EOF
@@ -256,12 +251,12 @@ function distribute_keys() {
        sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:~/kubernetes/pki/etcd/
        sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:~/kubernetes/pki/etcd/
        sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/admin.conf "${USER}"@$host:~/kubernetes/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/cloud.conf "${USER}"@$host:~/kubernetes/
+       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/cloud.config "${USER}"@$host:~/kubernetes/
 
        ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo mv -v kubernetes /etc/
        ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chown root:root -vR /etc/kubernetes
        ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
-       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.conf
+       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.config
    done
 }
 
