@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  labels:
+    prometheus: nn
+  name: nn
+  namespace: nn-mon
+spec:
+  externalLabels:
+    cluster: ${CLUSTER_NAME}
+    customer: ${CUSTOMER_NAME}
+  baseImage: quay.io/prometheus/prometheus
+  nodeSelector:
+    beta.kubernetes.io/os: linux
+  replicas: 3
+  resources:
+    requests:
+      memory: 400Mi
+  ruleSelector:
+    matchLabels:
+      prometheus: nn
+      role: alert-rules
+  serviceAccountName: nn-prometheus
+  serviceMonitorNamespaceSelector: {}
+  serviceMonitorSelector: {}
+  version: v2.4.3
