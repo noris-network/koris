@@ -6,6 +6,9 @@
 
 set -e
 
+# TODO: add /etc/kubernetes/cloud.conf via cloud_init.py
+#       uncomment the appropriate section in each file
+
 # all the variables here should be writen to /etc/kubernetes/koris.env
 # via cloud_init.py
 
@@ -46,6 +49,34 @@ KUBE_VERSION=1.11.4
 
 ################################################################################
 
+# writes /etc/kubernetes/cloud.conf
+# we can throw this away once cloud_init.py is working again
+function write_cloud_conf() {
+
+PY_CODE=$(cat <<END
+from openstack.config.loader import _get_os_environ
+
+def env_to_cloud_conf(os_env_dict):
+    d = {}
+    d['domain-name'] = os_env_dict['user_domain_name']
+    d['region'] = os_env_dict['region_name']
+    d['tennat-id'] = os_env_dict['project_id']
+    d['auth-url'] = os_env_dict['auth_url']
+    d['password'] = os_env_dict['password']
+    d['username'] = os_env_dict['username']
+    return d
+
+with open("cloud.conf", "w") as conf:
+    conf.write("[Global]\n" + "\n".join(
+        "%s=%s" % (k, v) for (k, v) in env_to_cloud_conf(
+            _get_os_environ("OS_")).items()))
+END)
+
+python3 -c "$PYTHON_CODE"
+mv -v cloud.conf /etc/kubernetes/cloud.conf
+}
+
+
 function write_kubeadm_cfg() {
 cat << EOF > kubeadm-master-1.yaml
 apiVersion: kubeadm.k8s.io/v1alpha2
@@ -72,6 +103,11 @@ etcd:
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: ${POD_SUBNET}
+# TODO: write cloud.conf
+#nodeRegistrationOptions:
+#  kubeletExtraArgs:
+#    cloud-provider: openstack
+#    cloud-config: etc/kubernetes/cloud.conf
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -108,6 +144,12 @@ etcd:
 networking:
     # This CIDR is a calico default. Substitute or remove for your CNI provider.
     podSubnet:  "${POD_SUBNET}"
+# TODO: write cloud.conf
+#nodeRegistrationOptions:
+#  kubeletExtraArgs:
+#    cloud-provider: openstack
+#    cloud-config: etc/kubernetes/cloud.conf
+bootstrapTokens:
 EOF
 
 cat << EOF > kubeadm-master-3.yaml
@@ -136,10 +178,16 @@ etcd:
 networking:
     # This CIDR is a calico default. Substitute or remove for your CNI provider.
     podSubnet:  "${POD_SUBNET}"
+# TODO: write cloud.conf
+#nodeRegistrationOptions:
+#  kubeletExtraArgs:
+#    cloud-provider: openstack
+#    cloud-config: etc/kubernetes/cloud.conf
+bootstrapTokens:
 EOF
 }
 
-
+# distributes configuration files and certificates
 function distribute_keys() {
    USER=ubuntu # customizable
    for host in ${CONTROL_PLANE_IPS}; do
@@ -154,10 +202,12 @@ function distribute_keys() {
        sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:~/kubernetes/pki/etcd/
        sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:~/kubernetes/pki/etcd/
        sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/admin.conf "${USER}"@$host:~/kubernetes/
+       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/cloud.conf "${USER}"@$host:~/kubernetes/
 
        ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo mv -v kubernetes /etc/
        ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chown root:root -vR /etc/kubernetes
        ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.conf
    done
 }
 
@@ -230,6 +280,7 @@ write_kubeadm_cfg
 scp -i /home/ubuntu/.ssh/id_rsa kubeadm-master-2.yaml ubuntu@master-2-a:~/
 scp -i /home/ubuntu/.ssh/id_rsa kubeadm-master-3.yaml ubuntu@master-3-b:~/
 
+write_cloud_conf
 bootstrap_with_phases kubeadm-master-1.yaml
 wait_for_etcd
 bootstrap_master_2
