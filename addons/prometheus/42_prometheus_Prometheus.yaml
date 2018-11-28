@@ -7,8 +7,8 @@ metadata:
   namespace: nn-mon
 spec:
   externalLabels:
-    cluster: example-cluster
-    customer: example-customer
+    cluster: ${CLUSTER_NAME}
+    customer: ${CUSTOMER_NAME}
   baseImage: quay.io/prometheus/prometheus
   nodeSelector:
     beta.kubernetes.io/os: linux
