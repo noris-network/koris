@@ -124,18 +124,18 @@ apiServerExtraArgs:
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
-apiserverextravolumes:
+apiServerExtraVolumes:
 - name: "/etc/kubernetes/cloud.conf"
-  hostpath: "/etc/kubernetes/cloud.conf"
-  mountpath: "/etc/kubernetes/cloud.conf"
+  hostPath: "/etc/kubernetes/cloud.conf"
+  mountPath: "/etc/kubernetes/cloud.conf"
   writable: false
-  pathtype: file
-controllermanagerextravolumes
+  pathType: File
+controllerManagerExtraVolumes:
 - name: "/etc/kubernetes/cloud.conf"
-  hostpath: "/etc/kubernetes/cloud.conf"
-  mountpath: "/etc/kubernetes/cloud.conf"
+  hostPath: "/etc/kubernetes/cloud.conf"
+  mountPath: "/etc/kubernetes/cloud.conf"
   writable: false
-  pathtype: file
+  pathType: File
 EOF
 
 cat << EOF > kubeadm-master-2.yaml
@@ -175,18 +175,18 @@ apiServerExtraArgs:
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
-apiserverextravolumes:
+apiServerExtraVolumes:
 - name: "/etc/kubernetes/cloud.conf"
-  hostpath: "/etc/kubernetes/cloud.conf"
-  mountpath: "/etc/kubernetes/cloud.conf"
+  hostPath: "/etc/kubernetes/cloud.conf"
+  mountPath: "/etc/kubernetes/cloud.conf"
   writable: false
-  pathtype: file
-controllermanagerextravolumes
+  pathType: File
+controllerManagerExtraVolumes:
 - name: "/etc/kubernetes/cloud.conf"
-  hostpath: "/etc/kubernetes/cloud.conf"
-  mountpath: "/etc/kubernetes/cloud.conf"
+  hostPath: "/etc/kubernetes/cloud.conf"
+  mountPath: "/etc/kubernetes/cloud.conf"
   writable: false
-  pathtype: file
+  pathType: File
 EOF
 
 cat << EOF > kubeadm-master-3.yaml
@@ -226,18 +226,18 @@ apiServerExtraArgs:
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
-apiserverextravolumes:
+apiServerExtraVolumes:
 - name: "/etc/kubernetes/cloud.conf"
-  hostpath: "/etc/kubernetes/cloud.conf"
-  mountpath: "/etc/kubernetes/cloud.conf"
+  hostPath: "/etc/kubernetes/cloud.conf"
+  mountPath: "/etc/kubernetes/cloud.conf"
   writable: false
-  pathtype: file
-controllermanagerextravolumes
+  pathType: File
+controllerManagerExtraVolumes:
 - name: "/etc/kubernetes/cloud.conf"
-  hostpath: "/etc/kubernetes/cloud.conf"
-  mountpath: "/etc/kubernetes/cloud.conf"
+  hostPath: "/etc/kubernetes/cloud.conf"
+  mountPath: "/etc/kubernetes/cloud.conf"
   writable: false
-  pathtype: file
+  pathType: File
 EOF
 }
 
