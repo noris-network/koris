@@ -103,11 +103,10 @@ etcd:
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: ${POD_SUBNET}
-# TODO: write cloud.conf
-#nodeRegistrationOptions:
-#  kubeletExtraArgs:
-#    cloud-provider: openstack
-#    cloud-config: etc/kubernetes/cloud.conf
+nodeRegistrationOptions:
+  kubeletExtraArgs:
+    cloud-provider: openstack
+    cloud-config: etc/kubernetes/cloud.conf
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -116,6 +115,24 @@ bootstrapTokens:
   usages:
   - signing
   - authentication
+apiServerExtraArgs:
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+controllerManagerExtraArgs:
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+apiserverextravolumes:
+- name: "/etc/kubernetes/cloud.conf"
+  hostpath: "/etc/kubernetes/cloud.conf"
+  mountpath: "/etc/kubernetes/cloud.conf"
+  writable: false
+  pathtype: file
+controllermanagerextravolumes
+- name: "/etc/kubernetes/cloud.conf"
+  hostpath: "/etc/kubernetes/cloud.conf"
+  mountpath: "/etc/kubernetes/cloud.conf"
+  writable: false
+  pathtype: file
 EOF
 
 cat << EOF > kubeadm-master-2.yaml
@@ -144,12 +161,29 @@ etcd:
 networking:
     # This CIDR is a calico default. Substitute or remove for your CNI provider.
     podSubnet:  "${POD_SUBNET}"
-# TODO: write cloud.conf
-#nodeRegistrationOptions:
-#  kubeletExtraArgs:
-#    cloud-provider: openstack
-#    cloud-config: etc/kubernetes/cloud.conf
+nodeRegistrationOptions:
+  kubeletExtraArgs:
+    cloud-provider: openstack
+    cloud-config: etc/kubernetes/cloud.conf
 bootstrapTokens:
+apiServerExtraArgs:
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+controllerManagerExtraArgs:
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+apiserverextravolumes:
+- name: "/etc/kubernetes/cloud.conf"
+  hostpath: "/etc/kubernetes/cloud.conf"
+  mountpath: "/etc/kubernetes/cloud.conf"
+  writable: false
+  pathtype: file
+controllermanagerextravolumes
+- name: "/etc/kubernetes/cloud.conf"
+  hostpath: "/etc/kubernetes/cloud.conf"
+  mountpath: "/etc/kubernetes/cloud.conf"
+  writable: false
+  pathtype: file
 EOF
 
 cat << EOF > kubeadm-master-3.yaml
@@ -178,12 +212,29 @@ etcd:
 networking:
     # This CIDR is a calico default. Substitute or remove for your CNI provider.
     podSubnet:  "${POD_SUBNET}"
-# TODO: write cloud.conf
-#nodeRegistrationOptions:
-#  kubeletExtraArgs:
-#    cloud-provider: openstack
-#    cloud-config: etc/kubernetes/cloud.conf
+nodeRegistrationOptions:
+  kubeletExtraArgs:
+    cloud-provider: openstack
+    cloud-config: etc/kubernetes/cloud.conf
 bootstrapTokens:
+apiServerExtraArgs:
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+controllerManagerExtraArgs:
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+apiserverextravolumes:
+- name: "/etc/kubernetes/cloud.conf"
+  hostpath: "/etc/kubernetes/cloud.conf"
+  mountpath: "/etc/kubernetes/cloud.conf"
+  writable: false
+  pathtype: file
+controllermanagerextravolumes
+- name: "/etc/kubernetes/cloud.conf"
+  hostpath: "/etc/kubernetes/cloud.conf"
+  mountpath: "/etc/kubernetes/cloud.conf"
+  writable: false
+  pathtype: file
 EOF
 }
 
