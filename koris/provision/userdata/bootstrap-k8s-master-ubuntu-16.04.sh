@@ -46,6 +46,8 @@ KUBE_VERSION=1.12.2
 DOCKER_VERSION=18.06
 ################################################################################
 
+LOGLEVEL=4
+
 # writes /etc/kubernetes/cloud.config
 # we can throw this away once cloud_init.py is working again
 function write_cloud_conf() {
@@ -122,15 +124,15 @@ controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
+- name: cloud-config
+  hostPath: /etc/kubernetes/cloud.config
+  mountPath: /etc/kubernetes/cloud.config
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
+- name: cloud-config
+  hostPath: /etc/kubernetes/cloud.config
+  mountPath: /etc/kubernetes/cloud.config
   writable: false
   pathType: File
 EOF
@@ -166,21 +168,21 @@ nodeRegistrationOptions:
     cloud-provider: openstack
     cloud-config: etc/kubernetes/cloud.config
 APIServerExtraArgs:
-  cloud-provider: "openstack"
+  cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 controllerManagerExtraArgs:
-  cloud-provider: "openstack"
+  cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
+- name: cloud-config
+  hostPath: /etc/kubernetes/cloud.config
+  mountPath: /etc/kubernetes/cloud.config
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
+- name: cloud-config
+  hostPath: /etc/kubernetes/cloud.config
+  mountPath: /etc/kubernetes/cloud.config
   writable: false
   pathType: File
 EOF
@@ -216,21 +218,21 @@ nodeRegistrationOptions:
     cloud-provider: openstack
     cloud-config: etc/kubernetes/cloud.config
 APIServerExtraArgs:
-  cloud-provider: "openstack"
+  cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 controllerManagerExtraArgs:
-  cloud-provider: "openstack"
+  cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
+- name: cloud-config
+  hostPath: /etc/kubernetes/cloud.config
+  mountPath: /etc/kubernetes/cloud.config
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
+- name: cloud-config
+  hostPath: /etc/kubernetes/cloud.config
+  mountPath: /etc/kubernetes/cloud.config
   writable: false
   pathType: File
 EOF
@@ -260,19 +262,22 @@ function distribute_keys() {
    done
 }
 
+
+V=${LOGLEVEL}
+
 function bootstrap_with_phases() {
-   kubeadm -v=6 alpha phase certs all --config $1
-   kubeadm -v=8 alpha phase kubelet config write-to-disk --config $1
-   kubeadm -v=6 alpha phase kubelet write-env-file --config $1
-   kubeadm -v=8 alpha phase kubeconfig kubelet --config $1
-   kubeadm -v=8 alpha phase kubeconfig all --config $1
+   kubeadm -v=${V} alpha phase certs all --config $1
+   kubeadm -v=${V} alpha phase kubelet config write-to-disk --config $1
+   kubeadm -v=${V} alpha phase kubelet write-env-file --config $1
+   kubeadm -v=${V} alpha phase kubeconfig kubelet --config $1
+   kubeadm -v=${V} alpha phase kubeconfig all --config $1
    distribute_keys
    systemctl start kubelet
-   kubeadm -v=6 alpha phase etcd local --config $1
-   kubeadm -v=8 alpha phase controlplane all --config $1
-   kubeadm -v=8 alpha phase mark-master --config $1
-   kubeadm -v=8 alpha phase addon kube-proxy --config $1
-   kubeadm -v=8 alpha phase addon coredns --config $1
+   kubeadm -v=${V} alpha phase etcd local --config $1
+   kubeadm -v=${V} alpha phase controlplane all --config $1
+   kubeadm -v=${V} alpha phase mark-master --config $1
+   kubeadm -v=${V} alpha phase addon kube-proxy --config $1
+   kubeadm -v=${V} alpha phase addon coredns --config $1
    kubeadm alpha phase bootstrap-token all --config $1
    test -d .kube || mkdir .kube
    sudo cp /etc/kubernetes/admin.conf ~/.kube/config
@@ -281,7 +286,7 @@ function bootstrap_with_phases() {
    until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
        do echo "api server is not up! trying again ...";
    done
-   kubeadm -v=6 alpha phase kubelet config upload  --config $1
+   kubeadm -v=${V} alpha phase kubelet config upload  --config $1
    kubectl get nodes
 }
 
@@ -337,8 +342,8 @@ bootstrap_master_3
 
 # add calico! we should have these manifests in the base image
 # this will prevent failure if there is a network problem
-curl -O https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-curl -O https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+curl -LsO https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+curl -LsO https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
 
 sed "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
 
