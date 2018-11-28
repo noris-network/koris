@@ -54,6 +54,9 @@ KUBE_VERSION=1.11.4
 function write_cloud_conf() {
 
 PY_CODE=$(cat <<END
+# This works only with
+# pip3 install openstacksdk==0.12.0
+
 from openstack.config.loader import _get_os_environ
 
 def env_to_cloud_conf(os_env_dict):
@@ -73,7 +76,7 @@ with open("cloud.conf", "w") as conf:
 END)
 
 python3 -c "$PY_CODE"
-mv -v cloud.conf /etc/kubernetes/cloud.conf
+install -m 600 cloud.conf /etc/kubernetes/cloud.conf
 }
 
 
