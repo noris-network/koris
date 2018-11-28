@@ -4,8 +4,6 @@
 # A script to create a HA K8S cluster on OpenStack using pure bash and kubeadm
 ###
 
-set -e
-
 # all the variables here should be writen to /etc/kubernetes/koris.env
 # via cloud_init.py
 
@@ -72,7 +70,8 @@ with open("cloud.config", "w") as conf:
     conf.write("[Global]\n" + "\n".join(
         "%s=%s" % (k, v) for (k, v) in env_to_cloud_conf(
             _get_os_environ("OS_")).items()))
-END)
+END
+)
 
 python3 -c "$PY_CODE"
 install -m 600 cloud.config /etc/kubernetes/cloud.config
@@ -266,6 +265,7 @@ function distribute_keys() {
 V=${LOGLEVEL}
 
 function bootstrap_with_phases() {
+   echo "*********** Bootstrapping master-1 ******************"
    kubeadm -v=${V} alpha phase certs all --config $1
    kubeadm -v=${V} alpha phase kubelet config write-to-disk --config $1
    kubeadm -v=${V} alpha phase kubelet write-env-file --config $1
@@ -291,6 +291,7 @@ function bootstrap_with_phases() {
 }
 
 function bootstrap_master_2() {
+   echo "*********** Bootstrapping master-2 ******************"
    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase certs all --config  kubeadm-master-2.yaml
    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase kubelet config write-to-disk --config  kubeadm-master-2.yaml
    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase kubelet write-env-file --config  kubeadm-master-2.yaml
@@ -306,14 +307,13 @@ function bootstrap_master_2() {
 }
 
 function bootstrap_master_3() {
+    echo "*********** Bootstrapping master-3 ******************"
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase certs all --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubelet config write-to-disk --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubelet write-env-file --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubeconfig kubelet --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo systemctl start kubelet
-
     sudo kubectl exec -n kube-system etcd-${CP0_HOSTNAME} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${CP0_IP}:2379 member add ${CP2_HOSTNAME} https://${CP2_IP}:2380
-
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase etcd local --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubeconfig all --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase controlplane all --config kubeadm-master-3.yaml
@@ -321,23 +321,21 @@ function bootstrap_master_3() {
 }
 
 function wait_for_etcd () {
-    until [[ x"$(kubectl get pod --selector=component=etcd -n kube-system -o jsonpath='{.items[0].status.phase}')" == x"Running" ]]; do
-        echo "waiting ..."
+    until [[ x"$(kubectl get pod etcd-$1 -n kube-system -o jsonpath='{.status.phase}' 2>/dev/null)" == x"Running" ]]; do
+        echo "waiting for etcd-$1 ... "
         sleep 2
     done
 }
 
-set -x
-
 write_kubeadm_cfg
-
-scp -i /home/ubuntu/.ssh/id_rsa kubeadm-master-2.yaml ubuntu@master-2-a:~/
-scp -i /home/ubuntu/.ssh/id_rsa kubeadm-master-3.yaml ubuntu@master-3-b:~/
+scp -q -o LogLevel=QUIET -i /home/ubuntu/.ssh/id_rsa kubeadm-master-2.yaml ubuntu@master-2-a:~/
+scp -q -o LogLevel=QUIET -i /home/ubuntu/.ssh/id_rsa kubeadm-master-3.yaml ubuntu@master-3-b:~/
 
 write_cloud_conf
 bootstrap_with_phases kubeadm-master-1.yaml
-wait_for_etcd
+wait_for_etcd master-1-a
 bootstrap_master_2
+wait_for_etcd master-2-a
 bootstrap_master_3
 
 # add calico! we should have these manifests in the base image
