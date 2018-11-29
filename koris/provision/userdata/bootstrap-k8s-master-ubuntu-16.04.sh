@@ -357,3 +357,30 @@ join_all_hosts() {
        ssh ${K} sudo kubeadm join --token $TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
    done
 }
+
+
+# keep this function here, although we don't use it really, it's usefull for
+# building bare metal cluster or vSphere clusters
+function fetch_all() {
+    sudo apt-get update
+    sudo apt-get install -y software-properties-common
+    sudo swapoff -a
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
+    sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
+
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    sudo apt-get update
+    sudo apt-get -y install docker-ce
+    sudo apt install -y socat conntrack ipset
+}
+
+
+function install_deps() {
+    for K in "${ALLHOSTS[@]}"; do
+        echo "***** ${K} ******"
+        ssh ${K} "KUBE_VERSION=${KUBE_VERSION}; $(typeset -f fetch_all);  fetch_all"
+    done
+}
+
