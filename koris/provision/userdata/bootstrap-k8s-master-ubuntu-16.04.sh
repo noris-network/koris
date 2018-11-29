@@ -287,6 +287,7 @@ function bootstrap_with_phases() {
        do echo "api server is not up! trying again ...";
    done
    kubeadm -v=${V} alpha phase kubelet config upload  --config $1
+   kubeadm token create --config $1
    kubectl get nodes
 }
 
