@@ -42,8 +42,8 @@ export KUBE_VERSION=1.11.4
 export CLUSTER=master-3-b=https://192.168.0.123:2380,master-1-a=https://192.168.0.121:2380,master-2-a=https://192.168.0.126:2380
 export CONTROL_PLANE_IPS="master-2-a master-3-b"
 export ALLHOSTS=( "${!HOSTS[@]}" "${!MASTERS[@]}" )
-KUBE_VERSION=1.11.4
-
+KUBE_VERSION=1.12.2
+DOCKER_VERSION=18.06
 ################################################################################
 
 # writes /etc/kubernetes/cloud.config
@@ -372,7 +372,7 @@ function fetch_all() {
     sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     sudo apt-get update
-    sudo apt-get -y install docker-ce
+    sudo apt-get -y install docker-ce=${DOCKER_VERSION}*
     sudo apt install -y socat conntrack ipset
 }
 
