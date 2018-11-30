@@ -42,8 +42,16 @@ export KUBE_VERSION=1.11.4
 export CLUSTER=master-3-b=https://192.168.0.123:2380,master-1-a=https://192.168.0.121:2380,master-2-a=https://192.168.0.126:2380
 export CONTROL_PLANE_IPS="master-2-a master-3-b"
 export ALLHOSTS=( "${!HOSTS[@]}" "${!MASTERS[@]}" )
+#### Versions for Kube 1.12.2
 KUBE_VERSION=1.12.2
 DOCKER_VERSION=18.06
+CALICO_VERSION=3.3
+
+### Versions for Kube 1.11.4
+#KUBE_VERSION=1.11.5
+#DOCKER_VERSION=17.03
+#CALICO_VERSION=3.1
+
 ################################################################################
 
 # writes /etc/kubernetes/cloud.config
@@ -337,8 +345,8 @@ bootstrap_master_3
 
 # add calico! we should have these manifests in the base image
 # this will prevent failure if there is a network problem
-curl -O https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-curl -O https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
 
 sed "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
 
