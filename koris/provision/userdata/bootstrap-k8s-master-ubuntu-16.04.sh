@@ -4,6 +4,8 @@
 # A script to create a HA K8S cluster on OpenStack using pure bash and kubeadm
 ###
 
+set -e
+
 # all the variables here should be writen to /etc/kubernetes/koris.env
 # via cloud_init.py
 
@@ -40,11 +42,18 @@ export KUBE_VERSION=1.11.4
 export CLUSTER=master-3-b=https://192.168.0.123:2380,master-1-a=https://192.168.0.121:2380,master-2-a=https://192.168.0.126:2380
 export CONTROL_PLANE_IPS="master-2-a master-3-b"
 export ALLHOSTS=( "${!HOSTS[@]}" "${!MASTERS[@]}" )
+#### Versions for Kube 1.12.2
 KUBE_VERSION=1.12.2
 DOCKER_VERSION=18.06
-################################################################################
+CALICO_VERSION=3.3
+
+### Versions for Kube 1.11.4
+#KUBE_VERSION=1.11.5
+#DOCKER_VERSION=17.03
+#CALICO_VERSION=3.1
 
 LOGLEVEL=4
+################################################################################
 
 # writes /etc/kubernetes/cloud.config
 # we can throw this away once cloud_init.py is working again
@@ -314,7 +323,9 @@ function bootstrap_master_3() {
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubelet write-env-file --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubeconfig kubelet --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo systemctl start kubelet
+
     sudo kubectl exec -n kube-system etcd-${CP0_HOSTNAME} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${CP0_IP}:2379 member add ${CP2_HOSTNAME} https://${CP2_IP}:2380
+
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase etcd local --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubeconfig all --config kubeadm-master-3.yaml
     ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase controlplane all --config kubeadm-master-3.yaml
@@ -327,6 +338,8 @@ function wait_for_etcd () {
         sleep 2
     done
 }
+
+set -x
 
 write_kubeadm_cfg
 scp -q -o LogLevel=QUIET -i /home/ubuntu/.ssh/id_rsa kubeadm-master-2.yaml ubuntu@master-2-a:~/
@@ -341,8 +354,8 @@ bootstrap_master_3
 
 # add calico! we should have these manifests in the base image
 # this will prevent failure if there is a network problem
-curl -LsO https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-curl -LsO https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
 
 sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
 
