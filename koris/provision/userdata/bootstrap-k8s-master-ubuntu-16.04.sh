@@ -2,7 +2,20 @@
 
 ###
 # A script to create a HA K8S cluster on OpenStack using pure bash and kubeadm
-###
+#
+# The script is devided into a whole bunch of function, look for the fuction
+# called main at the bottom.
+#
+# The script will create mutliple kubernetes control plane members connected
+# via an etcd cluster which is grown in a serial manner. That means we first
+# create a single etcd host, and then add N hosts one after another.
+#
+# The addition of hosts is done via SSH! And that is currently the biggest caveat
+# of this script. If one of the hosts will fail to because SSH is still not ready
+# the whole cluster will fail to create.
+#
+# Future work: add a mechanism to recover from ssh failure.
+##
 
 set -e
 
@@ -21,27 +34,20 @@ HOSTS["worker-4-b"]="de-nbg6-1b"
 HOSTS["worker-5-b"]="de-nbg6-1b"
 HOSTS["worker-6-b"]="de-nbg6-1b"
 export HOSTS
-export IMAGE=koris-2018-11-24
-export MASTER_FLAVOR=ECS.C1.2-4
-export WORKER_FLAVOR=ECS.C1.4-8
 export SUBNET="k8s-subnet"
 export FLOATING_IP="213.95.155.150"
-export MASTER1_IP=192.168.0.121
-export MASTER2_IP=192.168.0.126
-export MASTER3_IP=192.168.0.123
 export LOAD_BALANCER_IP=213.95.155.150
 export LOAD_BALANCER_PORT=6443
-export CP0_IP=192.168.0.121
-export CP1_IP=192.168.0.126
-export CP2_IP=192.168.0.123
-export CP0_HOSTNAME=master-1-a
-export CP1_HOSTNAME=master-2-a
-export CP2_HOSTNAME=master-3-b
 export POD_SUBNET=10.233.0.0/16
 export KUBE_VERSION=1.11.4
-export CLUSTER=master-3-b=https://192.168.0.123:2380,master-1-a=https://192.168.0.121:2380,master-2-a=https://192.168.0.126:2380
-export CONTROL_PLANE_IPS="master-2-a master-3-b"
+
+MASTERS_IPS=( 192.168.0.121 192.168.0.126 192.168.0.123 )
+MASTERS=( master-1-a master-2-a master-3-b )
+
 export ALLHOSTS=( "${!HOSTS[@]}" "${!MASTERS[@]}" )
+export CURRENT_CLUSTER=""
+
+
 #### Versions for Kube 1.12.2
 KUBE_VERSION=1.12.2
 DOCKER_VERSION=18.06
@@ -86,9 +92,11 @@ python3 -c "$PY_CODE"
 install -m 600 cloud.config /etc/kubernetes/cloud.config
 }
 
-
-function write_kubeadm_cfg() {
-cat << EOF > kubeadm-master-1.yaml
+# create a proper kubeadm config file for each master.
+# the configuration files are ordered and contain the correct information
+# of each master and the rest of the etcd cluster
+function create_config_files() {
+    cat <<TMPL > init.tmpl
 apiVersion: kubeadm.k8s.io/v1alpha2
 kind: MasterConfiguration
 kubernetesVersion: v${KUBE_VERSION}
@@ -99,20 +107,20 @@ api:
 etcd:
   local:
     extraArgs:
-      listen-client-urls: "https://127.0.0.1:2379,https://${CP0_IP}:2379"
-      advertise-client-urls: "https://${CP0_IP}:2379"
-      listen-peer-urls: "https://${CP0_IP}:2380"
-      initial-advertise-peer-urls: "https://${CP0_IP}:2380"
-      initial-cluster: "${CP0_HOSTNAME}=https://${CP0_IP}:2380"
+      listen-client-urls: "https://127.0.0.1:2379,https://\${HOST_IP}:2379"
+      advertise-client-urls: "https://\${HOST_IP}:2379"
+      listen-peer-urls: "https://\${HOST_IP}:2380"
+      initial-advertise-peer-urls: "https://\${HOST_IP}:2380"
+      initial-cluster: "\${CURRENT_CLUSTER}"
     serverCertSANs:
-      - ${CP0_HOSTNAME}
-      - ${CP0_IP}
+      - \${HOST_NAME}
+      - \${HOST_IP}
     peerCertSANs:
-      - ${CP0_HOSTNAME}
-      - ${CP0_IP}
+      - \${HOST_NAME}
+      - \${HOST_NAME}
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
-    podSubnet: ${POD_SUBNET}
+    podSubnet: \${POD_SUBNET}
 nodeRegistrationOptions:
   kubeletExtraArgs:
     cloud-provider: openstack
@@ -132,118 +140,27 @@ controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: cloud-config
-  hostPath: /etc/kubernetes/cloud.config
-  mountPath: /etc/kubernetes/cloud.config
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: cloud-config
-  hostPath: /etc/kubernetes/cloud.config
-  mountPath: /etc/kubernetes/cloud.config
+- name: "/etc/kubernetes/cloud.config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
-EOF
+TMPL
 
-cat << EOF > kubeadm-master-2.yaml
-apiVersion: kubeadm.k8s.io/v1alpha2
-kind: MasterConfiguration
-kubernetesVersion: v${KUBE_VERSION}
-apiServerCertSANs:
-- "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
-api:
-    controlPlaneEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
-etcd:
-  local:
-    extraArgs:
-      listen-client-urls: "https://127.0.0.1:2379,https://${CP1_IP}:2379"
-      advertise-client-urls: "https://${CP1_IP}:2379"
-      listen-peer-urls: "https://${CP1_IP}:2380"
-      initial-advertise-peer-urls: "https://${CP1_IP}:2380"
-      initial-cluster: "${CP0_HOSTNAME}=https://${CP0_IP}:2380,${CP1_HOSTNAME}=https://${CP1_IP}:2380"
-      initial-cluster-state: existing
-    serverCertSANs:
-      - ${CP1_HOSTNAME}
-      - ${CP1_IP}
-    peerCertSANs:
-      - ${CP1_HOSTNAME}
-      - ${CP1_IP}
-networking:
-    # This CIDR is a calico default. Substitute or remove for your CNI provider.
-    podSubnet:  "${POD_SUBNET}"
-nodeRegistrationOptions:
-  kubeletExtraArgs:
-    cloud-provider: openstack
-    cloud-config: etc/kubernetes/cloud.config
-APIServerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
-controllerManagerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
-apiServerExtraVolumes:
-- name: cloud-config
-  hostPath: /etc/kubernetes/cloud.config
-  mountPath: /etc/kubernetes/cloud.config
-  writable: false
-  pathType: File
-controllerManagerExtraVolumes:
-- name: cloud-config
-  hostPath: /etc/kubernetes/cloud.config
-  mountPath: /etc/kubernetes/cloud.config
-  writable: false
-  pathType: File
-EOF
-
-cat << EOF > kubeadm-master-3.yaml
-apiVersion: kubeadm.k8s.io/v1alpha2
-kind: MasterConfiguration
-kubernetesVersion: v${KUBE_VERSION}
-apiServerCertSANs:
-- "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
-api:
-    controlPlaneEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
-etcd:
-  local:
-    extraArgs:
-      listen-client-urls: "https://127.0.0.1:2379,https://${CP2_IP}:2379"
-      advertise-client-urls: "https://${CP2_IP}:2379"
-      listen-peer-urls: "https://${CP2_IP}:2380"
-      initial-advertise-peer-urls: "https://${CP2_IP}:2380"
-      initial-cluster: "${CP0_HOSTNAME}=https://${CP0_IP}:2380,${CP1_HOSTNAME}=https://${CP1_IP}:2380,${CP2_HOSTNAME}=https://${CP2_IP}:2380"
-      initial-cluster-state: existing
-    serverCertSANs:
-      - ${CP2_HOSTNAME}
-      - ${CP2_IP}
-    peerCertSANs:
-      - ${CP2_HOSTNAME}
-      - ${CP2_IP}
-networking:
-    # This CIDR is a calico default. Substitute or remove for your CNI provider.
-    podSubnet:  "${POD_SUBNET}"
-nodeRegistrationOptions:
-  kubeletExtraArgs:
-    cloud-provider: openstack
-    cloud-config: etc/kubernetes/cloud.config
-APIServerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
-controllerManagerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
-apiServerExtraVolumes:
-- name: cloud-config
-  hostPath: /etc/kubernetes/cloud.config
-  mountPath: /etc/kubernetes/cloud.config
-  writable: false
-  pathType: File
-controllerManagerExtraVolumes:
-- name: cloud-config
-  hostPath: /etc/kubernetes/cloud.config
-  mountPath: /etc/kubernetes/cloud.config
-  writable: false
-  pathType: File
-EOF
+for i in ${!MASTERS[@]}; do
+	echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
+	export HOST_IP="${MASTERS_IPS[$i]}"
+	export HOST_NAME="${MASTERS[$i]}"
+	CURRENT_CLUSTER="${CURRENT_CLUSTER}$HOST_NAME=https://${HOST_IP}:2380,"
+        CURRENT_CLUSTER=${CURRENT_CLUSTER%?}
+	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
+done
 }
 
 # distributes configuration files and certificates
@@ -273,7 +190,10 @@ function distribute_keys() {
 
 V=${LOGLEVEL}
 
-function bootstrap_with_phases() {
+# bootstrap the first master.
+# the process is slightly different then for the rest of the N masters
+# we add
+function bootstrap_first_master() {
    echo "*********** Bootstrapping master-1 ******************"
    kubeadm -v=${V} alpha phase certs all --config $1
    kubeadm -v=${V} alpha phase kubelet config write-to-disk --config $1
@@ -300,37 +220,26 @@ function bootstrap_with_phases() {
    kubectl get nodes
 }
 
-function bootstrap_master_2() {
-   echo "*********** Bootstrapping master-2 ******************"
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase certs all --config  kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase kubelet config write-to-disk --config  kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase kubelet write-env-file --config  kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase kubeconfig kubelet --config  kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo systemctl start kubelet
+# add a master to the cluster
+# the first argument is the host name to add
+# the second argument is the host IP
+function add_master {
+   echo "*********** Bootstrapping $1 ******************"
+   scp -i /home/ubuntu/.ssh/id_rsa kubeadm-$1.yaml ubuntu@$1:~/
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase certs all --config  kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config  kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubelet write-env-file --config  kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubeconfig kubelet --config  kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo systemctl start kubelet
    # join the etcd host to the cluster
-   sudo kubectl exec -n kube-system etcd-${CP0_HOSTNAME} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${CP0_IP}:2379 member add ${CP1_HOSTNAME} https://${CP1_IP}:2380
+   sudo kubectl exec -n kube-system etcd-${first_master} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${first_master_ip}:2379 member add $1 https://$2:2380
    # launch etcd
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase etcd local --config  kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase kubeconfig all --config  kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase controlplane all --config   kubeadm-master-2.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP1_HOSTNAME sudo kubeadm alpha phase mark-master --config  kubeadm-master-2.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase etcd local --config  kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubeconfig all --config  kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase controlplane all --config   kubeadm-$1.yaml
+   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase mark-master --config  kubeadm-master-$1.yaml
 }
 
-function bootstrap_master_3() {
-    echo "*********** Bootstrapping master-3 ******************"
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase certs all --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubelet config write-to-disk --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubelet write-env-file --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubeconfig kubelet --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo systemctl start kubelet
-
-    sudo kubectl exec -n kube-system etcd-${CP0_HOSTNAME} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${CP0_IP}:2379 member add ${CP2_HOSTNAME} https://${CP2_IP}:2380
-
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase etcd local --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase kubeconfig all --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase controlplane all --config kubeadm-master-3.yaml
-    ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$CP2_HOSTNAME sudo kubeadm alpha phase mark-master --config kubeadm-master-3.yaml
-}
 
 function wait_for_etcd () {
     until [[ x"$(kubectl get pod etcd-$1 -n kube-system -o jsonpath='{.status.phase}' 2>/dev/null)" == x"Running" ]]; do
@@ -339,28 +248,36 @@ function wait_for_etcd () {
     done
 }
 
-set -x
+# the entry point of the who script.
+# this function bootstraps the who etcd cluster and control plane components
+# accross N hosts
+function main() {
+    export first_master=${MASTERS[0]}
+    export first_master_ip=${MASTERS_IPS[0]}
+    create_config_files
+    write_cloud_conf
+    bootstrap_first_master kubeadm-master-1.yaml
+    wait_for_etcd master-1-a
 
-write_kubeadm_cfg
-scp -q -o LogLevel=QUIET -i /home/ubuntu/.ssh/id_rsa kubeadm-master-2.yaml ubuntu@master-2-a:~/
-scp -q -o LogLevel=QUIET -i /home/ubuntu/.ssh/id_rsa kubeadm-master-3.yaml ubuntu@master-3-b:~/
+    for (( i=1; i<${#MASTERS[@]}; i++ )); do
+        echo "${MASTERS[$i]}";
+        HOST_NAME=${MASTERS[$i]}
+        HOST_IP=${MASTERS_IPS[$i]}
+        add_master $HOST_NAME $HOST_IP
+        wait_for_etcd $HOST_NAME
+    done
 
-write_cloud_conf
-bootstrap_with_phases kubeadm-master-1.yaml
-wait_for_etcd master-1-a
-bootstrap_master_2
-wait_for_etcd master-2-a
-bootstrap_master_3
+    # add calico! we should have these manifests in the base image
+    # this will prevent failure if there is a network problem
+    curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+    curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
 
-# add calico! we should have these manifests in the base image
-# this will prevent failure if there is a network problem
-curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+    sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
 
-sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
+    kubectl apply -f rbac-kdd.yaml
+    kubectl apply -f calico.yaml
+}
 
-kubectl apply -f rbac-kdd.yaml
-kubectl apply -f calico.yaml
 
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
@@ -401,3 +318,5 @@ function install_deps() {
     done
 }
 
+
+main
