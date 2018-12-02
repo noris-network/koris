@@ -13,9 +13,7 @@
 # The addition of hosts is done via SSH! And that is currently the biggest caveat
 # of this script. If one of the hosts will fail to because SSH is still not ready
 # the whole cluster will fail to create.
-#
-# Future work: add a mechanism to recover from ssh failure.
-##
+###
 
 set -e
 
@@ -59,6 +57,7 @@ CALICO_VERSION=3.3
 #CALICO_VERSION=3.1
 
 LOGLEVEL=4
+SSHOPTS="-i /home/ubuntu/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 ################################################################################
 
 # writes /etc/kubernetes/cloud.config
@@ -167,23 +166,23 @@ done
 function distribute_keys() {
    USER=ubuntu # customizable
    for host in ${CONTROL_PLANE_IPS}; do
-       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo rm -vRf /etc/kubernetes
-       ssh -i /home/ubuntu/.ssh/id_rsa  ${USER}@$host mkdir -pv kubernetes/pki/etcd
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/ca.crt "${USER}"@$host:~/kubernetes/pki/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/ca.key "${USER}"@$host:~/kubernetes/pki/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/sa.key "${USER}"@$host:~/kubernetes/pki/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/sa.pub "${USER}"@$host:~/kubernetes/pki/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:~/kubernetes/pki/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:~/kubernetes/pki/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:~/kubernetes/pki/etcd/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:~/kubernetes/pki/etcd/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/admin.conf "${USER}"@$host:~/kubernetes/
-       sudo -E scp -i /home/ubuntu/.ssh/id_rsa /etc/kubernetes/cloud.config "${USER}"@$host:~/kubernetes/
+       ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
+       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv kubernetes/pki/etcd
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:~/kubernetes/pki/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:~/kubernetes/pki/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:~/kubernetes/pki/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:~/kubernetes/pki/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:~/kubernetes/pki/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:~/kubernetes/pki/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:~/kubernetes/pki/etcd/
+       sudo -E ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:~/kubernetes/pki/etcd/
+       sudo -E ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:~/kubernetes/
+       sudo -E ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:~/kubernetes/
 
-       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo mv -v kubernetes /etc/
-       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chown root:root -vR /etc/kubernetes
-       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
-       ssh -i /home/ubuntu/.ssh/id_rsa ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.config
+       ssh ${SSHOPTS} ${USER}@$host sudo mv -v kubernetes /etc/
+       ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+       ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+       ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.config
    done
 }
 
@@ -225,19 +224,24 @@ function bootstrap_first_master() {
 # the second argument is the host IP
 function add_master {
    echo "*********** Bootstrapping $1 ******************"
+   until ssh $1 hostname; do
+       echo "waiting for ssh on $1"
+       sleep 2
+   done
+
    scp -i /home/ubuntu/.ssh/id_rsa kubeadm-$1.yaml ubuntu@$1:~/
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase certs all --config  kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config  kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubelet write-env-file --config  kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubeconfig kubelet --config  kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo systemctl start kubelet
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase certs all --config  kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config  kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubelet write-env-file --config  kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubeconfig kubelet --config  kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo systemctl start kubelet
    # join the etcd host to the cluster
    sudo kubectl exec -n kube-system etcd-${first_master} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${first_master_ip}:2379 member add $1 https://$2:2380
    # launch etcd
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase etcd local --config  kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase kubeconfig all --config  kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase controlplane all --config   kubeadm-$1.yaml
-   ssh -i /home/ubuntu/.ssh/id_rsa ubuntu@$1 sudo kubeadm alpha phase mark-master --config  kubeadm-master-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase etcd local --config  kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubeconfig all --config  kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase controlplane all --config   kubeadm-$1.yaml
+   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase mark-master --config  kubeadm-master-$1.yaml
 }
 
 
