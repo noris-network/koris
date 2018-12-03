@@ -4,21 +4,18 @@ to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
 import base64
-import json
 import os
-import re
-import textwrap
-
+import yaml
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pkg_resources import (Requirement, resource_filename, get_distribution)
 from datetime import datetime
 
-from koris.ssl import (b64_key, b64_cert)
-from koris.util.util import (encryption_config_tmpl,
-                             calicoconfig, get_kubeconfig_yaml,
-                             get_logger)
+from cryptography.hazmat.primitives import serialization
+
+from koris.ssl import b64_cert, b64_key
+from koris.util.util import get_logger
 
 LOGGER = get_logger(__name__)
 
@@ -26,466 +23,201 @@ LOGGER = get_logger(__name__)
 BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 
-# TODO: fix this file, since I wanted to do it nicely but lost the overview...
-
 class BaseInit:
     """
-    Base class for cloud inits
+    Attributes:
+        cloud_config_data       this attribute contains the text/cloud-config
+                                files that is passed to the instances
+        attachments             this attribute contains other parts of the
+                                userdata, e.g scripts that are directly
+                                executed by cloud-init. They should be
+                                instances of MIMEText with the header
+                                'Content-Disposition' set to 'attachment'
     """
+    def __init__(self):
+        self._cloud_config_data = {}
+        self._attachments = []
 
-    @staticmethod
-    def format_file(
-            part_name, path_name, content,
-            encoder=lambda x: base64.b64encode(x),  # pylint: disable=unnecessary-lambda
-            owner='root',
-            group='root',
-            permissions='0600'):
+        # if needed we can declare and use other sections at this point...
+        self._cloud_config_data['write_files'] = []
+        self._cloud_config_data['ssh_authorized_keys'] = []
+
+        # TODO: Do we still need this?
+        self._cloud_config_data['manage_etc_hosts'] = True
+        self._cloud_config_data['runcmd'] = []
+        self._cloud_config_data['runcmd'].append('swapoff -a')
+
+        # assemble the parts
+        self._write_koris_info()
+
+    def write_file(self, path, content, owner="root", group="root",
+                   permissions="0600", encoder=lambda x: base64.b64encode(x)):
         """
-        format a file to the correct section in cloud init
+        writes a file to the instance
+        path: e.g. /etc/kubernetes/koris.conf
+        content: string of the content of the file
+        owner: e.g. root
+        group: e.g. root
+        permissions: e.g. "0644", as string
+        encode: Optional encoder to use for the needed base64 encoding
         """
-        part = """
-        # {part_name}
-         - path: {path_name}
-           encoding: b64
-           content: {content}
-           owner: {owner}:{group}
-           permissions: '{permissions}'
+        data = {
+            "path": path,
+            "owner": owner+":"+group,
+            "encoding": "b64",
+            "permissions": permissions,
+            "content": encoder(content.encode()).decode()
+        }
+        self._cloud_config_data['write_files'].append(data)
+
+    def execute_shell_script(self, script):
         """
-        part = textwrap.dedent(part)
-
-        return part.format(part_name=part_name,
-                           path_name=path_name,
-                           content=encoder(content).decode(),
-                           owner=owner,
-                           group=group,
-                           permissions=permissions).lstrip()
-
-    def __init__(self, cloud_provider):
-        self.cloud_provider = cloud_provider
-
-    def _get_generic(self):
-        return self.format_file(
-            'cloud_config',
-            '/etc/kubernetes/cloud.conf',
-            self.cloud_provider,
-            encoder=lambda x: bytes(x))  # pylint: disable=unnecessary-lambda
-            
-        
-        # process generic cloud-init file
-        fh = open(resource_filename(Requirement('koris'),
-                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                 'generic')))
-        # we currently blindly assume the first line is a mimetype
-        # or a shebang
-        main_type, _subtype = fh.readline().strip().split("/", 1)
-
-        if '#!' in main_type:
-            _subtype = 'x-shellscript'
-
-        sub_message = MIMEText(fh.read(), _subtype=_subtype)
-        sub_message.add_header('Content-Disposition', 'attachment',
-                               filename='generic')
-        self.combined_message.attach(sub_message)
-        fh.close()
-
-        return self.combined_message.as_string()
-        
-    def _get_cloud_provider(self):
-        return self.format_file(
-            'cloud_config',
-            '/etc/kubernetes/cloud.conf',
-            self.cloud_provider,
-            encoder=lambda x: bytes(x))  # pylint: disable=unnecessary-lambda
-
-    def get_files_config(self):
+        execute a script on the booted instance.
+        script: the script (str) to execute after provisioning the instance
         """
-        join all parts of the cloud-init
+        part = MIMEText(script, _subtype='x-shellscript')
+        part.add_header('Content-Disposition', 'attachment')
+        self._attachments.append(part)
+
+    def add_ssh_public_key(self, ssh_key):
         """
-        raise NotImplementedError
-
-
-class FirstMasterInit(BaseInit):
-    """
-    Create a cloud  init config for a master node (the first one)
-    """
-    def __init__(self, ssh_key):
-        super().__init__()
-        self.ssh_key = ssh_key
-        self.role = 'master'
-
-    def _get_bootstrap_script(self):
+        ssh_key should be the key pair to use of type:
+            cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey
+        which is the return value of function koris.ssl.create_key
         """
-        write bootstrap script to BOOTSTRAP_SCRIPTS_DIR
+        keyline = ssh_key.public_key().public_bytes(
+            serialization.Encoding.OpenSSH,
+            serialization.PublicFormat.OpenSSH).decode()
+        self._cloud_config_data['ssh_authorized_keys'].append(keyline)
+
+    def _write_koris_info(self):
         """
-        return self.format_file('', '/var/lib/kubernetes/token.csv',
-                                self.token_csv_data,
-                                encoder=lambda x: x.encode())
-
-        sub_message = MIMEText(self.get_files_config(),
-                               _subtype='text/cloud-config')
-        sub_message.add_header('Content-Disposition', 'attachment')
-        self.combined_message.attach(sub_message)  # pylint: disable=no-member
-
-        k8s_bootstrap = "bootstrap-k8s-%s-%s-%s.sh" % (
-            self.role, self.os_type, self.os_version)  # pylint: disable=no-member
-
-
-
-    def get_files_config(self):
+        Generate the koris.conf configuration file.
         """
-        write the section write_files into the cloud-config
-        """
-        config = textwrap.dedent("""
-        #cloud-config
-        write_files:
-        """) + self._get_bootstrap_script().lstrip() \
-             + self._etcd_cluster_info().lstrip() \
-             + self._get_svc_account_info().lstrip() \
-             + self._get_encryption_config().lstrip() \
-             + self._get_cloud_provider().lstrip() \
-             + self._get_token_csv().lstrip() \
-             + self._get_koris_info().lstrip()
+        content = """# This file contains meta information about koris
 
-        return config
-
-
-class MasterInit(BaseInit):
-    """
-    Create a cloud  init config for a master node (not the first one)
-    """
-
-    def __init__(self, hostname, etcds,
-                 certs, encryption_key=None,
-                 cloud_provider=None,
-                 token_csv_data="",
-                 os_type='ubuntu',
-                 os_version="16.04"):
-        """
-        cluster_info - a dictionary with infromation about the etcd cluster
-        members
-        """
-        self.combined_message = MIMEMultipart()
-        self.hostname = hostname
-        self.role = 'master'
-        self.etcds = etcds
-        self.certs = certs
-        self.os_type = os_type
-        self.os_version = os_version
-        self.encryption_key = encryption_key
-        self.cloud_provider = cloud_provider
-        self.token_csv_data = token_csv_data
-
-    def _etcd_cluster_info(self, port=2380):
-        """
-        Write the etcd cluster info to /etc/systemd/system/etcd.env
-        """
-        tmpl = "%s=https://%s:%d"
-        cluster_info_part = """
-
-        # systemd env
-         - path: /etc/systemd/system/etcd.env
-           owner: root:root
-           permissions: '0644'
-           content: |
-             NODE01_IP={}
-             NODE02_IP={}
-             NODE03_IP={}
-             INITIAL_CLUSTER={}
-        """.format(self.etcds[0].ip_address,
-                   self.etcds[1].ip_address,
-                   self.etcds[2].ip_address,
-                   ",".join(
-                       tmpl % (etcd.name.lower(), etcd.ip_address, port) for
-                            etcd in self.etcds))
-        return textwrap.dedent(cluster_info_part)
-
-    def _get_token_csv(self):
-        """
-        write access data to /var/lib/kubernetes/token.csv
-        """
-
-        return self.format_file('token_csv', '/var/lib/kubernetes/token.csv',
-                                self.token_csv_data,
-                                encoder=lambda x: x.encode())
-
-    def _get_certificate_info(self):
-        # write data for CA for the etcds
-        etcd_ca = self.format_file("etcd_ca",
-                                   "/etc/kubernetes/pki/etcd/ca.crt",
-                                   self.certs['etcd_ca'].cert,
-                                   encoder=lambda x: b64_cert(x).encode())
-
-        etcd_ca_key = self.format_file("etcd_ca_key",
-                                       "/etc/kubernetes/pki/etcd/ca.key",
-                                       self.certs['etcd_ca'].key,
-                                       encoder=lambda x: b64_key(x).encode())
-
-        # write data for this host as etcd peer, this certificate is used
-        # for opening up connections to peers and for validating incoming
-        # connections from peers
-        etcd_peer = self.format_file('peer',
-                                     "/etc/kubernetes/pki/etcd/peer.crt",
-                                     self.certs["%s-peer" % self.hostname].cert,  # noqa
-                                     encoder=lambda x: b64_cert(x).encode())
-
-        etcd_peer_key = self.format_file('peer_key',
-                                         "/etc/kubernetes/pki/etcd/peer.key",
-                                         self.certs["%s-peer" % self.hostname].key,  # noqa
-                                         encoder=lambda x: b64_key(x).encode())
-
-        # write data for this host as etcd server, this certificate is used
-        # for validating incoming client connections (from K8s)
-        etcd_server = self.format_file('server',
-                                     "/etc/kubernetes/pki/etcd/server.crt",
-                                     self.certs["%s-server" % self.hostname].cert,  # noqa
-                                     encoder=lambda x: b64_cert(x).encode())
-
-        etcd_server_key = self.format_file('server_key',
-                                         "/etc/kubernetes/pki/etcd/server.key",
-                                         self.certs["%s-server" % self.hostname].key,  # noqa
-                                         encoder=lambda x: b64_key(x).encode())
-
-        # write out certificate data so that the api-server running on this
-        # host is able to access the etcd cluster
-        api_etcd_client = self.format_file('apiserver-etcd-client',
-                                     "/etc/kubernetes/pki/etcd/api-ectd-client.crt", # noqa
-                                     self.certs["apiserver-etcd-client"].cert,  # noqa
-                                     encoder=lambda x: b64_cert(x).encode())
-
-        api_etcd_client_key = self.format_file('apiserver-etcd-client_key',
-                                     "/etc/kubernetes/pki/etcd/api-ectd-client.key", # noqa
-                                     self.certs["apiserver-etcd-client"].key,  # noqa
-                                     encoder=lambda x: b64_key(x).encode())
-
-        # write certificates needed for K8s
-        # this CA will be used to authenticate accesses to the K8S api-server.
-        # It is _not_ the same as the CA for etcd!
-        ca = self.format_file("ca",
-                              "/etc/ssl/kubernetes/ca.pem",
-                              self.certs['ca'].cert,
-                              encoder=lambda x: b64_cert(x).encode())
-
-        ca_key = self.format_file("ca-key",
-                                  "/etc/ssl/kubernetes/ca-key.pem",
-                                  self.certs['ca'].key,
-                                  encoder=lambda x: b64_key(x).encode())
-
-        # this certifcate is used for communications within K8s
-        k8s_key = self.format_file("k8s-key",
-                                   "/etc/ssl/kubernetes/kubernetes-key.pem",
-                                   self.certs['k8s'].key,
-                                   encoder=lambda x: b64_key(x).encode())
-        k8s_cert = self.format_file("k8s-cert",
-                                    "/etc/ssl/kubernetes/kubernetes.pem",
-                                    self.certs['k8s'].cert,
-                                    encoder=lambda x: b64_cert(x).encode())
-
-        return "".join((etcd_ca, etcd_ca_key, etcd_peer, etcd_peer_key,
-                        etcd_server, etcd_server_key, api_etcd_client,
-                        api_etcd_client_key, ca, ca_key, k8s_key,
-                        k8s_cert, ))
-
-    def _get_encryption_config(self):
-        encryption_config = re.sub("%%ENCRYPTION_KEY%%",
-                                   self.encryption_key,
-                                   encryption_config_tmpl).encode()
-
-        return self.format_file(
-            "encryption_config",
-            "/var/lib/kubernetes/encryption-config.yaml",
-            encryption_config)
-
-    def _get_svc_account_info(self):
-
-        svc_accnt_key = self.format_file(
-            "svc-account-key",
-            "/etc/ssl/kubernetes/service-accounts-key.pem",
-            self.certs['service-account'].key,
-            encoder=lambda x: b64_key(x).encode())
-
-        svc_accnt_cert = self.format_file(
-            "svc-account-cert",
-            "/etc/ssl/kubernetes/service-accounts.pem",
-            self.certs['service-account'].cert,
-            encoder=lambda x: b64_cert(x).encode())
-
-        return svc_accnt_key + svc_accnt_cert
-
-    def _get_koris_info(self):
-        """
-        Write the koris.conf configuration file
-        """
-        koris_conf_info_part = """
-
-        # koris conf
-         - path: /etc/kubernetes/koris.conf
-           owner: root:root
-           permissions: '0644'
-           content: |
-             # This file contains meta information about koris
-
-             koris_version={}
-             creation_date={}
+        koris_version={}
+        creation_date={}
         """.format(
             get_distribution('koris').version,
             datetime.strftime(datetime.now(), format="%c"))
-        return textwrap.dedent(koris_conf_info_part)
 
-    def get_files_config(self):
-        """
-        write the section write_files into the cloud-config
-        """
-        config = textwrap.dedent("""
-        #cloud-config
-        write_files:
-        """) + self._get_certificate_info().lstrip() \
-             + self._etcd_cluster_info().lstrip() \
-             + self._get_svc_account_info().lstrip() \
-             + self._get_encryption_config().lstrip() \
-             + self._get_cloud_provider().lstrip() \
-             + self._get_token_csv().lstrip() \
-             + self._get_koris_info().lstrip()
+        self.write_file("/etc/kubernetes/koris.conf", content, "root", "root",
+                        "0644")
 
-        return config
+    def __str__(self):
+        """
+        This method generates a string from the cloud_config_data and the
+        attachments that have been set in the corresponding attributes.
+        """
+        userdata = MIMEMultipart()
+
+        # first add the cloud-config-data script
+        config = MIMEText(yaml.dump(self._cloud_config_data),
+                          _subtype='cloud-config')
+        config.add_header('Content-Disposition', 'attachment')
+        userdata.attach(config)
+
+        for attachment in self._attachments:
+            userdata.attach(attachment)
+
+        return userdata.as_string()
+
+
+class NthMasterInit(BaseInit):
+    """
+    Initialization userdata for an n-th master node. Nothing more than
+    adding an public SSH key for access from the first master node needs
+    to be done.
+    """
+    def __init__(self, ssh_key, os_type='ubuntu',
+                 os_version="16.04"):
+        """
+        ssh_key is a RSA keypair (return value from create_key from util.ssl
+            package)
+        """
+        super().__init__()
+        self.ssh_key = ssh_key
+        self.os_type = os_type
+        self.os_version = os_version
+        self.role = 'master'
+
+        # assemble the parts for an n-th master node
+        self.add_ssh_public_key(self.ssh_key)
+
+
+class FirstMasterInit(NthMasterInit):
+    """
+    First node is a special nth node. Therefore we inherit from NthMasterInit.
+    First node needs to execute bootstrap script.
+    """
+    def __init__(self, ssh_key, ca_bundle, cloud_config, os_type='ubuntu',
+                 os_version="16.04"):
+        """
+        ssh_key is a RSA keypair (return value from create_key from util.ssl
+            package)
+        ca_bundle: The CA bundle for the CA that is used to permit accesses
+            to the API server.
+        cloud_config: An OSCloudConfig instance describing the information
+            necessary for sending requests to the underlying cloud. Needed e.g.
+            for auto scaling.
+        """
+        super().__init__(ssh_key, os_type, os_version)
+        self.ca_bundle = ca_bundle
+        self.cloud_config = cloud_config
+
+        # assemble the parts for the first master
+        # use an encoder that just returns x, since b64_cert encodes already
+        # in base64 mode
+        self.write_file("/etc/kubernetes/pki/ca.crt", b64_cert(ca_bundle.cert),
+                        "root", "root", "0600", lambda x: x)
+        self.write_file("/etc/kubernetes/pki/ca.key", b64_key(ca_bundle.key),
+                        "root", "root", "0600", lambda x: x)
+        self._write_cloud_config()
+        self.execute_shell_script(self._get_bootstrap_script())
+
+    def _get_bootstrap_script(self):
+        name = "bootstrap-k8s-%s-%s-%s.sh" % (
+            self.role, self.os_type, self.os_version)
+
+        fh = open(resource_filename(Requirement('koris'),
+                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                 name)))
+        script = fh.read()
+        return script
+
+    def _write_cloud_config(self):
+        """
+        write out the cloud provider configuration file for OpenStack
+        """
+        # TODO: Password for OpenStack is included... think about security?
+        content = str(self.cloud_config)
+        self.write_file("/etc/kubernetes/cloud.conf", content, "root", "root",
+                        "0600")
 
 
 class NodeInit(BaseInit):
-
-    def __init__(self, instance, token,
-                 ca_cert_bundle,
-                 etcd_cert_bundle,
-                 svc_account_bundle,
-                 etcd_cluster_info, calico_token,
-                 lb_ip,
-                 cloud_provider=None,
-                 os_type='ubuntu', os_version="16.04"):
-
-        self.instance = instance
-        self.role = 'node'
-        self.token = token
-        self.ca_cert_bundle = ca_cert_bundle
+    """
+    The node does nothing else than executing its bootstrap script.
+    """
+    def __init__(self, os_type='ubuntu', os_version="16.04"):
+        """
+        """
+        super().__init__()
         self.os_type = os_type
         self.os_version = os_version
-        self.etcd_cluster_info = etcd_cluster_info
-        self.calico_token = calico_token
-        self.lb_ip_address = lb_ip
-        self.combined_message = MIMEMultipart()
-        self.cloud_provider = cloud_provider
-        self.etcd_cert_bundle = etcd_cert_bundle
-        self.svc_accnt_bundle = svc_account_bundle
+        self.role = "node"
 
-    def _get_certificate_info(self):
-        """
-        write certificates to destination directory
-        """
-        ca = self.format_file("ca",
-                              "/etc/ssl/kubernetes/ca.pem",
-                              self.ca_cert_bundle.cert,
-                              encoder=lambda x: b64_cert(x).encode())
+        # assemble parts for the node
+        # TODO: How to include bootstrap token? What's the exact mechanic here
+        self.execute_shell_script(self._get_bootstrap_script())
 
-        k8s_key = self.format_file("k8s-key",
-                                   "/etc/ssl/kubernetes/kubernetes-key.pem",
-                                   self.etcd_cert_bundle.key,
-                                   encoder=lambda x: b64_key(x).encode())
-        k8s_cert = self.format_file("k8s-cert",
-                                    "/etc/ssl/kubernetes/kubernetes.pem",
-                                    self.etcd_cert_bundle.cert,
-                                    encoder=lambda x: b64_cert(x).encode())
+        def _get_bootstrap_script(self):
+            name = "bootstrap-k8s-%s-%s-%s.sh" % (
+                self.role, self.os_type, self.os_version)
 
-        return ca + k8s_key + k8s_cert
-
-    def _get_svc_account_info(self):
-
-        svc_accnt_key = self.format_file(
-            "svc-account-key",
-            "/etc/ssl/kubernetes/service-accounts-key.pem",
-            self.svc_accnt_bundle.key,
-            encoder=lambda x: b64_key(x).encode())
-
-        svc_accnt_cert = self.format_file(
-            "svc-account-cert",
-            "/etc/ssl/kubernetes/service-accounts.pem",
-            self.svc_accnt_bundle.cert,
-            encoder=lambda x: b64_cert(x).encode())
-
-        return svc_accnt_key + svc_accnt_cert
-
-    def _get_kubelet_config(self):
-
-        kubeconfig = get_kubeconfig_yaml(
-            "https://%s:6443" % self.lb_ip_address,
-            "kubelet",
-            self.token,
-            skip_tls=True
-        )
-
-        kubelet_config_part = """
-        # encryption_config
-         - path: /var/lib/kubelet/kubeconfig.yaml
-           encoding: b64
-           content: {}
-           owner: root:root
-           permissions: '0600'
-        """.format(kubeconfig)
-
-        return textwrap.dedent(kubelet_config_part).lstrip()
-
-    def _get_kubeproxy_info(self):
-        kubeproxy_part = """
-        # kube proxy configuration
-         - path: /etc/systemd/system/kube-proxy.env
-           encoding: b64
-           content: {}
-           owner: root:root
-           permissions: '0600'
-        """.format(
-            base64.b64encode(("LB_IP=%s" %
-                              self.lb_ip_address).encode()).decode()  # noqa
-            )
-
-        return textwrap.dedent(kubeproxy_part).lstrip()
-
-    def _get_calico_config(self, port=2739):
-        calicoconfig['etcd_endpoints'] = ",".join(
-            "https://%s:%d" % (etcd_host.ip_address, port)
-            for etcd_host in self.etcd_cluster_info)
-
-        cc = json.dumps(calicoconfig, indent=2).encode()
-
-        return self.format_file(
-            'calico_config',
-            '/etc/cni/net.d/10-calico.conf',
-            cc,
-            encoder=lambda x: base64.b64encode(x))  # pylint: disable=unnecessary-lambda
-
-    def _get_kubelet_env_info(self):
-        """
-        Write the kubelet environment info to /etc/systemd/system/kubelet.env
-        """
-        kubelet_env_info_part = """
-
-        # systemd env
-         - path: /etc/systemd/system/kubelet.env
-           owner: root:root
-           permissions: '0644'
-           content: |
-             NODE_IP={}
-        """.format(self.instance.ip_address)
-        return textwrap.dedent(kubelet_env_info_part)
-
-    def get_files_config(self):
-        """
-        write the section write_files into the cloud-config
-        """
-        config = textwrap.dedent("""
-        #cloud-config
-        write_files:
-        """) + self._get_kubelet_config() \
-             + self._get_certificate_info() \
-             + self._get_svc_account_info() \
-             + self._get_kubeproxy_info() \
-             + self._get_cloud_provider().lstrip() \
-             + self._get_calico_config() \
-             + self._get_kubelet_env_info()
-
-        return config
+            fh = open(resource_filename(Requirement('koris'),
+                                        os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                     name)))
+            script = fh.read()
+            return script

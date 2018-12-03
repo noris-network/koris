@@ -697,7 +697,6 @@ def distribute_host_zones(hosts, zones):
 
     n = len(zones)
     hosts = [hosts[start::len(zones)] for start in range(n)]
-
     return list(zip(hosts, zones))
 
 

@@ -302,6 +302,9 @@ class CertBundle:
         """
         save a certificate bundle to the file system
         """
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+
         write_key(self.key,
                   filename=os.path.join(directory, name + key_suffix))
         write_cert(self.cert, os.path.join(directory, name + cert_suffix))

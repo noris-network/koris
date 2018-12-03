@@ -5,20 +5,14 @@ Builder
 Build a kubernetes cluster on a cloud
 """
 import asyncio
-import uuid
 import sys
-import time
 
-from koris.deploy.k8s import K8S
-
-from koris.cli import write_kubeconfig
-from koris.provision.cloud_init import MasterInit, NodeInit
-from koris.ssl import create_certs, b64_key, b64_cert, create_key, create_ca, CertBundle
+from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
+from koris.ssl import create_key, create_ca, CertBundle
 from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
-from koris.util.util import (get_logger,
-                             get_token_csv)
+from koris.util.util import get_logger
 from .openstack import OSClusterInfo
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
@@ -55,6 +49,10 @@ class NodeBuilder:
             etcd_cluster_info - a list of EtcServer instances.
             This is need since calico communicates with etcd.
         """
+
+        # TODO: remove after debugging
+        return
+
         cloud_provider_info = OSCloudConfig(self._info.subnet_id)
 
         kubelet_token = kwargs.get('kubelet_token')
@@ -135,9 +133,7 @@ class ControlPlaneBuilder:
     """
 
     def __init__(self, config, osinfo):
-
-        LOGGER.info(info(cyan(
-            "gathering control plane information from openstack ...")))
+        LOGGER.info("gathering control plane information from openstack ...")
         self._config = config
         self._info = osinfo
 
@@ -150,13 +146,13 @@ class ControlPlaneBuilder:
         """
         return list(self._info.distribute_management())
 
-    def create_masters_tasks(self, ssh_key):
+    def create_masters_tasks(self, cloud_config, ssh_key, ca_bundle):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
         masters = self.get_masters()
         if len(masters) < 3:
-            print(red("There should be at lest three master nodes!"))
+            LOGGER.warn("There should be at lest three master nodes!")
             return
 
         loop = asyncio.get_event_loop()
@@ -164,20 +160,21 @@ class ControlPlaneBuilder:
 
         for index, master in enumerate(masters):
             if master._exists:
-                print(yellow("Node {} is already existing! Skipping "
-                             "creation.".format(master)))
+                LOGGER.error("Node {} is already existing! Skipping "
+                             "creation.".format(master))
                 continue
 
             if not index:
                 # create userdata for first master node if not existing
-                userdata = str(FirstMasterInit(ssh_key))
+                userdata = str(FirstMasterInit(ssh_key, ca_bundle,
+                               cloud_config))
             else:
                 # create userdata for following master nodes if not existing
-                userdata = str((MasterInit(ssh_key)))
+                userdata = str(NthMasterInit(ssh_key))
 
             tasks.append(loop.create_task(
-                masters[0].create(self._info.master_flavor, self._info.secgroups, # noqa
-                                  self._info.keypair, userdata)
+                master.create(self._info.master_flavor, self._info.secgroups,
+                              self._info.keypair, userdata)
             ))
 
         return tasks
@@ -194,7 +191,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             sys.exit(2)
 
         self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
-        LOGGER.debug(info("Done collecting infromation from OpenStack"))
+        LOGGER.debug(info("Done collecting information from OpenStack"))
 
         self.nodes_builder = NodeBuilder(config, self.info)
         self.masters_builder = ControlPlaneBuilder(config, self.info)
@@ -205,26 +202,31 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         _key = create_key(size=2048)
         _ca = create_ca(_key, _key.public_key(),
                         "DE", "BY", "NUE",
-                        "Kubernetes", "CDA-PI",
-                        "kubernetes")
+                        "Kubernetes", "CDA-RT",
+                        "kubernetes-ca")
         return CertBundle(_key, _ca)
 
     def run(self, config):  # pylint: disable=too-many-locals
         """
         execute the complete cluster build
         """
+        if not config['subnet']:
+            LOGGER.error("You must specify a subnet ID.")
+            return
+
         loop = asyncio.get_event_loop()
-        cluster_info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
 
         # create a security group for the cluster if not already present
-        if cluster_info.secgroup._exists:
+        if self.info.secgroup._exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
                     'cluster-name'])))
             LOGGER.info(
                 info(red("I will add my own rules, please manually review all others")))  # noqa
 
-        cluster_info.secgroup.configure()
+        self.info.secgroup.configure()
+
+        cloud_config = OSCloudConfig(config['subnet'])
 
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
@@ -238,11 +240,20 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
-        master_tasks = self.masters_builder.create_masters_tasks(ssh_key,
-                                                                 ca_bundle)
+        master_tasks = self.masters_builder.create_masters_tasks(
+            cloud_config, ssh_key, ca_bundle)
 
         # create the worker node with ssh_key (public key)
-        node_tasks = self.nodes_builder.create_nodes_tasks(ssh_key)
+        # TODO: insert after debugging
+        # node_tasks = self.nodes_builder.create_nodes_tasks(ssh_key)
+
+        # TODO: remove after debugging is finished
+        # TODO: why is results [None, None, None]?!!?!?!?
+        loop = asyncio.get_event_loop()
+        results = loop.run_until_complete(asyncio.gather(*master_tasks))
+
+        import pdb
+        pdb.set_trace()
 
         # create a load balancer for accessing the API server of the cluster
         lbinst = LoadBalancer(config)
@@ -250,34 +261,30 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # add a listener for the first master node, since this is the node we
         # call kubeadm init on
+        # first, we need to get the IP from the first master node, maybe
+        # we need to wait until booted?
         # TODO: implement
 
-        configure_lb_task = loop.create_task(
-            lbinst.configure(NEUTRON, [host.ip_address for host in cp_hosts]))
+        # configure_lb_task = loop.create_task(
+        #    lbinst.configure(NEUTRON, [host.ip_address for host in cp_hosts]))
 
         # wait until the create tasks are finished
         LOGGER.info("Waiting for the machines to be launched...")
-        tasks = master_tasks + node_tasks + configure_lb_task
+        tasks = master_tasks + node_tasks
+        # tasks = master_tasks + node_tasks + configure_lb_task
         if tasks:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.gather(*tasks))
-        
-        # write local kubeconfig
-        # TODO: how to get to admin token? -> Answer: There is no admin token
-        # anymore, we have the CA and can create an own client certificate
-        # we can use to authenticate with 
-        kubeconfig = write_kubeconfig(config, lb_ip,
-                                      admin_t,
-                                      True)
-        
-        # connect the the API server and query which nodes are available;
-        # if every node is available and running, continue
-        # calico deployment was already applied during cloud-init
+
+        # We should no be able to query the API server for available nodes
+        # with a valid certificate from the generated CA. Hence, generate
+        # a client certificate and connect the the API server and query which
+        # nodes are available. If every node is available and running, continue
         # TODO: implement
-        
+
         # Finally, we want to add the other master nodes to the LoadBalancer
         # TODO: implement
-        
+
         # At this point, we're ready with our cluster
         LOGGER.debug(info("Done creating nodes tasks"))
         LOGGER.info("Kubernetes API Server is ready !!!")

@@ -54,7 +54,6 @@ class Kolt:
         Bootstrap a Kubernetes cluster
 
         config - configuration file
-        inventory - invetory file to write
         """
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
@@ -73,7 +72,6 @@ class Kolt:
         Bootstrap a Kubernetes cluster (deprecated)
 
         config - configuration file
-        inventory - invetory file to write
         """
         print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
         print(yellow("Use `apply` instead."))
