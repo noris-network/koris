@@ -49,7 +49,8 @@ class NodeBuilder:
 
         return list(self._info.distribute_nodes())
 
-    def create_nodes_tasks(self):
+    def create_nodes_tasks(self, ca_bundle, lb_ip, lb_port, bootstrap_token,
+                           discovery_hash):
         """
         Create future tasks for creating the cluster worker nodes
         """
@@ -63,7 +64,8 @@ class NodeBuilder:
                 raise BuilderError("Node {} is already existing! Skipping "
                                    "creation of the cluster.".format(node))
 
-            userdata = str(NodeInit())
+            userdata = str(NodeInit(ca_bundle, lb_ip, lb_port, bootstrap_token,
+                                    discovery_hash))
             tasks.append(loop.create_task(
                 node.create(self._info.node_flavor, self._info.secgroups,
                             self._info.keypair, userdata)
@@ -212,7 +214,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
         # TODO: We want to pass IP of load balancer and Join token to node
-        node_tasks = self.nodes_builder.create_nodes_tasks()
+        lb_port = "404"  # TODO: Where to get port from?
+        bootstrap_token = "foobar"  # TODO: generate generic bootstrap token
+        discovery_hash = "foobar2"  # TODO: What is this?
+
+        node_tasks = self.nodes_builder.create_nodes_tasks(ca_bundle,
+            floatingip, lb_port, bootstrap_token, discovery_hash)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
 
         # We should no be able to query the API server for available nodes

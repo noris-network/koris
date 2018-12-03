@@ -5,6 +5,7 @@ provided
 """
 import base64
 import os
+import textwrap
 import yaml
 
 from email.mime.multipart import MIMEMultipart
@@ -94,13 +95,14 @@ class BaseInit:
         """
         Generate the koris.conf configuration file.
         """
-        content = """# This file contains meta information about koris
-
+        content = """
+        # This file contains meta information about koris
         koris_version={}
         creation_date={}
         """.format(
             get_distribution('koris').version,
             datetime.strftime(datetime.now(), format="%c"))
+        content = textwrap.dedent(content)
 
         self.write_file("/etc/kubernetes/koris.conf", content, "root", "root",
                         "0644")
@@ -200,16 +202,24 @@ class NodeInit(BaseInit):
     """
     The node does nothing else than executing its bootstrap script.
     """
-    def __init__(self, os_type='ubuntu', os_version="16.04"):
+    def __init__(self, ca_bundle, lb_ip, lb_port, bootstrap_token,
+                 discovery_hash, lb_dns='', os_type='ubuntu',
+                 os_version="16.04"):
         """
         """
         super().__init__()
+        self.ca_bundle = ca_bundle
+        self.lb_ip = lb_ip
+        self.lb_port = lb_port
+        self.bootstrap_token = bootstrap_token
+        self.discovery_hash = discovery_hash
+        self.lb_dns = lb_dns
         self.os_type = os_type
         self.os_version = os_version
         self.role = "node"
 
         # assemble parts for the node
-        # TODO: How to include bootstrap token? What's the exact mechanic here
+        self._write_koris_env()
         self.execute_shell_script(self._get_bootstrap_script())
 
     def _get_bootstrap_script(self):
@@ -221,3 +231,22 @@ class NodeInit(BaseInit):
                                                  name)))
         script = fh.read()
         return script
+
+    def _write_koris_env(self):
+        """
+        writes the necessary koris information for the node to the file
+        /etc/kubernetes/koris.env
+        """
+        content = """
+            #!/bin/bash
+            export B64_CA_CONTENT="{}"
+            export LOAD_BALANCER_DNS="{}"
+            export LOAD_BALANCER_IP="{}"
+            export LOAD_BALANCER_PORT="{}"
+            export BOOTSTRAP_TOKEN="{}"
+            export DISCOVERY_HASH="{}"
+        """.format(b64_cert(self.ca_bundle.cert), self.lb_dns, self.lb_ip,
+                   self.lb_port, self.bootstrap_token, self.discovery_hash)
+        content = textwrap.dedent(content)
+        self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
+                        "0600")
