@@ -13,7 +13,7 @@ from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
 from koris.util.util import get_logger
-from .openstack import OSClusterInfo
+from .openstack import OSClusterInfo, BuilderError
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
                         )
@@ -39,35 +39,6 @@ class NodeBuilder:
         self.config = config
         self._info = osinfo
 
-    def create_userdata(self, nodes, etcd_cluster_info,
-                        cert_bundle, **kwargs):
-        """
-        create the userdata which is given to cloud init
-
-        Args:
-            nodes - a list of koris.cloud.openstack.Instance
-            etcd_cluster_info - a list of EtcServer instances.
-            This is need since calico communicates with etcd.
-        """
-
-        # TODO: remove after debugging
-        return
-
-        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
-
-        kubelet_token = kwargs.get('kubelet_token')
-        ca_cert = kwargs.get('ca_cert')
-        calico_token = kwargs.get('calico_token')
-        service_account_bundle = kwargs.get('service_account_bundle')
-        lb_ip = kwargs.get("lb_ip")
-
-        for node in nodes:
-            userdata = str(NodeInit(node, kubelet_token, ca_cert,
-                                    cert_bundle, service_account_bundle,
-                                    etcd_cluster_info, calico_token, lb_ip,
-                                    cloud_provider=cloud_provider_info))
-            yield userdata
-
     def get_nodes(self):
         """
         get information on the nodes from openstack.
@@ -78,42 +49,25 @@ class NodeBuilder:
 
         return list(self._info.distribute_nodes())
 
-    def create_nodes_tasks(self, certs,
-                           kubelet_token,
-                           calico_token,
-                           etcd_host_list,
-                           lb_ip,
-                           ):
+    def create_nodes_tasks(self):
         """
         Create future tasks for creating the cluster worker nodes
         """
-        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
-
-        node_args = {'kubelet_token': kubelet_token,
-                     'etcd_cluster_info': etcd_host_list,
-                     'calico_token': calico_token,
-                     }
-
         nodes = self.get_nodes()
-        node_args.update({
-            'nodes': nodes,
-            'ca_cert': certs['ca'],
-            'service_account_bundle': certs[
-                'service-account'],  # noqa
-            'cert_bundle': certs['k8s'],
-            'lb_ip': lb_ip,
-            'cloud_provider': cloud_provider_info})
-
-        user_data = self.create_userdata(**node_args)
 
         loop = asyncio.get_event_loop()
-        tasks = [loop.create_task(
-            node.create(self._info.node_flavor,
-                        self._info.secgroups,
-                        self._info.keypair,
-                        data
-                        )) for node, data in zip(nodes, user_data)
-                 if not node._exists]
+        tasks = []
+
+        for node in nodes:
+            if node._exists:
+                raise BuilderError("Node {} is already existing! Skipping "
+                                   "creation of the cluster.".format(node))
+
+            userdata = str(NodeInit())
+            tasks.append(loop.create_task(
+                node.create(self._info.node_flavor, self._info.secgroups,
+                            self._info.keypair, userdata)
+            ))
 
         return tasks
 
@@ -160,9 +114,8 @@ class ControlPlaneBuilder:
 
         for index, master in enumerate(masters):
             if master._exists:
-                LOGGER.error("Node {} is already existing! Skipping "
-                             "creation.".format(master))
-                continue
+                raise BuilderError("Node {} is already existing! Skipping "
+                             "creation of the cluster.".format(master))
 
             if not index:
                 # create userdata for first master node if not existing
@@ -214,8 +167,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             LOGGER.error("You must specify a subnet ID.")
             return
 
-        loop = asyncio.get_event_loop()
-
         # create a security group for the cluster if not already present
         if self.info.secgroup._exists:
             LOGGER.info(info(red(
@@ -240,50 +191,47 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
+        LOGGER.info("Waiting for the master machines to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(
             cloud_config, ssh_key, ca_bundle)
-
-        # create the worker node with ssh_key (public key)
-        # TODO: insert after debugging
-        # node_tasks = self.nodes_builder.create_nodes_tasks(ssh_key)
-
-        # TODO: remove after debugging is finished
-        # TODO: why is results [None, None, None]?!!?!?!?
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
-        import pdb
-        pdb.set_trace()
-
-        # create a load balancer for accessing the API server of the cluster
-        lbinst = LoadBalancer(config)
-        lb, floatingip = lbinst.get_or_create(NEUTRON)
-
+        # create a load balancer for accessing the API server of the cluster;
         # add a listener for the first master node, since this is the node we
         # call kubeadm init on
-        # first, we need to get the IP from the first master node, maybe
-        # we need to wait until booted?
-        # TODO: implement
+        LOGGER.info("Creating the load balancer and pointing to first "
+                    "master...")
+        lbinst = LoadBalancer(config)
+        lb, floatingip = lbinst.get_or_create(NEUTRON)
+        first_master_ip = results[0].ip_address
+        configure_lb_task = loop.create_task(
+            lbinst.configure(NEUTRON, [first_master_ip]))
+        results = loop.run_until_complete(asyncio.gather(configure_lb_task))
 
-        # configure_lb_task = loop.create_task(
-        #    lbinst.configure(NEUTRON, [host.ip_address for host in cp_hosts]))
-
-        # wait until the create tasks are finished
-        LOGGER.info("Waiting for the machines to be launched...")
-        tasks = master_tasks + node_tasks
-        # tasks = master_tasks + node_tasks + configure_lb_task
-        if tasks:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(asyncio.gather(*tasks))
+        # create the worker nodes
+        LOGGER.info("Waiting for the worker machines to be launched...")
+        # TODO: We want to pass IP of load balancer and Join token to node
+        node_tasks = self.nodes_builder.create_nodes_tasks()
+        results = loop.run_until_complete(asyncio.gather(*node_tasks))
 
         # We should no be able to query the API server for available nodes
         # with a valid certificate from the generated CA. Hence, generate
         # a client certificate and connect the the API server and query which
         # nodes are available. If every node is available and running, continue
+        LOGGER.info("Talking to the API server and waiting for nodes to be "
+                    "online.")
         # TODO: implement
 
+        import pdb
+        pdb.set_trace()
+
         # Finally, we want to add the other master nodes to the LoadBalancer
-        # TODO: implement
+        LOGGER.info("Configuring load balancer again...")
+        master_ips = [master.result().ip_address for master in master_tasks]
+        configure_lb_task = loop.create_task(
+            lbinst.configure(NEUTRON, master_ips))
+        results = loop.run_until_complete(asyncio.gather(configure_lb_task))
 
         # At this point, we're ready with our cluster
         LOGGER.debug(info("Done creating nodes tasks"))

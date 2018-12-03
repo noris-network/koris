@@ -212,12 +212,12 @@ class NodeInit(BaseInit):
         # TODO: How to include bootstrap token? What's the exact mechanic here
         self.execute_shell_script(self._get_bootstrap_script())
 
-        def _get_bootstrap_script(self):
-            name = "bootstrap-k8s-%s-%s-%s.sh" % (
-                self.role, self.os_type, self.os_version)
+    def _get_bootstrap_script(self):
+        name = "bootstrap-k8s-%s-%s-%s.sh" % (
+            self.role, self.os_type, self.os_version)
 
-            fh = open(resource_filename(Requirement('koris'),
-                                        os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                     name)))
-            script = fh.read()
-            return script
+        fh = open(resource_filename(Requirement('koris'),
+                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                 name)))
+        script = fh.read()
+        return script

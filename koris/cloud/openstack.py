@@ -149,9 +149,10 @@ class Instance:
     async def create(self, flavor, secgroups, keypair, userdata):  # pragma: no coverage
         """
         Boot the instance on openstack
+        returns the OpenStack instance
         """
         if self._exists:
-            return
+            return self
 
         volume_data = await self._create_volume()
 
@@ -192,6 +193,9 @@ class Instance:
         LOGGER.info(
             "Instance booted! Name: %s, IP: %s, Status : %s",
             self.name, instance.status, self._ip_address)
+
+        self._exists = True
+        return self
 
     async def delete(self, netclient):
         """stop and terminate an instance"""
