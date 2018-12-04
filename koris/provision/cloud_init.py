@@ -41,10 +41,9 @@ class BaseInit:
 
         # if needed we can declare and use other sections at this point...
         self._cloud_config_data['write_files'] = []
-        self._cloud_config_data['ssh_authorized_keys'] = []
 
-        # TODO: Do we still need this?
-        self._cloud_config_data['manage_etc_hosts'] = True
+        # TODO: Do we still need this? Gave errors...
+        # self._cloud_config_data['manage_etc_hosts'] = True
         self._cloud_config_data['runcmd'] = []
         self._cloud_config_data['runcmd'].append('swapoff -a')
 
@@ -80,7 +79,7 @@ class BaseInit:
         part.add_header('Content-Disposition', 'attachment')
         self._attachments.append(part)
 
-    def add_ssh_public_key(self, ssh_key):
+    def add_ssh_public_key(self, ssh_key, username):
         """
         ssh_key should be the key pair to use of type:
             cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey
@@ -89,7 +88,22 @@ class BaseInit:
         keyline = ssh_key.public_key().public_bytes(
             serialization.Encoding.OpenSSH,
             serialization.PublicFormat.OpenSSH).decode()
-        self._cloud_config_data['ssh_authorized_keys'].append(keyline)
+
+        """try:
+            self._cloud_config_data['users']
+        except KeyError:
+            self._cloud_config_data['users'] = []
+            self._cloud_config_data['users'].append("default")
+
+        self._cloud_config_data['users'].append({
+            "name": username,
+            "ssh_authorized_keys": [
+                keyline
+            ]
+        })"""
+
+        self._cloud_config_data["ssh_authorized_keys"] = []
+        self._cloud_config_data["ssh_authorized_keys"].append(keyline)
 
     def _write_koris_info(self):
         """
@@ -132,7 +146,7 @@ class NthMasterInit(BaseInit):
     adding an public SSH key for access from the first master node needs
     to be done.
     """
-    def __init__(self, ssh_key, os_type='ubuntu',
+    def __init__(self, ssh_key, username='ubuntu', os_type='ubuntu',
                  os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
@@ -142,10 +156,24 @@ class NthMasterInit(BaseInit):
         self.ssh_key = ssh_key
         self.os_type = os_type
         self.os_version = os_version
+        self.username = username
         self.role = 'master'
 
         # assemble the parts for an n-th master node
-        self.add_ssh_public_key(self.ssh_key)
+        self.add_ssh_public_key(self.ssh_key, username)
+        self.execute_shell_script(self._get_kubadm_script())
+
+    def _get_kubadm_script(self):
+        """
+        TODO:
+        This can be removed if the koris image container kubeadm properly...
+        """
+        name = "install_kubeadm.sh"
+        fh = open(resource_filename(Requirement('koris'),
+                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                 name)))
+        script = fh.read()
+        return script
 
 
 class FirstMasterInit(NthMasterInit):
@@ -153,8 +181,9 @@ class FirstMasterInit(NthMasterInit):
     First node is a special nth node. Therefore we inherit from NthMasterInit.
     First node needs to execute bootstrap script.
     """
-    def __init__(self, ssh_key, ca_bundle, cloud_config, os_type='ubuntu',
-                 os_version="16.04"):
+    def __init__(self, ssh_key, ca_bundle, cloud_config, master_ips,
+                 master_names, lb_ip, lb_port, lb_dns='', username='ubuntu',
+                 os_type='ubuntu', os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
@@ -164,9 +193,14 @@ class FirstMasterInit(NthMasterInit):
             necessary for sending requests to the underlying cloud. Needed e.g.
             for auto scaling.
         """
-        super().__init__(ssh_key, os_type, os_version)
+        super().__init__(ssh_key, username, os_type, os_version)
         self.ca_bundle = ca_bundle
         self.cloud_config = cloud_config
+        self.master_ips = master_ips
+        self.master_names = master_names
+        self.lb_ip = lb_ip
+        self.lb_port = lb_port
+        self.lb_dns = lb_dns
 
         # assemble the parts for the first master
         # use an encoder that just returns x, since b64_cert encodes already
@@ -176,6 +210,8 @@ class FirstMasterInit(NthMasterInit):
         self.write_file("/etc/kubernetes/pki/ca.key", b64_key(ca_bundle.key),
                         "root", "root", "0600", lambda x: x)
         self._write_cloud_config()
+        self._write_koris_env()
+        self._write_ssh_private_key()
         self.execute_shell_script(self._get_bootstrap_script())
 
     def _get_bootstrap_script(self):
@@ -194,7 +230,41 @@ class FirstMasterInit(NthMasterInit):
         """
         # TODO: Password for OpenStack is included... think about security?
         content = str(self.cloud_config)
-        self.write_file("/etc/kubernetes/cloud.conf", content, "root", "root",
+        self.write_file("/etc/kubernetes/cloud.config", content, "root",
+                        "root", "0600")
+
+    def _write_ssh_private_key(self):
+        # path = "/home/{}/.ssh/id_rsa_masters".format(self.username)
+        key = self.ssh_key.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption()).decode()
+
+        self._cloud_config_data["ssh_keys"] = {}
+        self._cloud_config_data["ssh_keys"]["rsa_private"] = key
+
+    def _write_koris_env(self):
+        """
+        writes the necessary koris information for the node to the file
+        /etc/kubernetes/koris.env
+        """
+        content = """
+            #!/bin/bash
+            # MASTERS_IPS=( 192.168.0.121 192.168.0.126 192.168.0.123 )
+            export MASTERS_IPS=( {} )
+            # MASTERS=( master-1-a master-2-a master-3-b )
+            export MASTERS=( {} )
+
+            export LOAD_BALANCER_DNS="{}"
+            export LOAD_BALANCER_IP="{}"
+            export LOAD_BALANCER_PORT="{}"
+
+            export POD_SUBNET=10.233.0.0/16
+
+        """.format(" ".join(self.master_ips), " ".join(self.master_names),
+                   self.lb_dns, self.lb_ip, self.lb_port)
+        content = textwrap.dedent(content)
+        self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")
 
 

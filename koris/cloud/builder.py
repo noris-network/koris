@@ -102,7 +102,8 @@ class ControlPlaneBuilder:
         """
         return list(self._info.distribute_management())
 
-    def create_masters_tasks(self, cloud_config, ssh_key, ca_bundle):
+    def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
+                             lb_port, lb_dns=''):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -111,18 +112,22 @@ class ControlPlaneBuilder:
             LOGGER.warn("There should be at lest three master nodes!")
             return
 
+        master_ips = [master.ip_address for master in masters]
+        master_names = [master.name for master in masters]
+
         loop = asyncio.get_event_loop()
         tasks = []
 
         for index, master in enumerate(masters):
             if master._exists:
                 raise BuilderError("Node {} is already existing! Skipping "
-                             "creation of the cluster.".format(master))
+                                   "creation of the cluster.".format(master))
 
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
-                               cloud_config))
+                               cloud_config, master_ips, master_names, lb_ip,
+                               lb_port, lb_dns))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(ssh_key))
@@ -191,33 +196,40 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # to the other nodes so that they can join the cluster
         ssh_key = create_key()
 
+        # create a load balancer for accessing the API server of the cluster;
+        # do not add a listener, since we created no machines yet.
+        LOGGER.info("Creating the load balancer...")
+        lbinst = LoadBalancer(config)
+        lb, floatingip = lbinst.get_or_create(NEUTRON)
+        lb_port = "6443"  # TODO: Where to get port from?
+        lb_dns = ""  # TODO: get this clean?
+
+        # calculate information needed for joining nodes to the cluster...
+        # TODO: finish implementing
+        bootstrap_token = "foobar"  # TODO: generate generic bootstrap token
+        discovery_hash = "foobar2"  # TODO: What is this?
+
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for the master machines to be launched...")
-        master_tasks = self.masters_builder.create_masters_tasks(
-            cloud_config, ssh_key, ca_bundle)
+        master_tasks = self.masters_builder.create_masters_tasks(ssh_key,
+            ca_bundle, cloud_config, floatingip, lb_port, lb_dns)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
-        # create a load balancer for accessing the API server of the cluster;
         # add a listener for the first master node, since this is the node we
         # call kubeadm init on
-        LOGGER.info("Creating the load balancer and pointing to first "
-                    "master...")
-        lbinst = LoadBalancer(config)
-        lb, floatingip = lbinst.get_or_create(NEUTRON)
+        LOGGER.info("Configuring the LoadBalancer...")
         first_master_ip = results[0].ip_address
         configure_lb_task = loop.create_task(
             lbinst.configure(NEUTRON, [first_master_ip]))
         results = loop.run_until_complete(asyncio.gather(configure_lb_task))
 
+        # TODO: remove after debugging
+        import pdb; pdb.set_trace()
+
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
-        # TODO: We want to pass IP of load balancer and Join token to node
-        lb_port = "404"  # TODO: Where to get port from?
-        bootstrap_token = "foobar"  # TODO: generate generic bootstrap token
-        discovery_hash = "foobar2"  # TODO: What is this?
-
         node_tasks = self.nodes_builder.create_nodes_tasks(ca_bundle,
             floatingip, lb_port, bootstrap_token, discovery_hash)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))

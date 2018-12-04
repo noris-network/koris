@@ -17,79 +17,38 @@
 
 set -e
 
-# all the variables here should be writen to /etc/kubernetes/koris.env
-# via cloud_init.py
+iptables -P FORWARD ACCEPT
+swapoff -a
 
-declare -A MASTERS
-declare -A HOSTS
-MASTERS["master-1-a"]="de-nbg6-1a"
-MASTERS["master-2-a"]="de-nbg6-1a"
-MASTERS["master-3-b"]="de-nbg6-1b"
-HOSTS["worker-1-a"]="de-nbg6-1a"
-HOSTS["worker-2-a"]="de-nbg6-1a"
-HOSTS["worker-3-a"]="de-nbg6-1a"
-HOSTS["worker-4-b"]="de-nbg6-1b"
-HOSTS["worker-5-b"]="de-nbg6-1b"
-HOSTS["worker-6-b"]="de-nbg6-1b"
-export HOSTS
-export SUBNET="k8s-subnet"
-export FLOATING_IP="213.95.155.150"
-export LOAD_BALANCER_IP=213.95.155.150
-export LOAD_BALANCER_PORT=6443
-export POD_SUBNET=10.233.0.0/16
+# load koris environment file if available
+if [ -f /etc/kubernetes/koris.env ]; then
+    source /etc/kubernetes/koris.env
+fi
+
 export KUBE_VERSION=1.11.4
-
-MASTERS_IPS=( 192.168.0.121 192.168.0.126 192.168.0.123 )
-MASTERS=( master-1-a master-2-a master-3-b )
-
-export ALLHOSTS=( "${!HOSTS[@]}" "${!MASTERS[@]}" )
 export CURRENT_CLUSTER=""
 
 
 #### Versions for Kube 1.12.2
-KUBE_VERSION=1.12.2
-DOCKER_VERSION=18.06
-CALICO_VERSION=3.3
+# KUBE_VERSION=1.12.2
+# DOCKER_VERSION=18.06
+# CALICO_VERSION=3.3
 
 ### Versions for Kube 1.11.4
-#KUBE_VERSION=1.11.5
-#DOCKER_VERSION=17.03
-#CALICO_VERSION=3.1
+KUBE_VERSION=1.11.4
+DOCKER_VERSION=17.03
+CALICO_VERSION=3.1
 
 LOGLEVEL=4
-SSHOPTS="-i /home/ubuntu/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=60"
+V=${LOGLEVEL}
+SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 ################################################################################
 
-# writes /etc/kubernetes/cloud.config
-# we can throw this away once cloud_init.py is working again
-function write_cloud_conf() {
+# install kubeadm if not already done
+sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
+sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
 
-PY_CODE=$(cat <<END
-# This works only with
-# pip3 install openstacksdk==0.12.0
-
-from openstack.config.loader import _get_os_environ
-
-def env_to_cloud_conf(os_env_dict):
-    d = {}
-    d['domain-name'] = os_env_dict['user_domain_name']
-    d['region'] = os_env_dict['region_name']
-    d['tenant-id'] = os_env_dict['project_id']
-    d['auth-url'] = os_env_dict['auth_url']
-    d['password'] = os_env_dict['password']
-    d['username'] = os_env_dict['username']
-    return d
-
-with open("cloud.config", "w") as conf:
-    conf.write("[Global]\n" + "\n".join(
-        "%s=%s" % (k, v) for (k, v) in env_to_cloud_conf(
-            _get_os_environ("OS_")).items()))
-END
-)
-
-python3 -c "$PY_CODE"
-install -m 600 cloud.config /etc/kubernetes/cloud.config
-}
+################################################################################
 
 # create a proper kubeadm config file for each master.
 # the configuration files are ordered and contain the correct information
@@ -116,7 +75,7 @@ etcd:
       - \${HOST_IP}
     peerCertSANs:
       - \${HOST_NAME}
-      - \${HOST_NAME}
+      - \${HOST_IP}
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: \${POD_SUBNET}
@@ -139,13 +98,13 @@ controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
+- name: "cloud-config"
   hostPath: "/etc/kubernetes/cloud.config"
   mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
 controllerManagerExtraVolumes:
-- name: "/etc/kubernetes/cloud.config"
+- name: "cloud-config"
   hostPath: "/etc/kubernetes/cloud.config"
   mountPath: "/etc/kubernetes/cloud.config"
   writable: false
@@ -156,8 +115,12 @@ for i in ${!MASTERS[@]}; do
 	echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
 	export HOST_IP="${MASTERS_IPS[$i]}"
 	export HOST_NAME="${MASTERS[$i]}"
-	CURRENT_CLUSTER="${CURRENT_CLUSTER}$HOST_NAME=https://${HOST_IP}:2380,"
-        CURRENT_CLUSTER=${CURRENT_CLUSTER%?}
+  if [ -z "$CURRENT_CLUSTER" ]; then
+    CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
+  else
+    CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
+  fi
+	
 	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
 done
 }
@@ -165,32 +128,44 @@ done
 # distributes configuration files and certificates
 function distribute_keys() {
    USER=ubuntu # customizable
-   for host in ${CONTROL_PLANE_IPS}; do
+   
+   for (( i=1; i<${#MASTERS_IPS[@]}; i++ )); do
+       echo "distributing keys to ${MASTERS_IPS[$i]}";
+       host=${MASTERS_IPS[$i]}
+       
+       # clean and recreate directory structure
        ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
-       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv kubernetes/pki/etcd
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:~/kubernetes/pki/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:~/kubernetes/pki/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:~/kubernetes/pki/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:~/kubernetes/pki/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:~/kubernetes/pki/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:~/kubernetes/pki/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:~/kubernetes/pki/etcd/
-       sudo -E ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:~/kubernetes/pki/etcd/
-       sudo -E ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:~/kubernetes/
-       sudo -E ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:~/kubernetes/
+       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
+       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
+       
+       # copy over everything PKI related, copy to temporary directory with
+       # non-root write access
+       scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
+       scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+       scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+       scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
+       scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
+       scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+       scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
+       scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
+       scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
+       scp ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:/home/${USER}/kubernetes/
+       scp ${SSHOPTS} /etc/kubernetes/koris.conf "${USER}"@$host:/home/${USER}/kubernetes/
+       scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
 
-       ssh ${SSHOPTS} ${USER}@$host sudo mv -v kubernetes /etc/
+       # move back to /etc on remote machine
+       ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
        ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
        ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
        ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.config
+
+       echo "done distributing keys to ${MASTERS_IPS[$i]}";
    done
 }
 
 
-V=${LOGLEVEL}
-
 # bootstrap the first master.
-# the process is slightly different then for the rest of the N masters
+# the process is slightly different than for the rest of the N masters
 # we add
 function bootstrap_first_master() {
    echo "*********** Bootstrapping master-1 ******************"
@@ -199,7 +174,6 @@ function bootstrap_first_master() {
    kubeadm -v=${V} alpha phase kubelet write-env-file --config $1
    kubeadm -v=${V} alpha phase kubeconfig kubelet --config $1
    kubeadm -v=${V} alpha phase kubeconfig all --config $1
-   distribute_keys
    systemctl start kubelet
    kubeadm -v=${V} alpha phase etcd local --config $1
    kubeadm -v=${V} alpha phase controlplane all --config $1
@@ -207,15 +181,22 @@ function bootstrap_first_master() {
    kubeadm -v=${V} alpha phase addon kube-proxy --config $1
    kubeadm -v=${V} alpha phase addon coredns --config $1
    kubeadm alpha phase bootstrap-token all --config $1
-   test -d .kube || mkdir .kube
-   sudo cp /etc/kubernetes/admin.conf ~/.kube/config
-   chown ubuntu:ubuntu ~/.kube/config
+   
+   test -d /root/.kube || mkdir -p /root/.kube
+   cp /etc/kubernetes/admin.conf /root/.kube/config
+   chown root:root /root/.kube/config
+   
    # this only works if the api is available
    until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
        do echo "api server is not up! trying again ...";
    done
+   
    kubeadm -v=${V} alpha phase kubelet config upload  --config $1
-   kubeadm token create --config $1
+   
+   # We already have a token... Hence, we do not have to do this anymore
+   # TODO: Can we delete this?
+   # kubeadm token create --config $1
+
    kubectl get nodes
 }
 
@@ -223,25 +204,31 @@ function bootstrap_first_master() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
+  USER=ubuntu # customizable
+  
    echo "*********** Bootstrapping $1 ******************"
-   until ssh $1 hostname; do
+   until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
        sleep 2
    done
 
-   scp -i /home/ubuntu/.ssh/id_rsa kubeadm-$1.yaml ubuntu@$1:~/
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase certs all --config  kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config  kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubelet write-env-file --config  kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubeconfig kubelet --config  kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo systemctl start kubelet
-   # join the etcd host to the cluster
-   sudo kubectl exec -n kube-system etcd-${first_master} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${first_master_ip}:2379 member add $1 https://$2:2380
+   # TODO: We need to create a new koris image that has kubeadm already 
+   # installed!
+   scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig kubelet --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo systemctl start kubelet
+   
+   # join the etcd host to the cluster, this is executed on local node!
+   kubectl exec -n kube-system etcd-${first_master} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${first_master_ip}:2379 member add $1 https://$2:2380
+   
    # launch etcd
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase etcd local --config  kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase kubeconfig all --config  kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase controlplane all --config   kubeadm-$1.yaml
-   ssh ${SSHOPTS} ubuntu@$1 sudo kubeadm alpha phase mark-master --config  kubeadm-master-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase controlplane all --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase mark-master --config /home/${USER}/kubeadm-$1.yaml
 }
 
 
@@ -252,25 +239,29 @@ function wait_for_etcd () {
     done
 }
 
-# the entry point of the who script.
+# the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
-function main() {
+
+function main() {    
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
     create_config_files
-    write_cloud_conf
-    bootstrap_first_master kubeadm-master-1.yaml
-    wait_for_etcd master-1-a
+    bootstrap_first_master kubeadm-${first_master}.yaml
+    wait_for_etcd ${first_master}
+    
+    distribute_keys
 
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
-        echo "${MASTERS[$i]}";
+        echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
         add_master $HOST_NAME $HOST_IP
         wait_for_etcd $HOST_NAME
+        echo "done bootstrapping master ${MASTERS[$i]}";
     done
 
+    echo "installing calico"
     # add calico! we should have these manifests in the base image
     # this will prevent failure if there is a network problem
     curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
@@ -280,6 +271,9 @@ function main() {
 
     kubectl apply -f rbac-kdd.yaml
     kubectl apply -f calico.yaml
+
+    echo "done installing calico"
+    echo "the installation has finished."
 }
 
 
@@ -322,5 +316,8 @@ function install_deps() {
     done
 }
 
+# The script is called as user 'root' in the directory '/'. Since we add some
+# files we want to change to root's home directory.
+cd /root
 
 main
