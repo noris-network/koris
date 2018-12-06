@@ -34,8 +34,8 @@ wait-for-resources:
   script:
    - pip3 install 
    - pip3 install python-gitlab
-   - pip3 install -e .
    - pip3 install python-cinderclient==3.6.1
+   - pip3 install -e .
    - python3 tests/scripts/wait_for_pipeline.py
 
 build-cluster:
