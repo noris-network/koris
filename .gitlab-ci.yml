@@ -32,8 +32,10 @@ wait-for-resources:
   stage: wait-for-resources
   image: oz123/koris-alpine:0.1.1
   script:
+   - pip3 install 
    - pip3 install python-gitlab
    - pip3 install -e .
+   - pip3 install python-cinderclient==3.6.1
    - python3 tests/scripts/wait_for_pipeline.py
 
 build-cluster:
