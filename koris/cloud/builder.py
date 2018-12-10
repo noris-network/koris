@@ -5,6 +5,7 @@ Builder
 Build a kubernetes cluster on a cloud
 """
 import asyncio
+import subprocess
 import sys
 
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
@@ -103,7 +104,7 @@ class ControlPlaneBuilder:
         return list(self._info.distribute_management())
 
     def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
-                             lb_port, lb_dns=''):
+                             lb_port, bootstrap_token, lb_dns=''):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -127,7 +128,7 @@ class ControlPlaneBuilder:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
                                cloud_config, master_ips, master_names, lb_ip,
-                               lb_port, lb_dns))
+                               lb_port, bootstrap_token, lb_dns))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(ssh_key))
@@ -205,15 +206,23 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         lb_dns = ""  # TODO: get this clean?
 
         # calculate information needed for joining nodes to the cluster...
-        # TODO: finish implementing
-        bootstrap_token = "foobar"  # TODO: generate generic bootstrap token
-        discovery_hash = "foobar2"  # TODO: What is this?
+        # TODO: generate generic bootstrap token
+        bootstrap_token = "foobar.fedcba9876543210"
+
+        cmd = "openssl x509 -pubkey -in {} | \
+            openssl rsa -pubin -outform der 2>/dev/null | \
+            openssl dgst -sha256 -hex | sed 's/^.* //'".format(
+                cert_dir+"/"+"k8s.pem"
+            )
+        discovery_hash = subprocess.run(cmd,
+                    stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8').strip()
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for the master machines to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(ssh_key,
-            ca_bundle, cloud_config, floatingip, lb_port, lb_dns)
+            ca_bundle, cloud_config, floatingip, lb_port, bootstrap_token,
+            lb_dns)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -224,9 +233,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         configure_lb_task = loop.create_task(
             lbinst.configure(NEUTRON, [first_master_ip]))
         results = loop.run_until_complete(asyncio.gather(configure_lb_task))
-
-        # TODO: remove after debugging
-        import pdb; pdb.set_trace()
 
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")

@@ -25,20 +25,19 @@ if [ -f /etc/kubernetes/koris.env ]; then
     source /etc/kubernetes/koris.env
 fi
 
-export KUBE_VERSION=1.11.4
 export CURRENT_CLUSTER=""
 export CLUSTER_STATE=""
 
 
-#### Versions for Kube 1.12.2
-# KUBE_VERSION=1.12.2
-# DOCKER_VERSION=18.06
-# CALICO_VERSION=3.3
+#### Versions for Kube 1.12.3
+export KUBE_VERSION=1.12.3
+export DOCKER_VERSION=18.06
+export CALICO_VERSION=3.3
 
-### Versions for Kube 1.11.4
-KUBE_VERSION=1.11.4
-DOCKER_VERSION=17.03
-CALICO_VERSION=3.1
+### Versions for Kube 1.11.5
+# export KUBE_VERSION=1.11.5
+# export DOCKER_VERSION=17.03
+# export CALICO_VERSION=3.1
 
 LOGLEVEL=4
 V=${LOGLEVEL}
@@ -88,7 +87,7 @@ nodeRegistrationOptions:
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
-  token: foobar.fedcba9876543210
+  token: "\${BOOTSTRAP_TOKEN}"
   ttl: 24h0m0s
   usages:
   - signing

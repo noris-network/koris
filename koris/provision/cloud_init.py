@@ -182,8 +182,8 @@ class FirstMasterInit(NthMasterInit):
     First node needs to execute bootstrap script.
     """
     def __init__(self, ssh_key, ca_bundle, cloud_config, master_ips,
-                 master_names, lb_ip, lb_port, lb_dns='', username='ubuntu',
-                 os_type='ubuntu', os_version="16.04"):
+                 master_names, lb_ip, lb_port, bootstrap_token, lb_dns='',
+                 username='ubuntu', os_type='ubuntu', os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
@@ -200,6 +200,7 @@ class FirstMasterInit(NthMasterInit):
         self.master_names = master_names
         self.lb_ip = lb_ip
         self.lb_port = lb_port
+        self.bootstrap_token = bootstrap_token
         self.lb_dns = lb_dns
 
         # assemble the parts for the first master
@@ -259,10 +260,12 @@ class FirstMasterInit(NthMasterInit):
             export LOAD_BALANCER_IP="{}"
             export LOAD_BALANCER_PORT="{}"
 
+            export BOOTSTRAP_TOKEN="{}"
+
             export POD_SUBNET=10.233.0.0/16
 
         """.format(" ".join(self.master_ips), " ".join(self.master_names),
-                   self.lb_dns, self.lb_ip, self.lb_port)
+                   self.lb_dns, self.lb_ip, self.lb_port, self.bootstrap_token)
         content = textwrap.dedent(content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")

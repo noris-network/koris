@@ -7,8 +7,8 @@
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 # MAKE SURE THIS MATCHED THE MASTER K8S VERSION
-#KUBE_VERSION="1.12.2"
-KUBE_VERSION="1.11.4"
+KUBE_VERSION="1.12.3"
+# KUBE_VERSION="1.11.5"
 
 iptables -P FORWARD ACCEPT
 swapoff -a
@@ -26,7 +26,7 @@ apiVersion: v1
 clusters:
 - cluster:
     certificate-authority-data: ${B64_CA_CONTENT}
-    server: https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT};
+    server: https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}
   name: ""
 contexts: []
 current-context: ""
@@ -35,8 +35,8 @@ preferences: {}
 users: []
 EOF
 
-# config for 1.11.4
-if [ "$KUBE_VERSION" = "1.11.4" ]; then
+# config for 1.11.5
+if [ "$KUBE_VERSION" = "1.11.5" ]; then
   cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
 apiVersion: kubeadm.k8s.io/v1alpha1
 kind: NodeConfiguration
@@ -45,11 +45,12 @@ nodeName: $(hostname -s)
 tlsBootstrapToken: "${BOOTSTRAP_TOKEN}"
 discoveryTokenCACertHashes:
   sha256:${DISCOVERY_HASH}
+caCertPath: /etkdfjs
 EOF
 fi
 
-# config for 1.12.2
-if [ "$KUBE_VERSION" = "1.12.2" ]; then
+# config for 1.12.3
+if [ "$KUBE_VERSION" = "1.12.3" ]; then
   cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
 ---
 apiVersion: kubeadm.k8s.io/v1alpha2
@@ -70,6 +71,6 @@ sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
 sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
 
 # join !
-until kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT;
+until kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT
     do sudo kubeadm reset --force
 done
