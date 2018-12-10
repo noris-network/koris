@@ -5,8 +5,10 @@ Builder
 Build a kubernetes cluster on a cloud
 """
 import asyncio
-import subprocess
 import sys
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.backends import default_backend
 
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
@@ -206,23 +208,24 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         lb_dns = ""  # TODO: get this clean?
 
         # calculate information needed for joining nodes to the cluster...
+        # calculate bootstrap token
         # TODO: generate generic bootstrap token
         bootstrap_token = "foobar.fedcba9876543210"
 
-        cmd = "openssl x509 -pubkey -in {} | \
-            openssl rsa -pubin -outform der 2>/dev/null | \
-            openssl dgst -sha256 -hex | sed 's/^.* //'".format(
-                cert_dir+"/"+"k8s.pem"
-            )
-        discovery_hash = subprocess.run(cmd,
-                    stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8').strip()
+        # calculate discovery hash
+        pub_key = ca_bundle.cert.public_key()
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(pub_key.public_bytes(
+            serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo))
+        discovery_hash = digest.finalize().hex()
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for the master machines to be launched...")
-        master_tasks = self.masters_builder.create_masters_tasks(ssh_key,
-            ca_bundle, cloud_config, floatingip, lb_port, bootstrap_token,
-            lb_dns)
+        master_tasks = self.masters_builder.create_masters_tasks(
+            ssh_key, ca_bundle, cloud_config, floatingip, lb_port,
+            bootstrap_token, lb_dns)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -236,8 +239,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
-        node_tasks = self.nodes_builder.create_nodes_tasks(ca_bundle,
-            floatingip, lb_port, bootstrap_token, discovery_hash)
+        node_tasks = self.nodes_builder.create_nodes_tasks(
+            ca_bundle, floatingip, lb_port, bootstrap_token, discovery_hash)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
 
         # We should no be able to query the API server for available nodes
