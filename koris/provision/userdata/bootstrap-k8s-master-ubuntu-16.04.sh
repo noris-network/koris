@@ -27,6 +27,7 @@ fi
 
 export KUBE_VERSION=1.11.4
 export CURRENT_CLUSTER=""
+export CLUSTER_STATE=""
 
 
 #### Versions for Kube 1.12.2
@@ -70,6 +71,7 @@ etcd:
       listen-peer-urls: "https://\${HOST_IP}:2380"
       initial-advertise-peer-urls: "https://\${HOST_IP}:2380"
       initial-cluster: "\${CURRENT_CLUSTER}"
+      initial-cluster-state: "\${CLUSTER_STATE}"
     serverCertSANs:
       - \${HOST_NAME}
       - \${HOST_IP}
@@ -116,8 +118,10 @@ for i in ${!MASTERS[@]}; do
 	export HOST_IP="${MASTERS_IPS[$i]}"
 	export HOST_NAME="${MASTERS[$i]}"
   if [ -z "$CURRENT_CLUSTER" ]; then
+    CLUSTER_STATE="new"
     CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
   else
+    CLUSTER_STATE="existing"
     CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
   fi
 	
@@ -214,7 +218,9 @@ function add_master {
 
    # TODO: We need to create a new koris image that has kubeadm already 
    # installed!
+   
    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
+   
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config /home/${USER}/kubeadm-$1.yaml
@@ -290,6 +296,15 @@ join_all_hosts() {
    done
 }
 
+#ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join \
+#   --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH} \
+#   --config /home/${USER}/kubeadm-$1.yaml \
+#   ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT
+
+#return
+#for K in "${!HOSTS[@]}"; do
+#    ssh ${K} sudo 
+#done
 
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
