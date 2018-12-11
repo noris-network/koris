@@ -264,7 +264,7 @@ class LoadBalancer:  # pragma: no coverage
             for member in pool['members']:
                 self._del_member(client, member['id'], pool['id'])
 
-        self._add_members(client, pool['id'], master_ips)
+        self.add_member(client, pool['id'], master_ips[0])
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor ...")
         else:

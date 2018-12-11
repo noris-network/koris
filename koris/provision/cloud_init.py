@@ -70,9 +70,8 @@ class BaseInit:
         }
         self._cloud_config_data['write_files'].append(data)
 
-    def execute_shell_script(self, script):
+    def add_bootstrap_script(self, script):
         """
-        execute a script on the booted instance.
         script: the script (str) to execute after provisioning the instance
         """
         part = MIMEText(script, _subtype='x-shellscript')
@@ -161,7 +160,7 @@ class NthMasterInit(BaseInit):
 
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key, username)
-        self.execute_shell_script(self._get_kubadm_script())
+        self.add_bootstrap_script(self._get_kubadm_script())
 
     def _get_kubadm_script(self):
         """
@@ -185,8 +184,7 @@ class FirstMasterInit(NthMasterInit):
                  master_names, lb_ip, lb_port, bootstrap_token, lb_dns='',
                  username='ubuntu', os_type='ubuntu', os_version="16.04"):
         """
-        ssh_key is a RSA keypair (return value from create_key from util.ssl
-            package)
+        ssh_key is a RSA keypair (return value from create_key from koris.ssl module)
         ca_bundle: The CA bundle for the CA that is used to permit accesses
             to the API server.
         cloud_config: An OSCloudConfig instance describing the information
@@ -213,7 +211,7 @@ class FirstMasterInit(NthMasterInit):
         self._write_cloud_config()
         self._write_koris_env()
         self._write_ssh_private_key()
-        self.execute_shell_script(self._get_bootstrap_script())
+        self.add_bootstrap_script(self._get_bootstrap_script())
 
     def _get_bootstrap_script(self):
         name = "bootstrap-k8s-%s-%s-%s.sh" % (
@@ -265,7 +263,8 @@ class FirstMasterInit(NthMasterInit):
             export POD_SUBNET=10.233.0.0/16
 
         """.format(" ".join(self.master_ips), " ".join(self.master_names),
-                   self.lb_dns, self.lb_ip, self.lb_port, self.bootstrap_token)
+                   self.lb_dns if self.lb_dns else "",
+                   self.lb_ip, self.lb_port, self.bootstrap_token)
         content = textwrap.dedent(content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")
@@ -293,7 +292,7 @@ class NodeInit(BaseInit):
 
         # assemble parts for the node
         self._write_koris_env()
-        self.execute_shell_script(self._get_bootstrap_script())
+        self.add_bootstrap_script(self._get_bootstrap_script())
 
     def _get_bootstrap_script(self):
         name = "bootstrap-k8s-%s-%s-%s.sh" % (
