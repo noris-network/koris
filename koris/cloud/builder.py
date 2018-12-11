@@ -203,8 +203,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Creating the load balancer...")
         lbinst = LoadBalancer(config)
         lb, floatingip = lbinst.get_or_create(NEUTRON)
-        lb_port = "6443"  # TODO: Where to get port from?
-        lb_dns = ""  # TODO: get this clean?
+        lb_port = "6443"
+
+        lb_dns = config['loadbalancer'].get('dnsname') or floatingip
+        lb_ip = floatingip if floatingip else lb['vip_address']
 
         # calculate information needed for joining nodes to the cluster...
         # calculate bootstrap token
@@ -223,7 +225,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for the master machines to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(
-            ssh_key, ca_bundle, cloud_config, floatingip, lb_port,
+            ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
             bootstrap_token, lb_dns)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
@@ -252,7 +254,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             ca_bundle, "DE", "BY", "NUE", "system:masters", "system:masters",
             "kubernetes-admin", "", "")
         client_cert.save("k8s-client", cert_dir)
-        kubeconfig = write_kubeconfig(config["cluster-name"], floatingip,
+
+        kubeconfig = write_kubeconfig(config["cluster-name"], lb_ip,
                                       lb_port, cert_dir, "k8s.pem",
                                       "k8s-client.pem", "k8s-client-key.pem")
 
