@@ -47,10 +47,9 @@ kubeconfig = {'apiVersion': 'v1',
               'kind': 'Config',
               'users': [
                   {'name': '%%%USERNAME%%%',
-                   'user': {
-                    'client-certificate': '%%%%CLIENT_CERT%%%%',
-                    'client-key': '%%%%CLIENT_KEY%%%%'
-                   }
+                   'user': {'client-certificate': '%%%%CLIENT_CERT%%%%',
+                            'client-key': '%%%%CLIENT_KEY%%%%'
+                            }
                    }]
               }
 

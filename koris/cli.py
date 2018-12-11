@@ -41,11 +41,11 @@ def write_kubeconfig(cluster_name, lb_ip, lb_port, cert_dir, ca_cert_name,
     Write a kubeconfig file to the filesystem
     """
     path = None
-    master_uri = "https://"+lb_ip+":"+lb_port
-    ca_cert = cert_dir+"/"+ca_cert_name
+    master_uri = "https://" + lb_ip + ":" + lb_port
+    ca_cert = cert_dir + "/" + ca_cert_name
     username = "admin"
-    client_cert = cert_dir+"/"+client_cert_name
-    client_key = cert_dir+"/"+client_key_name
+    client_cert = cert_dir + "/" + client_cert_name
+    client_key = cert_dir + "/" + client_key_name
 
     kubeconfig = get_kubeconfig_yaml(master_uri, ca_cert, username,
                                      client_cert, client_key)
