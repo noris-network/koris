@@ -377,6 +377,9 @@ class LoadBalancer:  # pragma: no coverage
 
             fip = client.list_floatingips(
                 floating_ip_address=self.floatingip)['floatingips']
+            if not fip:
+                LOGGER.error("Could not find %s in the pool" % self.floatingip)
+                sys.exit(1)
             fip = fip[0]
         if not fip:
             fips = client.list_floatingips()['floatingips']

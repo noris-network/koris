@@ -64,7 +64,7 @@ class Kolt:
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))
-            delete_cluster(config, self.nova, self.neutron,
+            delete_cluster(config, self.nova, self.neutron, self.cinder,
                            True)
 
     def k8s(self, config):  # pylint: disable=no-self-use

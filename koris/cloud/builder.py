@@ -68,7 +68,7 @@ class NodeBuilder:
 
         for node in nodes:
             if node._exists:
-                raise BuilderError("Node {} is already existing! Skipping "
+                raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(node))
 
             userdata = str(NodeInit(ca_bundle, lb_ip, lb_port, bootstrap_token,
@@ -127,7 +127,7 @@ class ControlPlaneBuilder:
 
         for index, master in enumerate(masters):
             if master._exists:
-                raise BuilderError("Node {} is already existing! Skipping "
+                raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(master))
 
             if not index:
@@ -177,10 +177,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         """
         execute the complete cluster build
         """
-        if not config['subnet']:
-            LOGGER.error("You must specify a subnet ID.")
-            return
-
         # create a security group for the cluster if not already present
         if self.info.secgroup._exists:
             LOGGER.info(info(red(
@@ -191,7 +187,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         self.info.secgroup.configure()
 
-        cloud_config = OSCloudConfig(config['subnet'])
+        cloud_config = OSCloudConfig()
 
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
