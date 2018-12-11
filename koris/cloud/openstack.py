@@ -230,7 +230,8 @@ class LoadBalancer:  # pragma: no coverage
         # on the command line via:
         # neutron subnet-show k8s-subnet -f value -c id
         self.subnet = config.get('subnet')
-        # these attributes are set after create
+        # these attributes are set after creation
+        self.pool = None
         self._id = None
         self._subnet_id = None
         self._data = None
@@ -417,6 +418,7 @@ class LoadBalancer:  # pragma: no coverage
                       "protocol": "HTTPS",
                       "name": "%s-pool" % self.name},
              })
+        self.pool = pool['pool']
 
         return pool['pool']
 
