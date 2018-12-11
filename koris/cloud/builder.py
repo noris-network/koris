@@ -249,16 +249,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # nodes are available. If every node is available and running, continue
         LOGGER.info("Talking to the API server and waiting for nodes to be "
                     "online.")
-        # TODO: implement
-
-        import pdb
-        pdb.set_trace()
-
         # Finally, we want to add the other master nodes to the LoadBalancer
         LOGGER.info("Configuring load balancer again...")
-        master_ips = [master.result().ip_address for master in master_tasks]
-        configure_lb_task = loop.create_task(
-            lbinst.configure(NEUTRON, master_ips))
+        masters = [master.result() for master in master_tasks]
+        for master in masters:
+            lbinst.add_member(NEUTRON, lbinst.pool['id'], master.ip_address)
         results = loop.run_until_complete(asyncio.gather(configure_lb_task))
 
         # At this point, we're ready with our cluster

@@ -432,7 +432,7 @@ class LoadBalancer:  # pragma: no coverage
               "name": "%s-health" % self.name}})
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
-    def _add_member(self, client, pool_id, ip_addr):
+    def add_member(self, client, pool_id, ip_addr):
         client.create_lbaas_member(pool_id,
                                    {'member':
                                     {'subnet_id': self._subnet_id,
