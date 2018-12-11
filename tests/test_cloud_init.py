@@ -1,4 +1,3 @@
-import base64
 import re
 import uuid
 from unittest.mock import patch
@@ -6,11 +5,10 @@ import yaml
 
 import pytest
 
-from koris.provision.cloud_init import MasterInit, NodeInit
+from koris.provision.cloud_init import NthMasterInit, NodeInit
 from koris.ssl import create_certs, CertBundle, create_key, create_ca
 from koris.cloud.openstack import OSCloudConfig
-from koris.util.util import (get_kubeconfig_yaml,
-                             get_token_csv)
+from koris.util.util import get_kubeconfig_yaml
 
 
 class DummyServer:  # pylint: disable=too-few-public-methods
@@ -92,20 +90,16 @@ certs = create_certs({}, hostnames, ips, write=False)
 for item in create_etcd_certs(hostnames, ips):
     certs.update(item)
 
-encryption_key = base64.b64encode(uuid.uuid4().hex[:32].encode()).decode()
-
 admin_token = uuid.uuid4().hex[:32]
 kubelet_token = uuid.uuid4().hex[:32]
 calico_token = uuid.uuid4().hex[:32]
-token_csv_data = get_token_csv(admin_token, calico_token, kubelet_token)
 
 
 @pytest.fixture
-def ci_master():
-    ci = MasterInit('master-1-test', test_cluster,
-                    certs,
-                    encryption_key=encryption_key,
-                    cloud_provider=cloud_config)
+def ci_nth_master():
+    ci = NthMasterInit('master-1-test', test_cluster,
+                       certs,
+                       )
     return ci
 
 
@@ -120,47 +114,19 @@ def ci_node():
         test_cluster,
         calico_token,
         "10.32.192.121",
-        cloud_provider=cloud_config
     )
     return ci
 
 
-def test_token_cvs(ci_master):
+def test_cloud_config(ci_nth_master):
 
-    token_csv = ci_master._get_token_csv()
-    assert yaml.safe_load(token_csv)[0]['permissions'] == '0600'
-
-
-def test_cloud_config(ci_master):
-
-    _cloud_config = ci_master._get_cloud_provider()
+    _cloud_config = ci_nth_master._get_cloud_provider()
     assert yaml.safe_load(_cloud_config)[0]['permissions'] == '0600'
 
 
-def test_encryption_config(ci_master):
+def test_cloud_init(ci_nth_master):
 
-    _config = ci_master._get_encryption_config()
-
-    _config = yaml.safe_load(_config)[0]
-
-    assert _config['path'] == '/var/lib/kubernetes/encryption-config.yaml'
-
-    content = _config['content']
-    enc_ = yaml.safe_load(base64.b64decode(content).decode())
-    assert enc_['resources'][0]['providers'][0][
-        'aescbc']['keys'][0]['secret'] == encryption_key
-
-
-def test_certificate_info(ci_master):
-
-    certs_config = ci_master._get_certificate_info()
-
-    assert 12 == len(yaml.safe_load(certs_config))
-
-
-def test_cloud_init(ci_master):
-
-    config = ci_master.get_files_config()
+    config = ci_nth_master.get_files_config()
     config = yaml.safe_load(config)
 
     assert len(config['write_files']) == 19
@@ -224,8 +190,9 @@ def test_node_init(ci_node):
 
 def test_get_kube_config():
 
-    kcy = get_kubeconfig_yaml("https://bar:2349", "kubelet", "12312aed321",
-                              skip_tls=True,
+    kcy = get_kubeconfig_yaml("https://bar:2349", "CAbase64ncodedstring",
+                              "kubelet", "CLientCertbase64ncodedstring",
+                              "ClientKeyBase64ncodedstring",
                               encode=False)
 
     kcy_dict = yaml.safe_load(kcy)

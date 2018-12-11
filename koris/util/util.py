@@ -19,20 +19,6 @@ def get_logger(name, level=logging.INFO):
     return logger
 
 
-encryption_config_tmpl = """
-kind: EncryptionConfig
-apiVersion: v1
-resources:
-  - resources:
-      - secrets
-    providers:
-      - aescbc:
-          keys:
-            - name: key1
-              secret: %%ENCRYPTION_KEY%%
-      - identity: {}
-"""
-
 kubeconfig = {'apiVersion': 'v1',
               'clusters': [
                   {'cluster': {'server': '%%%%MASTERURI%%%%',
