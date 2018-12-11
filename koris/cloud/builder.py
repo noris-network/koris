@@ -269,7 +269,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                 LOGGER.info("Kubernetes API Server is still not ready ...")
                 time.sleep(2)
 
-        # TODO: Fix this, something is wrong?!...
         while not k8s.masters_ready:
                 LOGGER.info("Kubernetes API masters are still not ready ...")
                 time.sleep(2)

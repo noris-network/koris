@@ -52,4 +52,6 @@ class K8S:
             if {'Ready': 'True'} in [{c.type: c.status} for c
                                      in item.status.conditions]:
                 res.append(True)
+            else:
+                res.append(False)
         return all(res)
