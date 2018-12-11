@@ -354,6 +354,7 @@ class LoadBalancer:  # pragma: no coverage
         lb = client.list_lbaas_loadbalancers(retrieve_all=True,
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
+            LOGGER.warning("LB %s was not found", self.name)
             return
 
         lb = lb[0]
