@@ -5,11 +5,15 @@ Builder
 Build a kubernetes cluster on a cloud
 """
 import asyncio
+import os
 import sys
+import time
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 
+from koris.cli import write_kubeconfig
+from koris.deploy.k8s import K8S
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.util.hue import (  # pylint: disable=no-name-in-module
@@ -242,20 +246,42 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         node_tasks = self.nodes_builder.create_nodes_tasks(
             ca_bundle, floatingip, lb_port, bootstrap_token, discovery_hash)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
+        LOGGER.debug(info("Done creating nodes tasks"))
 
         # We should no be able to query the API server for available nodes
         # with a valid certificate from the generated CA. Hence, generate
-        # a client certificate and connect the the API server and query which
-        # nodes are available. If every node is available and running, continue
-        LOGGER.info("Talking to the API server and waiting for nodes to be "
+        # a client certificate.
+        LOGGER.info("Talking to the API server and waiting for masters to be "
                     "online.")
+        client_cert = CertBundle.create_signed(
+            ca_bundle, "DE", "BY", "NUE", "system:masters", "system:masters",
+            "kubernetes-admin", "", "")
+        client_cert.save("k8s-client", cert_dir)
+        kubeconfig = write_kubeconfig(config["cluster-name"], floatingip,
+                                      lb_port, cert_dir, "k8s.pem",
+                                      "k8s-client.pem", "k8s-client-key.pem")
+
+        # Now connect to the the API server and query which masters are
+        # available. If every node is available and running, continue
+        manifest_path = os.path.join("koris", "deploy", "manifests")
+        k8s = K8S(kubeconfig, manifest_path)
+
+        while not k8s.is_ready:
+                LOGGER.info("Kubernetes API Server is still not ready ...")
+                time.sleep(2)
+
+        # TODO: Fix this, something is wrong?!...
+        while not k8s.masters_ready:
+                LOGGER.info("Kubernetes API masters are still not ready ...")
+                time.sleep(2)
+
         # Finally, we want to add the other master nodes to the LoadBalancer
         LOGGER.info("Configuring load balancer again...")
         masters = [master.result() for master in master_tasks]
         for master in masters:
             lbinst.add_member(NEUTRON, lbinst.pool['id'], master.ip_address)
         results = loop.run_until_complete(asyncio.gather(configure_lb_task))
+        LOGGER.info("Configured load balancer to use any API server")
 
         # At this point, we're ready with our cluster
-        LOGGER.debug(info("Done creating nodes tasks"))
-        LOGGER.info("Kubernetes API Server is ready !!!")
+        LOGGER.info("Kubernetes cluster is ready to use !!!")
