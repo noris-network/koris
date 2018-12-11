@@ -63,7 +63,7 @@ class BaseInit:
         """
         data = {
             "path": path,
-            "owner": owner+":"+group,
+            "owner": owner + ":" + group,
             "encoding": "b64",
             "permissions": permissions,
             "content": encoder(content.encode()).decode()
@@ -237,9 +237,9 @@ class FirstMasterInit(NthMasterInit):
     def _write_ssh_private_key(self):
         # path = "/home/{}/.ssh/id_rsa_masters".format(self.username)
         key = self.ssh_key.private_bytes(
-                    serialization.Encoding.PEM,
-                    serialization.PrivateFormat.TraditionalOpenSSL,
-                    encryption_algorithm=serialization.NoEncryption()).decode()
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()).decode()
 
         self._cloud_config_data["ssh_keys"] = {}
         self._cloud_config_data["ssh_keys"]["rsa_private"] = key
