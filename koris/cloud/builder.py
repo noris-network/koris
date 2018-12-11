@@ -242,7 +242,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
         node_tasks = self.nodes_builder.create_nodes_tasks(
-            ca_bundle, floatingip, lb_port, bootstrap_token, discovery_hash)
+            ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug(info("Done creating nodes tasks"))
 
@@ -282,8 +282,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             except NeutronConflict:
                 continue
 
-        results = loop.run_until_complete(asyncio.gather(configure_lb_task))
-        LOGGER.info("Configured load balancer to use any API server")
+        LOGGER.info("Configured load balancer to use all API servers")
 
         # At this point, we're ready with our cluster
         LOGGER.info("Kubernetes cluster is ready to use !!!")

@@ -203,7 +203,7 @@ function bootstrap_first_master() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
-  USER=ubuntu # customizable
+   USER=ubuntu # customizable
 
    echo "*********** Bootstrapping $1 ******************"
    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -243,7 +243,6 @@ function wait_for_etcd () {
 # the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
-
 function main() {
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
@@ -291,15 +290,6 @@ join_all_hosts() {
    done
 }
 
-#ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join \
-#   --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH} \
-#   --config /home/${USER}/kubeadm-$1.yaml \
-#   ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT
-
-#return
-#for K in "${!HOSTS[@]}"; do
-#    ssh ${K} sudo
-#done
 
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
