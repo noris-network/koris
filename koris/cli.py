@@ -35,22 +35,25 @@ def delete_cluster(config, nova, neutron, cinder, force=False):
         sys.exit(1)
 
 
-def write_kubeconfig(config, lb_address, admin_token,
-                     write=False):
+def write_kubeconfig(cluster_name, lb_ip, lb_port, cert_dir, ca_cert_name,
+                     client_cert_name, client_key_name):
     """
     Write a kubeconfig file to the filesystem
     """
     path = None
+    master_uri = "https://"+lb_ip+":"+lb_port
+    ca_cert = cert_dir+"/"+ca_cert_name
     username = "admin"
-    master_uri = "https://%s:6443" % lb_address
-    kubeconfig = get_kubeconfig_yaml(
-        master_uri, username, admin_token, write,
-        encode=False, ca='certs-%s/ca.pem' % config['cluster-name'])
-    if write:
-        path = '-'.join((config['cluster-name'], 'admin.conf'))
-        LOGGER.info(yellow("You can use your config with:"))
-        LOGGER.info(yellow("kubectl get nodes --kubeconfig=%s" % path))
-        with open(path, "w") as fh:
-            fh.write(kubeconfig)
+    client_cert = cert_dir+"/"+client_cert_name
+    client_key = cert_dir+"/"+client_key_name
+
+    kubeconfig = get_kubeconfig_yaml(master_uri, ca_cert, username,
+                                     client_cert, client_key)
+
+    path = '-'.join((cluster_name, 'admin.conf'))
+    LOGGER.info(yellow("You can use your config with:"))
+    LOGGER.info(yellow("kubectl get nodes --kubeconfig=%s" % path))
+    with open(path, "w") as fh:
+        fh.write(kubeconfig)
 
     return path
