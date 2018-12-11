@@ -115,8 +115,8 @@ class ControlPlaneBuilder:
         Create future tasks for creating the cluster control plane nodesself.
         """
         masters = self.get_masters()
-        if len(masters) < 3:
-            LOGGER.warn("There should be at lest three master nodes!")
+        if not len(masters) % 2:
+            LOGGER.warn("The number of masters should be odd!")
             return
 
         master_ips = [master.ip_address for master in masters]
@@ -129,7 +129,6 @@ class ControlPlaneBuilder:
             if master._exists:
                 raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(master))
-
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
