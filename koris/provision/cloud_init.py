@@ -249,9 +249,7 @@ class FirstMasterInit(NthMasterInit):
         """
         content = """
             #!/bin/bash
-            # MASTERS_IPS=( 192.168.0.121 192.168.0.126 192.168.0.123 )
             export MASTERS_IPS=( {} )
-            # MASTERS=( master-1-a master-2-a master-3-b )
             export MASTERS=( {} )
 
             export LOAD_BALANCER_DNS="{}"

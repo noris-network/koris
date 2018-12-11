@@ -23,6 +23,7 @@ from koris.util.util import get_logger
 from .openstack import OSClusterInfo, BuilderError
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
+                        NeutronConflict
                         )
 
 LOGGER = get_logger(__name__)
@@ -277,7 +278,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Configuring load balancer again...")
         masters = [master.result() for master in master_tasks]
         for master in masters:
-            lbinst.add_member(NEUTRON, lbinst.pool['id'], master.ip_address)
+            try:
+                lbinst.add_member(NEUTRON, lbinst.pool['id'], master.ip_address)
+            except NeutronConflict:
+                continue
+
         results = loop.run_until_complete(asyncio.gather(configure_lb_task))
         LOGGER.info("Configured load balancer to use any API server")
 

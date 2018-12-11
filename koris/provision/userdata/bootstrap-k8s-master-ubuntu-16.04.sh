@@ -123,7 +123,7 @@ for i in ${!MASTERS[@]}; do
     CLUSTER_STATE="existing"
     CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
   fi
-	
+
 	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
 done
 }
@@ -131,16 +131,16 @@ done
 # distributes configuration files and certificates
 function distribute_keys() {
    USER=ubuntu # customizable
-   
+
    for (( i=1; i<${#MASTERS_IPS[@]}; i++ )); do
        echo "distributing keys to ${MASTERS_IPS[$i]}";
        host=${MASTERS_IPS[$i]}
-       
+
        # clean and recreate directory structure
        ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
        ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
        ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
-       
+
        # copy over everything PKI related, copy to temporary directory with
        # non-root write access
        scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
@@ -184,21 +184,17 @@ function bootstrap_first_master() {
    kubeadm -v=${V} alpha phase addon kube-proxy --config $1
    kubeadm -v=${V} alpha phase addon coredns --config $1
    kubeadm alpha phase bootstrap-token all --config $1
-   
+
    test -d /root/.kube || mkdir -p /root/.kube
    cp /etc/kubernetes/admin.conf /root/.kube/config
    chown root:root /root/.kube/config
-   
+
    # this only works if the api is available
    until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
        do echo "api server is not up! trying again ...";
    done
-   
+
    kubeadm -v=${V} alpha phase kubelet config upload  --config $1
-   
-   # We already have a token... Hence, we do not have to do this anymore
-   # TODO: Can we delete this?
-   # kubeadm token create --config $1
 
    kubectl get nodes
 }
@@ -208,27 +204,27 @@ function bootstrap_first_master() {
 # the second argument is the host IP
 function add_master {
   USER=ubuntu # customizable
-  
+
    echo "*********** Bootstrapping $1 ******************"
    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
        sleep 2
    done
 
-   # TODO: We need to create a new koris image that has kubeadm already 
+   # TODO: We need to create a new koris image that has kubeadm already
    # installed!
-   
+
    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
-   
+
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig kubelet --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo systemctl start kubelet
-   
+
    # join the etcd host to the cluster, this is executed on local node!
    kubectl exec -n kube-system etcd-${first_master} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${first_master_ip}:2379 member add $1 https://$2:2380
-   
+
    # launch etcd
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config /home/${USER}/kubeadm-$1.yaml
@@ -248,13 +244,13 @@ function wait_for_etcd () {
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
 
-function main() {    
+function main() {
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
     create_config_files
     bootstrap_first_master kubeadm-${first_master}.yaml
     wait_for_etcd ${first_master}
-    
+
     distribute_keys
 
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
@@ -302,7 +298,7 @@ join_all_hosts() {
 
 #return
 #for K in "${!HOSTS[@]}"; do
-#    ssh ${K} sudo 
+#    ssh ${K} sudo
 #done
 
 # keep this function here, although we don't use it really, it's usefull for
