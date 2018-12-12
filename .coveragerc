@@ -1,6 +1,6 @@
 [run]
 source = koris
 omit = tests/*, examples/*, setup.py, *__init__.py, koris/cli.py, \
-  koris/cloud/builder.py, \
   koris/deploy/k8s.py, \
-  koris/koris.py
+  koris/koris.py, \
+  koris/util/hue.py

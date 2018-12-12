@@ -227,7 +227,6 @@ class FirstMasterInit(NthMasterInit):
         """
         write out the cloud provider configuration file for OpenStack
         """
-        # TODO: Password for OpenStack is included... think about security?
         content = str(self.cloud_config)
         self.write_file("/etc/kubernetes/cloud.config", content, "root",
                         "root", "0600")

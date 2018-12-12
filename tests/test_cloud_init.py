@@ -1,14 +1,10 @@
-import re
-import uuid
 from unittest.mock import patch
-import yaml
 
 import pytest
 
-from koris.provision.cloud_init import NthMasterInit, NodeInit
-from koris.ssl import create_certs, CertBundle, create_key, create_ca
+from koris.provision.cloud_init import NthMasterInit, NodeInit, FirstMasterInit
+from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
 from koris.cloud.openstack import OSCloudConfig
-from koris.util.util import get_kubeconfig_yaml
 
 
 class DummyServer:  # pylint: disable=too-few-public-methods
@@ -38,6 +34,7 @@ with patch('koris.cloud.openstack.read_os_auth_variables') as p:
                           region_name="de-nbg6-1")
 
 cloud_config = OSCloudConfig()
+lb_ip = "10.32.192.121",
 
 
 def create_etcd_certs(names, ips):
@@ -90,110 +87,49 @@ certs = create_certs({}, hostnames, ips, write=False)
 for item in create_etcd_certs(hostnames, ips):
     certs.update(item)
 
-admin_token = uuid.uuid4().hex[:32]
-kubelet_token = uuid.uuid4().hex[:32]
-calico_token = uuid.uuid4().hex[:32]
-
 
 @pytest.fixture
 def ci_nth_master():
-    ci = NthMasterInit('master-1-test', test_cluster,
-                       certs,
-                       )
+    ci = NthMasterInit(create_key())
+    return ci
+
+
+@pytest.fixture
+def ci_first_master():
+    ci = FirstMasterInit(create_key(),
+                         certs['ca'],
+                         cloud_config,
+                         hostnames,
+                         ips,
+                         lb_ip,
+                         "6443",
+                         "bootstrap_token"
+                         )
     return ci
 
 
 @pytest.fixture
 def ci_node():
     ci = NodeInit(
-        test_cluster[0],
-        kubelet_token,
         certs['ca'],
-        certs['k8s'],
-        certs['service-account'],
-        test_cluster,
-        calico_token,
-        "10.32.192.121",
+        lb_ip,
+        "6443",
+        "a73b8f597c04551a0fdc8e95544be8a",
+        "discovery_hash"
     )
     return ci
 
 
-def test_cloud_config(ci_nth_master):
-
-    _cloud_config = ci_nth_master._get_cloud_provider()
-    assert yaml.safe_load(_cloud_config)[0]['permissions'] == '0600'
+def test_cloud_config(ci_first_master):
+    ci_first_master._write_cloud_config()
+    cloud_config = ci_first_master._cloud_config_data['write_files'][-1]
+    assert cloud_config['path'] == '/etc/kubernetes/cloud.config'
 
 
 def test_cloud_init(ci_nth_master):
 
-    config = ci_nth_master.get_files_config()
-    config = yaml.safe_load(config)
-
-    assert len(config['write_files']) == 19
-
-    etcd_host = test_cluster[0]
-
-    etcd_env = [i for i in config['write_files'] if
-                i['path'] == '/etc/systemd/system/etcd.env'][0]
-
-    assert re.findall("%s=https://%s:%s" % (
-        etcd_host.name, etcd_host.ip_address, 2380),
-        etcd_env['content'])
-
-    # KORIS-68 Ensure koris.conf contains creation_date and version
-    koris_conf = [i for i in config['write_files'] if
-                  i['path'] == '/etc/kubernetes/koris.conf']
-
-    assert len(koris_conf) == 1
-
-    version_match = re.search(r'^koris_version=(.+)',
-                              koris_conf[0]['content'], flags=re.MULTILINE)
-
-    assert version_match
-    assert version_match.groups()[0]
-
-    creation_date_match = re.search(r'^creation_date=(.+)',
-                                    koris_conf[0]['content'],
-                                    flags=re.MULTILINE)
-
-    assert creation_date_match
-    assert creation_date_match.groups()[0]
+    assert 'ssh_authorized_keys' in ci_nth_master._cloud_config_data
 
 
 def test_node_init(ci_node):
-    config = ci_node.get_files_config()
-    config = yaml.safe_load(config)
-
-    assert len(config['write_files']) == 10
-
-    # KORIS-54 Ensure kubelet contains --node-ip
-    node_ip_var = 'NODE_IP'
-    kubelet_env_config = [cfg for cfg in config['write_files'] if
-                          cfg['path'] == '/etc/systemd/system/kubelet.env']
-
-    assert len(kubelet_env_config) == 1
-    assert re.match(r'.*?%s=\d+\.\d+\.\d+\.\d+\n.*' % (node_ip_var,),
-                    kubelet_env_config[0]['content'])
-
-    bootstrap_node = open('koris/provision/userdata/bootstrap-k8s-node-ubuntu-16.04.sh',
-                          'r').read()
-    pat = re.compile(r'.*?cat << EOF > /etc/systemd/system/kubelet.service(.*?)EOF.*',
-                     flags=re.DOTALL)
-
-    kubelet_config_match = pat.match(bootstrap_node)
-
-    assert kubelet_config_match
-
-    assert re.match(r'.*?--node-ip=\\\${%s}.*' % (node_ip_var,),
-                    kubelet_config_match.groups()[0], flags=re.DOTALL)
-
-
-def test_get_kube_config():
-
-    kcy = get_kubeconfig_yaml("https://bar:2349", "CAbase64ncodedstring",
-                              "kubelet", "CLientCertbase64ncodedstring",
-                              "ClientKeyBase64ncodedstring",
-                              encode=False)
-
-    kcy_dict = yaml.safe_load(kcy)
-    assert 'insecure-skip-tls-verify' not in kcy_dict['clusters'][0]['cluster']
+    ci_node._write_koris_env()
