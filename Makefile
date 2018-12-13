@@ -150,7 +150,7 @@ show-nodes:
 	kubectl get nodes -o wide --kubeconfig=${KUBECONFIG}
 
 integration-run:
-	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
+	kubectl apply -f tests/integration/nginx-pod.yml --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
 	@echo "started"
 
@@ -218,13 +218,12 @@ curl-run:
 
 check-cluster-dns:
 	dns_check_hostname="kubernetes"; \
-  dns_check_namespace="default"; \
-  dns_check_cluster_domain="svc.cluster.local"; \
+    dns_check_namespace="default"; \
+    dns_check_cluster_domain="svc.cluster.local"; \
 	dns_check_with_search_domains="$${dns_check_hostname}.$${dns_check_namespace}"; \
 	dns_check_fqdn="$${dns_check_with_search_domains}.$${dns_check_cluster_domain}"; \
 	dns_check="dig +noall +answer -q $${dns_check_fqdn} -t A"; \
-	dnscheck_pod='{"apiVersion":"v1","kind":"Pod","metadata":{"labels":{"k8s-app":"dnscheck"},"name":"dnscheck","namespace":"default"},"spec":{"containers":[{"image":"tutum/dnsutils","name":"dnscheck","command":["sleep"],"args":["86400"]}],"securityContext":{}}}'; \
-	echo $${dnscheck_pod} | kubectl --kubeconfig=${KUBECONFIG} apply -f -; \
+	kubectl --kubeconfig=${KUBECONFIG} apply -f tests/integration/dns-checkpod.yml;\
 	echo -n "Waiting for dnscheck pod to start"; \
 	while [ $$(kubectl --kubeconfig=${KUBECONFIG} get pod -l k8s-app=dnscheck -o jsonpath='{.items[0].status.phase}') != "Running" ]; do \
 		echo -n "."; \
