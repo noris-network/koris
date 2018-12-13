@@ -166,13 +166,13 @@ integration-wait:
 
 
 integration-patch-wait:
-	STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+	STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 	while true; do \
 		if [ "Running" == "$${STATUS}" ]; then \
 			break; \
 		fi; \
 		echo "pod is not running"; \
-		STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 		echo ${STATUS}; \
 		sleep 1; \
 	done ; \
@@ -189,7 +189,7 @@ integration-expose:
 
 expose-wait:
 	while true; do \
-		IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+		IP=`kubectl get service --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
 			echo "breaking "; \
 			break; \
@@ -206,7 +206,7 @@ reset-config:
 
 
 curl-run:
-	IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+	IP=`kubectl get service --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
 	echo $${IP}; \
 	while true; do \
 		curl http://$${IP}:80;\
@@ -255,7 +255,7 @@ clean-lb-after-integration-test:
 	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
-		kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG}; \
+		kubectl get service --selector=app=nginx --kubeconfig=${KUBECONFIG}; \
 		if [ $$? -eq 0 ]; then \
 			break; \
 		fi; \
