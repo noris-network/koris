@@ -179,12 +179,12 @@ integration-patch-wait:
 
 
 integration-patch:
-	kubectl patch deployment.apps nginx -p \
+	kubectl patch deployment nginx-deployment -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
-	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
+	kubectl expose deployment nginx-deployment --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
 
 
 expose-wait:
