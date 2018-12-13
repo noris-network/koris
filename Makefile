@@ -143,7 +143,7 @@ compliance-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
-	koris k8s tests/koris_test.yml
+	koris apply tests/koris_test.yml
 
 
 show-nodes:
