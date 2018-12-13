@@ -116,7 +116,8 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
-test -d /var/lib/kubernetes/ || mkdir -pv $_
+echo "testing if /var/lib/kubernetes/ exists"
+test -d /var/lib/kubernetes || mkdir -pv $_
 
 for item in kubernetes-key.pem kubernetes.pem ca.pem; do
     test -r /etc/ssl/kubernetes/$item && cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item

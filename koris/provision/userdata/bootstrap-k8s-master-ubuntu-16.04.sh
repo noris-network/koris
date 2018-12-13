@@ -125,7 +125,8 @@ LimitNOFILE=30000
 WantedBy=multi-user.target
 EOF
 
-mkdir -pv /var/lib/kubernetes/
+echo "testing if /var/lib/kubernetes/ exists"
+test -d /var/lib/kubernetes || mkdir -pv /var/lib/kubernetes/
 
 ##
 # link certificates from /etc/ssl/kubernetes - these are injected with cloud-init
