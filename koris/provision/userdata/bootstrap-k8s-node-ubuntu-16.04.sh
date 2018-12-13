@@ -116,11 +116,12 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
-echo "testing if /var/lib/kubernetes/ exists"
-test -d /var/lib/kubernetes || mkdir -pv $_
+if [ ! -d /var/lib/kubernetes ]; then
+    mkdir -pv /var/lib/kubernetes
+fi
 
 for item in kubernetes-key.pem kubernetes.pem ca.pem; do
-    test -r /etc/ssl/kubernetes/$item && cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
+    test -r /etc/ssl/kubernetes/$item && cp -fv /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
 done
 
 cat << EOF > /etc/systemd/system/kubelet.service
@@ -187,7 +188,8 @@ EOF
 
 iptables -P FORWARD ACCEPT
 
-systemctl enable kubelet
+systemctl daemon-reload
+systemctl enable -f kubelet  # kubelet was already installed and enabled by the deb. We override it
 systemctl start kubelet
+systemctl enable -f kube-proxy
 systemctl start kube-proxy
-systemctl enable kube-proxy
