@@ -147,7 +147,7 @@ launch-cluster: update-config
 
 
 show-nodes:
-	kubectl get nodes -o wide --kubeconfig=${KUBECONFIG}
+	kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."
 
 integration-run:
 	kubectl apply -f tests/integration/nginx-pod.yml --kubeconfig=${KUBECONFIG}
