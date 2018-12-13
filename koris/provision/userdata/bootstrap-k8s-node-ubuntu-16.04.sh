@@ -84,6 +84,21 @@ K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 CALICO_URL=https://github.com/projectcalico/cni-plugin/releases/download
 BIN_PATH=/usr/bin
 
+###
+# because kubelet was installed from the debian package during the image build
+# we first need to remove it. For the sake of love ...
+###
+set -x
+HAS_KUBELET=$(dpkg -l kubelet 2>&1 | grep -c ^ii)
+
+if [ $HAS_KUBELET -eq 1 ]; then
+    apt-get remove --purge -y kubelet
+    rm -vRf /etc/systemd/system/kubelet.service.d
+    systemctl unmask kubelet.service
+    systemctl daemon-reload
+fi
+
+set +x
 for item in kubelet kube-proxy; do
     version_found ${item} --version $K8S_VERSION || curlx ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/${item} ${BIN_PATH}/${item}
 done
