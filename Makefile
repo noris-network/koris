@@ -252,10 +252,10 @@ check-cluster-dns:
 	#kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck
 
 clean-lb-after-integration-test:
-	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
+	kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
-		kubectl get service --selector=app=nginx --kubeconfig=${KUBECONFIG}; \
+		kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG}; \
 		if [ $$? -eq 0 ]; then \
 			break; \
 		fi; \
