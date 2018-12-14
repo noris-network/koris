@@ -8,7 +8,7 @@ text/x-shellscript
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 
-K8S_VERSION=v1.11.4
+K8S_VERSION=v1.11.5
 # Specify the Kubernetes version to use.
 # can only use docker 17.03.X
 # https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md
@@ -84,6 +84,21 @@ K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 CALICO_URL=https://github.com/projectcalico/cni-plugin/releases/download
 BIN_PATH=/usr/bin
 
+###
+# because kubelet was installed from the debian package during the image build
+# we first need to remove it. For the sake of love ...
+###
+set -x
+HAS_KUBELET=$(dpkg -l kubelet 2>&1 | grep -c ^ii)
+
+if [ $HAS_KUBELET -eq 1 ]; then
+    apt-get remove --purge -y kubelet
+    rm -vRf /etc/systemd/system/kubelet.service.d
+    systemctl unmask kubelet.service
+    systemctl daemon-reload
+fi
+
+set +x
 for item in kubelet kube-proxy; do
     version_found ${item} --version $K8S_VERSION || curlx ${K8S_URL}/${K8S_VERSION}/bin/${OS}/${ARCH}/${item} ${BIN_PATH}/${item}
 done
@@ -116,10 +131,12 @@ if [ ${FETCH_ONLY} -eq 1 ]; then
     exit 0
 fi
 
-mkdir -pv /var/lib/kubernetes/
+if [ ! -d /var/lib/kubernetes ]; then
+    mkdir -pv /var/lib/kubernetes
+fi
 
 for item in kubernetes-key.pem kubernetes.pem ca.pem; do
-    test -r /etc/ssl/kubernetes/$item && cp -f /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
+    test -r /etc/ssl/kubernetes/$item && cp -fv /etc/ssl/kubernetes/$item /var/lib/kubernetes/$item
 done
 
 cat << EOF > /etc/systemd/system/kubelet.service
@@ -186,7 +203,8 @@ EOF
 
 iptables -P FORWARD ACCEPT
 
-systemctl enable kubelet
+systemctl daemon-reload
+systemctl enable -f kubelet  # kubelet was already installed and enabled by the deb. We override it
 systemctl start kubelet
+systemctl enable -f kube-proxy
 systemctl start kube-proxy
-systemctl enable kube-proxy

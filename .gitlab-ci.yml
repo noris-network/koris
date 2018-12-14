@@ -31,8 +31,9 @@ unittest:
 wait-for-resources:
   stage: wait-for-resources
   image: oz123/koris-alpine:0.1.1
-  script:
+  script: 
    - pip3 install python-gitlab
+   - pip3 install python-cinderclient==3.6.1
    - pip3 install -e .
    - python3 tests/scripts/wait_for_pipeline.py
   except:
@@ -154,6 +155,7 @@ dev-docs:
   image: oz123/koris-alpine:0.1.1
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+  - pip3 install .
   - which sphinx-build
   - pip3 install .
   - make -C docs html
@@ -188,12 +190,10 @@ build:
   stage: build
   image: oz123/koris-alpine:0.1.1
   script:
-   - python3 setup.py sdist
+   - pytho3 setup.py sdist
   artifacts:
-    #name: "$CI_COMMIT_REF_NAME"
     paths:
-     - dist/
-    expire_in: 1 year
+     - dist/koris-*.tar.gz
   only:
     - tags
     - master
