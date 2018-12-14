@@ -184,12 +184,12 @@ integration-patch:
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
-	kubectl expose deployment nginx-deployment --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
+	kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
 
 expose-wait:
 	while true; do \
-		IP=`kubectl get service --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
 			echo "breaking "; \
 			break; \
@@ -206,7 +206,7 @@ reset-config:
 
 
 curl-run:
-	IP=`kubectl get service --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+	IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 	echo $${IP}; \
 	while true; do \
 		curl http://$${IP}:80;\
