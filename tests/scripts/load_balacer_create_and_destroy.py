@@ -10,8 +10,10 @@ from koris.cloud.builder import get_clients
 from koris.cloud.openstack import LoadBalancer
 _, CLIENT, _ = get_clients()
 
+lb_name = os.getenv('LOADBALANCER_NAME', 'test')
+lb_name = lb_name.split('-lb')[0]
 
-config = {'cluster-name': os.getenv('LOADBALANCER_NAME', 'test')}
+config = {'cluster-name': lb_name}
 
 LB = LoadBalancer(config)
 
