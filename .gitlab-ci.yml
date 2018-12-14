@@ -151,6 +151,7 @@ dev-docs:
   image: oz123/koris-alpine:0.1.1
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+  - pip3 install .
   - which sphinx-build
   - make -C docs html
   - ls docs
