@@ -24,6 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath('..'))
 
+import pkg_resources
 import koris
 
 # -- General configuration ---------------------------------------------
@@ -58,7 +59,7 @@ author = u"Oz Tiram"
 # the built documents.
 #
 # The short X.Y version.
-version = koris.__version__
+version = pkg_resources.get_distribution('koris').version
 # The full version, including alpha/beta/rc tags.
 release = subprocess.check_output("git describe", shell=True).decode().strip()
 

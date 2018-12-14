@@ -36,6 +36,10 @@ wait-for-resources:
    - pip3 install python-cinderclient==3.6.1
    - pip3 install -e .
    - python3 tests/scripts/wait_for_pipeline.py
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
 
 build-cluster:
   stage: build-cluster
@@ -153,6 +157,7 @@ dev-docs:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - pip3 install .
   - which sphinx-build
+  - pip3 install .
   - make -C docs html
   - ls docs
   - mkdir -pv public/dev
@@ -171,6 +176,7 @@ pages:
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
+  - pip3 install .
   - make -C docs html
   - mv docs/_build/html/ public/
   artifacts:
