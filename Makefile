@@ -256,7 +256,7 @@ clean-lb-after-integration-test:
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
 		kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG}; \
-		if [ $$? -eq 0 ]; then \
+		if [ $$? -ne 0 ]; then \
 			break; \
 		fi; \
 	done;
