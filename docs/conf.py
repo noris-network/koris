@@ -51,8 +51,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'koris'
-copyright = u"2018, Oz Tiram"
-author = u"Oz Tiram"
+copyright = u"2018 noris network"
+author = u"koris authors"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
@@ -162,5 +162,12 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
+
+#html_context = {
+#    'script_files': ['_static/custom.js'],
+#}
+
+def setup(app):
+    app.add_javascript('custom.js')
 
 
