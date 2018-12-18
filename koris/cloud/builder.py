@@ -202,7 +202,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         self.info.secgroup.configure()
 
-        cloud_config = OSCloudConfig()
+        cloud_config = OSCloudConfig(config["subnet"])
 
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
