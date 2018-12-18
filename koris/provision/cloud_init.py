@@ -41,9 +41,6 @@ class BaseInit:
 
         # if needed we can declare and use other sections at this point...
         self._cloud_config_data['write_files'] = []
-
-        # TODO: Do we still need this? Gave errors...
-        # self._cloud_config_data['manage_etc_hosts'] = True
         self._cloud_config_data['runcmd'] = []
         self._cloud_config_data['runcmd'].append('swapoff -a')
 
@@ -160,19 +157,6 @@ class NthMasterInit(BaseInit):
 
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key, username)
-        self.add_bootstrap_script(self._get_kubadm_script())
-
-    def _get_kubadm_script(self):
-        """
-        TODO:
-        This can be removed if the koris image container kubeadm properly...
-        """
-        name = "install_kubeadm.sh"
-        fh = open(resource_filename(Requirement('koris'),
-                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                 name)))
-        script = fh.read()
-        return script
 
 
 class FirstMasterInit(NthMasterInit):

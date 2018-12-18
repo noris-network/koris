@@ -410,7 +410,6 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     nodes = []
     node_bundles = []
     node_ip = None
-    # todo: add node_ip
     for node in nodes:
         node_bundles.append(CertBundle.create_signed(ca_bundle,
                                                      country,

@@ -181,6 +181,15 @@ function bootstrap_first_master() {
    kubeadm -v=${V} alpha phase etcd local --config $1
    kubeadm -v=${V} alpha phase controlplane all --config $1
    kubeadm -v=${V} alpha phase mark-master --config $1
+   
+   # wait for the API server, we need to do this before installing the addons,
+   # otherwise weird timing problems occur irregularly:
+   # "error when creating kube-proxy service account: unable to create 
+   # serviceaccount: namespaces "kube-system" not found"
+   until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
+       do echo "api server is not up! trying again ...";
+   done
+   
    kubeadm -v=${V} alpha phase addon kube-proxy --config $1
    kubeadm -v=${V} alpha phase addon coredns --config $1
    kubeadm alpha phase bootstrap-token all --config $1
@@ -189,13 +198,7 @@ function bootstrap_first_master() {
    cp /etc/kubernetes/admin.conf /root/.kube/config
    chown root:root /root/.kube/config
 
-   # this only works if the api is available
-   until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
-       do echo "api server is not up! trying again ...";
-   done
-
    kubeadm -v=${V} alpha phase kubelet config upload  --config $1
-
    kubectl get nodes
 }
 
@@ -210,9 +213,6 @@ function add_master {
        echo "waiting for ssh on $1"
        sleep 2
    done
-
-   # TODO: We need to create a new koris image that has kubeadm already
-   # installed!
 
    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 

@@ -6,6 +6,8 @@ Build a kubernetes cluster on a cloud
 """
 import asyncio
 import os
+import random
+import string
 import sys
 import time
 
@@ -164,6 +166,20 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.masters_builder = ControlPlaneBuilder(config, self.info)
 
     @staticmethod
+    def create_bootstrap_token():
+        """create a new random bootstrap token like f62bcr.fedcba9876543210,
+        a valid token matches the expression [a-z0-9]{6}.[a-z0-9]{16}"""
+        token = ""
+        token = token + "".join([random.choice(string.ascii_lowercase +
+                                               string.digits)
+                                for n in range(6)])
+        token = token + "."
+        token = token + "".join([random.choice(string.ascii_lowercase +
+                                               string.digits)
+                                for n in range(16)])
+        return token
+
+    @staticmethod
     def create_ca():
         """create a self signed CA"""
         _key = create_key(size=2048)
@@ -211,8 +227,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # calculate information needed for joining nodes to the cluster...
         # calculate bootstrap token
-        # TODO: generate generic bootstrap token
-        bootstrap_token = "foobar.fedcba9876543210"
+        bootstrap_token = ClusterBuilder.create_bootstrap_token()
 
         # calculate discovery hash
         pub_key = ca_bundle.cert.public_key()
