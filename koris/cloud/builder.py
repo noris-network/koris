@@ -135,8 +135,9 @@ class ControlPlaneBuilder:
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
-                               cloud_config, master_ips, master_names, lb_ip,
-                               lb_port, bootstrap_token, lb_dns))
+                                               cloud_config, master_ips,
+                                               master_names, lb_ip, lb_port,
+                                               bootstrap_token, lb_dns))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(ssh_key))
@@ -170,13 +171,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         """create a new random bootstrap token like f62bcr.fedcba9876543210,
         a valid token matches the expression [a-z0-9]{6}.[a-z0-9]{16}"""
         token = ""
-        token = token + "".join([random.choice(string.ascii_lowercase +
-                                               string.digits)
-                                for n in range(6)])
+        token = token + "".join([random.choice(string.ascii_lowercase + string.digits)
+                                 for n in range(6)])
         token = token + "."
-        token = token + "".join([random.choice(string.ascii_lowercase +
-                                               string.digits)
-                                for n in range(16)])
+        token = token + "".join([random.choice(string.ascii_lowercase + string.digits)
+                                 for n in range(16)])
         return token
 
     @staticmethod
