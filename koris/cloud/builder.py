@@ -202,7 +202,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         self.info.secgroup.configure()
 
-        cloud_config = OSCloudConfig(config["subnet"])
+        if config["subnet"]:
+            subnet_id = NEUTRON.find_resource('subnet', self.subnet)['id']
+        else:
+            subnet_id = NEUTRON.list_subnets()['subnets'][-1]['id']
+
+        cloud_config = OSCloudConfig(subnet_id)
+        LOGGER.info("Using subnet with ID {}".format(subnet_id))
 
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
