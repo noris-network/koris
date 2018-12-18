@@ -80,10 +80,6 @@ etcd:
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: \${POD_SUBNET}
-nodeRegistrationOptions:
-  kubeletExtraArgs:
-    cloud-provider: openstack
-    cloud-config: etc/kubernetes/cloud.config
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -126,6 +122,10 @@ for i in ${!MASTERS[@]}; do
 
 	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
 done
+
+# write kubelet cloud config for openstack
+echo "KUBELET_EXTRA_ARGS=\"--cloud-provider=openstack \
+--cloud-config=/etc/kubernetes/cloud.config\"" > /etc/default/kubelet
 }
 
 # distributes configuration files and certificates
