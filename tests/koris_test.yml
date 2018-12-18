@@ -3,9 +3,9 @@
 ---
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-private_net: 'korispipeline-office-net'
+private_net: 'kubepipeline-int'
 # optionally specify the subnet
-# subnet: foo
+subnet: '1a2def9c-00fd-4a21-92f8-62656430c2bc'
 cluster-name: '%%CLUSTER_NAME%%'
 availibility-zones:
  - de-nbg6-1b
