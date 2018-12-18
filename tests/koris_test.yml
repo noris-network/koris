@@ -26,7 +26,7 @@ image: "koris-%%date%%"
 loadbalancer:
 # set this to true if you
 # want the load balancer to have a floating IP
- floatingip: false
+ floatingip: true
 certificates:
   expriry: 8760h
 #storage_class: "BSS-Performance-Storage"
