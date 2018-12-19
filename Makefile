@@ -44,7 +44,7 @@ BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sonobuoy_0.12.1_linux_amd64.tar.gz
 SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
-CIS_VERSION=1.12
+CIS_VERSION=1.11
 
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -283,7 +283,7 @@ security-checks-masters:
 	echo "Running security checks for K8S master nodes..."
 	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-master \
 		--image=aquasec/kube-bench:latest --restart=Never \
-		--overrides=$(OVERRIDES) -- master --version 1.11
+		--overrides=$(OVERRIDES) -- master --version ${CIS_VERSION}
 	sleep 30
 	kubectl logs kube-bench-master --kubeconfig=${KUBECONFIG}
 
