@@ -148,10 +148,14 @@ launch-cluster: update-config
 
 
 show-nodes:
-	kubectl get nodes -o wide --kubeconfig=${KUBECONFIG}
+	@echo "Waiting for nodes to join ..." 
+	for i in `seq 1 5`; do \
+		sleep 1; \
+	    kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
+	done
 
 integration-run:
-	kubectl run nginx --image=nginx --port=80 --kubeconfig=${KUBECONFIG}
+	kubectl apply -f tests/integration/nginx-pod.yml --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
 	@echo "started"
 
@@ -167,30 +171,30 @@ integration-wait:
 
 
 integration-patch-wait:
-	STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+	STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 	while true; do \
 		if [ "Running" == "$${STATUS}" ]; then \
 			break; \
 		fi; \
 		echo "pod is not running"; \
-		STATUS=`kubectl get pod --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 		echo ${STATUS}; \
 		sleep 1; \
 	done ; \
 
 
 integration-patch:
-	kubectl patch deployment.apps nginx -p \
+	kubectl patch deployment nginx-deployment -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
-	kubectl expose deployment nginx --type=LoadBalancer --name=nginx --kubeconfig=${KUBECONFIG}
+	kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
 
 expose-wait:
 	while true; do \
-		IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
 			echo "breaking "; \
 			break; \
@@ -207,7 +211,7 @@ reset-config:
 
 
 curl-run:
-	IP=`kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'`; \
+	IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 	echo $${IP}; \
 	while true; do \
 		curl http://$${IP}:80;\
@@ -224,8 +228,7 @@ check-cluster-dns:
 	dns_check_with_search_domains="$${dns_check_hostname}.$${dns_check_namespace}"; \
 	dns_check_fqdn="$${dns_check_with_search_domains}.$${dns_check_cluster_domain}"; \
 	dns_check="dig +noall +answer -q $${dns_check_fqdn} -t A"; \
-	dnscheck_pod='{"apiVersion":"v1","kind":"Pod","metadata":{"labels":{"k8s-app":"dnscheck"},"name":"dnscheck","namespace":"default"},"spec":{"containers":[{"image":"tutum/dnsutils","name":"dnscheck","command":["sleep"],"args":["86400"]}],"securityContext":{}}}'; \
-	echo $${dnscheck_pod} | kubectl --kubeconfig=${KUBECONFIG} apply -f -; \
+	kubectl --kubeconfig=${KUBECONFIG} apply -f tests/integration/dns-checkpod.yml;\
 	echo -n "Waiting for dnscheck pod to start"; \
 	while [ $$(kubectl --kubeconfig=${KUBECONFIG} get pod -l k8s-app=dnscheck -o jsonpath='{.items[0].status.phase}') != "Running" ]; do \
 		echo -n "."; \
@@ -254,11 +257,11 @@ check-cluster-dns:
 	#kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck
 
 clean-lb-after-integration-test:
-	kubectl delete service nginx --kubeconfig=${KUBECONFIG}
+	kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
-		kubectl get service --selector=run=nginx --kubeconfig=${KUBECONFIG}; \
-		if [ $$? -eq 0 ]; then \
+		kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG}; \
+		if [ $$? -ne 0 ]; then \
 			break; \
 		fi; \
 	done;

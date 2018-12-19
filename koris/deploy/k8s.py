@@ -7,6 +7,7 @@ import urllib3
 
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
+from kubernetes.client.rest import ApiException
 from pkg_resources import resource_filename, Requirement
 
 # LOGGER = get_logger(__name__, level=logging.DEBUG)
