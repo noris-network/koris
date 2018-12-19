@@ -131,6 +131,22 @@ def test_cloud_config(ci_first_master):
     assert cloud_config['path'] == '/etc/kubernetes/cloud.config'
 
 
+def test_bootstrap_script_first_master(ci_first_master):
+
+    ci_first_master.add_bootstrap_script()
+    assert len(ci_first_master._attachments) == 1
+    filename = ci_first_master._attachments[0].get_filename()
+    assert filename == 'bootstrap-k8s-master-ubuntu-16.04.sh'
+
+
+def test_bootstrap_script_nth_master(ci_nth_master):
+
+    ci_nth_master.add_bootstrap_script()
+    assert len(ci_nth_master._attachments) == 1
+    filename = ci_nth_master._attachments[0].get_filename()
+    assert filename == 'bootstrap-k8s-nth-master-ubuntu-16.04.sh'
+
+
 def test_cloud_init(ci_nth_master):
 
     assert 'ssh_authorized_keys' in ci_nth_master._cloud_config_data

@@ -74,12 +74,13 @@ class BaseInit:
         }
         self._cloud_config_data['write_files'].append(data)
 
-    def add_bootstrap_script(self, script):
+    def add_bootstrap_script(self):
         """
-        script: the script (str) to execute after provisioning the instance
         """
+        name, script = self._get_bootstrap_script()
         part = MIMEText(script, _subtype='x-shellscript')
-        part.add_header('Content-Disposition', 'attachment')
+        part.add_header('Content-Disposition', 'attachment',
+                        filename=name)
         self._attachments.append(part)
 
     def add_ssh_public_key(self, ssh_key):
@@ -132,6 +133,7 @@ class BaseInit:
         This method generates a string from the cloud_config_data and the
         attachments that have been set in the corresponding attributes.
         """
+        self.add_bootstrap_script()
         userdata = MIMEMultipart()
 
         # first add the cloud-config-data script
@@ -152,7 +154,7 @@ class NthMasterInit(BaseInit):
     adding an public SSH key for access from the first master node needs
     to be done.
     """
-    def __init__(self, cloud_config, ssh_key, username='ubuntu', os_type='ubuntu',
+    def __init__(self, cloud_config, ssh_key, os_type='ubuntu',
                  os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
@@ -162,11 +164,20 @@ class NthMasterInit(BaseInit):
         self.ssh_key = ssh_key
         self.os_type = os_type
         self.os_version = os_version
-        self.username = username
-        self.role = 'master'
+        self.role = 'nth-master'
 
         # assemble the parts for an n-th master node
-        self.add_ssh_public_key(self.ssh_key, username)
+        self.add_ssh_public_key(self.ssh_key)
+
+    def _get_bootstrap_script(self):
+        name = "bootstrap-k8s-%s-%s-%s.sh" % (
+            self.role, self.os_type, self.os_version)
+
+        fh = open(resource_filename(Requirement('koris'),
+                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                 name)))
+        script = fh.read()
+        return name, script
 
 
 class FirstMasterInit(NthMasterInit):
@@ -176,7 +187,7 @@ class FirstMasterInit(NthMasterInit):
     """
     def __init__(self, ssh_key, ca_bundle, cloud_config, master_ips,
                  master_names, lb_ip, lb_port, bootstrap_token, lb_dns='',
-                 username='ubuntu', os_type='ubuntu', os_version="16.04"):
+                 os_type='ubuntu', os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from koris.ssl module)
         ca_bundle: The CA bundle for the CA that is used to permit accesses
@@ -185,7 +196,7 @@ class FirstMasterInit(NthMasterInit):
             necessary for sending requests to the underlying cloud. Needed e.g.
             for auto scaling.
         """
-        super().__init__(cloud_config, ssh_key, username, os_type, os_version)
+        super().__init__(cloud_config, ssh_key, os_type, os_version)
         self.ca_bundle = ca_bundle
         self.master_ips = master_ips
         self.master_names = master_names
@@ -193,6 +204,7 @@ class FirstMasterInit(NthMasterInit):
         self.lb_port = lb_port
         self.bootstrap_token = bootstrap_token
         self.lb_dns = lb_dns
+        self.role = 'master'
 
         # assemble the parts for the first master
         # use an encoder that just returns x, since b64_cert encodes already
@@ -204,7 +216,6 @@ class FirstMasterInit(NthMasterInit):
         self._write_cloud_config()
         self._write_koris_env()
         self._write_ssh_private_key()
-        self.add_bootstrap_script(self._get_bootstrap_script())
 
     def _get_bootstrap_script(self):
         name = "bootstrap-k8s-%s-%s-%s.sh" % (
@@ -214,7 +225,7 @@ class FirstMasterInit(NthMasterInit):
                                     os.path.join(BOOTSTRAP_SCRIPTS_DIR,
                                                  name)))
         script = fh.read()
-        return script
+        return name, script
 
     def _write_ssh_private_key(self):
         # path = "/home/{}/.ssh/id_rsa_masters".format(self.username)
@@ -274,7 +285,6 @@ class NodeInit(BaseInit):
 
         # assemble parts for the node
         self._write_koris_env()
-        self.add_bootstrap_script(self._get_bootstrap_script())
 
     def _get_bootstrap_script(self):
         name = "bootstrap-k8s-%s-%s-%s.sh" % (
@@ -284,7 +294,7 @@ class NodeInit(BaseInit):
                                     os.path.join(BOOTSTRAP_SCRIPTS_DIR,
                                                  name)))
         script = fh.read()
-        return script
+        return name, script
 
     def _write_koris_env(self):
         """
