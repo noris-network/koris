@@ -44,6 +44,7 @@ BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sonobuoy_0.12.1_linux_amd64.tar.gz
 SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
+K8S_VERSION=1.12
 
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -274,11 +275,11 @@ clean-lb: ## delete a loadbalancer with all it's components
 security-checks:
 	echo "Running security checks for K8S master nodes..."
 	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
-	kubectl run --kubeconfig=${KUBECONFIG} -rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
-		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version ${K8S_VERSION}
 	echo "Running security checks for K8S worker nodes..."
 	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
-		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version ${K8S_VERSION}
 	sleep 30
 	kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 
