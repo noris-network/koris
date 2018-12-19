@@ -5,6 +5,7 @@ functions and classes to interact with openstack
 import asyncio
 import base64
 import copy
+import logging
 import os
 import re
 import sys
@@ -26,7 +27,7 @@ from koris.cloud import OpenStackAPI
 from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
-import logging
+
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
@@ -91,7 +92,7 @@ class Instance:
         self.role = role
         self._ports = []
         self._ip_address = None
-        self._exists = False
+        self.exists = False
 
     @property
     def nics(self):
@@ -151,7 +152,7 @@ class Instance:
         Boot the instance on openstack
         returns the OpenStack instance
         """
-        if self._exists:
+        if self.exists:
             return self
 
         volume_data = await self._create_volume()
@@ -194,7 +195,7 @@ class Instance:
             "Instance booted! Name: %s, IP: %s, Status : %s",
             self.name, instance.status, self._ip_address)
 
-        self._exists = True
+        self.exists = True
         return self
 
     async def delete(self, netclient):
@@ -204,7 +205,7 @@ class Instance:
             nics = [nic for nic in server.interface_list()]
             server.delete()
             list(netclient.delete_port(nic.id) for nic in nics)
-            LOGGER.info("deleted %s ..." % server.name)
+            LOGGER.info("deleted %s ...", server.name)
         except NovaNotFound:
             pass
 
@@ -433,18 +434,15 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
     def add_member(self, client, pool_id, ip_addr):
+        """
+        add listener to a loadbalancers pool.
+        """
         client.create_lbaas_member(pool_id,
                                    {'member':
                                     {'subnet_id': self._subnet_id,
                                      'protocol_port': 6443,
                                      'address': ip_addr,
                                      }})
-
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
-    def _add_members(self, client, pool_id, master_ips):
-        for ip in master_ips:
-            self._add_member(client, pool_id, ip)
-            LOGGER.info("added pool member %s ...", ip)
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
@@ -501,7 +499,7 @@ class SecurityGroup:
         self.name = name
         self.subnet = subnet
         self._id = None
-        self._exists = False
+        self.exists = False
 
     def add_sec_rule(self, **kwargs):
         """
@@ -538,7 +536,7 @@ class SecurityGroup:
         secgroup = next(secgroup)['security_groups']
 
         if secgroup:
-            self._exists = True
+            self.exists = True
             self._id = secgroup[0]['id']
             return secgroup[0]
 
@@ -764,7 +762,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             role,
                             volume_config)
             inst._ports.append(_server.interface_list()[0])
-            inst._exists = True
+            inst.exists = True
         except NovaNotFound:
             inst = Instance(self._cinderclient,
                             self._novaclient,

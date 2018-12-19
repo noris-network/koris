@@ -42,11 +42,12 @@ class Koris:
         self.nova = nova
         self.neutron = neutron
         self.cinder = cinder
-        self.parser.add_argument("--version", action="store_true",
-                                 help="show version and exit",
-                                 default=argparse.SUPPRESS)
+        self.parser.add_argument(  # pylint: disable=no-member
+            "--version", action="store_true",
+            help="show version and exit",
+            default=argparse.SUPPRESS)
 
-    def _get_version(self):
+    def _get_version(self):  # pylint: disable=no-self-use
         print("Kolt version:", __version__)
 
     def apply(self, config):
@@ -67,7 +68,7 @@ class Koris:
             delete_cluster(config, self.nova, self.neutron, self.cinder,
                            True)
 
-    def k8s(self, config):  # pylint: disable=no-self-use
+    def k8s(self):  # pylint: disable=no-self-use
         """
         Bootstrap a Kubernetes cluster (deprecated)
 

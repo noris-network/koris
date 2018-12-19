@@ -76,6 +76,7 @@ class BaseInit:
 
     def add_bootstrap_script(self):
         """
+        add a bootstrap script to each cluster member.
         """
         name, script = self._get_bootstrap_script()
         part = MIMEText(script, _subtype='x-shellscript')

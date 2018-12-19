@@ -70,7 +70,7 @@ class NodeBuilder:
         tasks = []
 
         for node in nodes:
-            if node._exists:
+            if node.exists:
                 raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(node))
 
@@ -130,7 +130,7 @@ class ControlPlaneBuilder:
         tasks = []
 
         for index, master in enumerate(masters):
-            if master._exists:
+            if master.exists:
                 raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(master))
             if not index:
@@ -194,7 +194,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         execute the complete cluster build
         """
         # create a security group for the cluster if not already present
-        if self.info.secgroup._exists:
+        if self.info.secgroup.exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
                     'cluster-name'])))

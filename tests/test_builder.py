@@ -25,7 +25,7 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 
         self.name = name
         self.ip_address = ip_address
-        self._exists = False
+        self.exists = False
 
     def interface_list(self):
         return [DUMMYPORT, ]
@@ -77,7 +77,7 @@ def test_node_builder(os_info):
                                                                 "10.32.192.101")) # noqa
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
-    list(map(lambda x: setattr(x, "_exists", False), nodes))
+    list(map(lambda x: setattr(x, "exists", False), nodes))
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)
     assert nodes[0].name == 'node-1-test'
 
