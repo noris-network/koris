@@ -143,7 +143,7 @@ compliance-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
-	koris k8s tests/koris_test.yml
+	koris apply tests/koris_test.yml
 
 
 show-nodes:
@@ -265,7 +265,7 @@ clean-lb-after-integration-test:
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
-# loadbalancer koris-pipe-line-6e754fe-7008-lb one would need to set 
+# loadbalancer koris-pipe-line-6e754fe-7008-lb one would need to set
 # LOADBALANCER_NAME to koris-pipe-line-6e754fe-7008 (without the -lb)
 clean-lb: ## delete a loadbalancer with all it's components
 	$(call ndef,LOADBALANCER_NAME)

@@ -73,9 +73,8 @@ class Koris:
 
         config - configuration file
         """
-        print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
+        print(yellow("This subcommand is deprecated.")) # noqa
         print(yellow("Use `apply` instead."))
-        self.apply(config)
 
     def destroy(self, config: str, force: bool = False):
         """
