@@ -123,9 +123,6 @@ for i in ${!MASTERS[@]}; do
 	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
 done
 
-# write kubelet cloud config for openstack
-echo "KUBELET_EXTRA_ARGS=\"--cloud-provider=openstack \
---cloud-config=/etc/kubernetes/cloud.config\"" > /etc/default/kubelet
 }
 
 # distributes configuration files and certificates
@@ -160,7 +157,6 @@ function distribute_keys() {
        ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
        ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
        ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
-       ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/cloud.config
 
        echo "done distributing keys to ${MASTERS_IPS[$i]}";
    done
@@ -181,15 +177,15 @@ function bootstrap_first_master() {
    kubeadm -v=${V} alpha phase etcd local --config $1
    kubeadm -v=${V} alpha phase controlplane all --config $1
    kubeadm -v=${V} alpha phase mark-master --config $1
-   
+
    # wait for the API server, we need to do this before installing the addons,
    # otherwise weird timing problems occur irregularly:
-   # "error when creating kube-proxy service account: unable to create 
+   # "error when creating kube-proxy service account: unable to create
    # serviceaccount: namespaces "kube-system" not found"
    until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
        do echo "api server is not up! trying again ...";
    done
-   
+
    kubeadm -v=${V} alpha phase addon kube-proxy --config $1
    kubeadm -v=${V} alpha phase addon coredns --config $1
    kubeadm alpha phase bootstrap-token all --config $1

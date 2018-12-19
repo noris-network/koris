@@ -1,3 +1,6 @@
+"""
+tests for koris.provision.cloud_init
+"""
 from unittest.mock import patch
 
 import pytest
@@ -16,13 +19,13 @@ class DummyServer:  # pylint: disable=too-few-public-methods
         self.ip_address = ip_address
 
 
-test_cluster = [DummyServer("master-%d-test" % i,
+TEST_CLUSTER = [DummyServer("master-%d-test" % i,
                             "10.32.192.10%d" % i) for i in range(1, 4)]
 
-etcd_host_list = test_cluster
+ETCD_HOST_LISTS = TEST_CLUSTER
 
 hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
-                                 i in etcd_host_list]))
+                                 i in ETCD_HOST_LISTS]))
 
 
 with patch('koris.cloud.openstack.read_os_auth_variables') as p:
@@ -33,11 +36,12 @@ with patch('koris.cloud.openstack.read_os_auth_variables') as p:
                           user_domain_name="noris.de",
                           region_name="de-nbg6-1")
 
-cloud_config = OSCloudConfig()
-lb_ip = "10.32.192.121",
+CLOUD_CONFIG = OSCloudConfig()
+LB_IP = "10.32.192.121",
 
 
 def create_etcd_certs(names, ips):
+    """create certificated for dummy servers"""
     _key = create_key(size=2048)
     _ca = create_ca(_key, _key.public_key(),
                     "DE", "BY", "NUE",
@@ -83,25 +87,25 @@ def create_etcd_certs(names, ips):
         yield {'etcd_ca': ca_bundle}
 
 
-certs = create_certs({}, hostnames, ips, write=False)
+CERTS = create_certs({}, hostnames, ips, write=False)
 for item in create_etcd_certs(hostnames, ips):
-    certs.update(item)
+    CERTS.update(item)
 
 
 @pytest.fixture
 def ci_nth_master():
-    ci = NthMasterInit(create_key())
+    ci = NthMasterInit(CLOUD_CONFIG, create_key())
     return ci
 
 
 @pytest.fixture
 def ci_first_master():
     ci = FirstMasterInit(create_key(),
-                         certs['ca'],
-                         cloud_config,
+                         CERTS['ca'],
+                         CLOUD_CONFIG,
                          hostnames,
                          ips,
-                         lb_ip,
+                         LB_IP,
                          "6443",
                          "bootstrap_token"
                          )
@@ -111,8 +115,9 @@ def ci_first_master():
 @pytest.fixture
 def ci_node():
     ci = NodeInit(
-        certs['ca'],
-        lb_ip,
+        CERTS['ca'],
+        CLOUD_CONFIG,
+        LB_IP,
         "6443",
         "a73b8f597c04551a0fdc8e95544be8a",
         "discovery_hash"

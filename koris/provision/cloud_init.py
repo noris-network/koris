@@ -26,6 +26,11 @@ BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 class BaseInit:
     """
+    Args:
+       cloud_config   An OSCloudConfig instance describing the information
+                      necessary for sending requests to the underlying cloud.
+                      Needed e.g. for auto scaling.
+
     Attributes:
         cloud_config_data       this attribute contains the text/cloud-config
                                 files that is passed to the instances
@@ -35,7 +40,9 @@ class BaseInit:
                                 instances of MIMEText with the header
                                 'Content-Disposition' set to 'attachment'
     """
-    def __init__(self):
+    def __init__(self, cloud_config):
+        self.cloud_config = cloud_config
+
         self._cloud_config_data = {}
         self._attachments = []
 
@@ -117,6 +124,22 @@ class BaseInit:
         self.write_file("/etc/kubernetes/koris.conf", content, "root", "root",
                         "0644")
 
+    def _write_cloud_config(self):
+        """
+        write out the cloud provider configuration file for OpenStack
+        """
+        content = str(self.cloud_config)
+        self.write_file("/etc/kubernetes/cloud.config", content, "root",
+                        "root", "0600")
+
+    def _write_kubelet_default(self):
+        """
+        write out flags for kubelet systemd unit
+        """
+        content = '''KUBELET_EXTRA_ARGS="--cloud-provider=openstack --cloud-config=/etc/kubernetes/cloud.config"'''  # noqa
+        self.write_file("/etc/default/kubelet", content, "root",
+                        "root", "0600")
+
     def __str__(self):
         """
         This method generates a string from the cloud_config_data and the
@@ -142,13 +165,13 @@ class NthMasterInit(BaseInit):
     adding an public SSH key for access from the first master node needs
     to be done.
     """
-    def __init__(self, ssh_key, username='ubuntu', os_type='ubuntu',
+    def __init__(self, cloud_config, ssh_key, username='ubuntu', os_type='ubuntu',
                  os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
         """
-        super().__init__()
+        super().__init__(cloud_config)
         self.ssh_key = ssh_key
         self.os_type = os_type
         self.os_version = os_version
@@ -175,9 +198,8 @@ class FirstMasterInit(NthMasterInit):
             necessary for sending requests to the underlying cloud. Needed e.g.
             for auto scaling.
         """
-        super().__init__(ssh_key, username, os_type, os_version)
+        super().__init__(cloud_config, ssh_key, username, os_type, os_version)
         self.ca_bundle = ca_bundle
-        self.cloud_config = cloud_config
         self.master_ips = master_ips
         self.master_names = master_names
         self.lb_ip = lb_ip
@@ -206,14 +228,6 @@ class FirstMasterInit(NthMasterInit):
                                                  name)))
         script = fh.read()
         return script
-
-    def _write_cloud_config(self):
-        """
-        write out the cloud provider configuration file for OpenStack
-        """
-        content = str(self.cloud_config)
-        self.write_file("/etc/kubernetes/cloud.config", content, "root",
-                        "root", "0600")
 
     def _write_ssh_private_key(self):
         # path = "/home/{}/.ssh/id_rsa_masters".format(self.username)
@@ -255,12 +269,12 @@ class NodeInit(BaseInit):
     """
     The node does nothing else than executing its bootstrap script.
     """
-    def __init__(self, ca_bundle, lb_ip, lb_port, bootstrap_token,
+    def __init__(self, ca_bundle, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
                  os_version="16.04"):
         """
         """
-        super().__init__()
+        super().__init__(cloud_config)
         self.ca_bundle = ca_bundle
         self.lb_ip = lb_ip
         self.lb_port = lb_port

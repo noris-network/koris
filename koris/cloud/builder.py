@@ -74,7 +74,8 @@ class NodeBuilder:
                 raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(node))
 
-            userdata = str(NodeInit(ca_bundle, lb_ip, lb_port, bootstrap_token,
+            userdata = str(NodeInit(ca_bundle, self._info, lb_ip, lb_port,
+                                    bootstrap_token,
                                     discovery_hash))
             tasks.append(loop.create_task(
                 node.create(self._info.node_flavor, self._info.secgroups,
@@ -119,7 +120,7 @@ class ControlPlaneBuilder:
         """
         masters = self.get_masters()
         if not len(masters) % 2:
-            LOGGER.warn("The number of masters should be odd!")
+            LOGGER.warnning("The number of masters should be odd!")
             return
 
         master_ips = [master.ip_address for master in masters]
@@ -140,7 +141,7 @@ class ControlPlaneBuilder:
                                                bootstrap_token, lb_dns))
             else:
                 # create userdata for following master nodes if not existing
-                userdata = str(NthMasterInit(ssh_key))
+                userdata = str(NthMasterInit(cloud_config, ssh_key))
 
             tasks.append(loop.create_task(
                 master.create(self._info.master_flavor, self._info.secgroups,
@@ -203,12 +204,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.info.secgroup.configure()
 
         try:
-            subnet_id = NEUTRON.find_resource('subnet', config['subnet'])['id']
+            subnet = NEUTRON.find_resource('subnet', config['subnet'])
         except KeyError:
-            subnet_id = NEUTRON.list_subnets()['subnets'][-1]['id']
+            subnet = NEUTRON.list_subnets()['subnets'][-1]
 
-        cloud_config = OSCloudConfig(subnet_id)
-        LOGGER.info("Using subnet with ID {}".format(subnet_id))
+        cloud_config = OSCloudConfig(subnet['id'])
+        LOGGER.info("Using subnet %s", subnet['name'])
 
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
@@ -286,12 +287,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         k8s = K8S(kubeconfig, manifest_path)
 
         while not k8s.is_ready:
-                LOGGER.info("Kubernetes API Server is still not ready ...")
-                time.sleep(2)
+            LOGGER.info("Kubernetes API Server is still not ready ...")
+            time.sleep(2)
 
         while not k8s.masters_ready:
-                LOGGER.info("Kubernetes API masters are still not ready ...")
-                time.sleep(2)
+            LOGGER.info("Kubernetes API masters are still not ready ...")
+            time.sleep(2)
 
         # Finally, we want to add the other master nodes to the LoadBalancer
         LOGGER.info("Configuring load balancer again...")
