@@ -3,16 +3,14 @@
 ###
 # A script to create a HA K8S cluster on OpenStack using pure bash and kubeadm
 #
-# The script is devided into a whole bunch of function, look for the fuction
+# The script is devided into a whole bunch of functions, look for the fuction
 # called main at the bottom.
 #
 # The script will create mutliple kubernetes control plane members connected
 # via an etcd cluster which is grown in a serial manner. That means we first
 # create a single etcd host, and then add N hosts one after another.
 #
-# The addition of hosts is done via SSH! And that is currently the biggest caveat
-# of this script. If one of the hosts will fail to because SSH is still not ready
-# the whole cluster will fail to create.
+# The addition of hosts is done via SSH!
 ###
 
 set -e
