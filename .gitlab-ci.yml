@@ -4,7 +4,8 @@ stages:
  - wait-for-resources
  - build-cluster
  - integration-test
- - security-checks
+ - security-checks-masters
+ - security-checks-nodes
  - compliance-checks
  - cleanup
  - pages
@@ -89,10 +90,11 @@ integration-test:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
       - $SKIP_E2E
 
-security-checks:
-  stage: security-checks
+security-checks-masters:
+  stage: security-checks-masters
   image: oz123/koris-alpine:0.1.1
   variables:
     LC_ALL: "C.UTF-8"
@@ -101,13 +103,23 @@ security-checks:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - "make security-checks"
-  artifacts:
-    paths:
-      - "certs-koris-pipe-line-*"
-      - "koris-pipe-line-*-admin.conf"
-      - "tests/koris_test.yml"
-    expire_in: 1 week
+  - "make security-checks-masters"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+
+security-checks-nodes:
+  stage: security-checks-nodes
+  image: oz123/koris-alpine:0.1.1
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - "make security-checks-nodes"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/

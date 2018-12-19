@@ -5,6 +5,7 @@ functions and classes to interact with openstack
 import asyncio
 import base64
 import copy
+import logging
 import os
 import re
 import sys
@@ -26,7 +27,7 @@ from koris.cloud import OpenStackAPI
 from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
-import logging
+
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
@@ -91,7 +92,7 @@ class Instance:
         self.role = role
         self._ports = []
         self._ip_address = None
-        self._exists = False
+        self.exists = False
 
     @property
     def nics(self):
@@ -149,9 +150,10 @@ class Instance:
     async def create(self, flavor, secgroups, keypair, userdata):  # pragma: no coverage
         """
         Boot the instance on openstack
+        returns the OpenStack instance
         """
-        if self._exists:
-            return
+        if self.exists:
+            return self
 
         volume_data = await self._create_volume()
 
@@ -193,6 +195,9 @@ class Instance:
             "Instance booted! Name: %s, IP: %s, Status : %s",
             self.name, instance.status, self._ip_address)
 
+        self.exists = True
+        return self
+
     async def delete(self, netclient):
         """stop and terminate an instance"""
         try:
@@ -200,7 +205,7 @@ class Instance:
             nics = [nic for nic in server.interface_list()]
             server.delete()
             list(netclient.delete_port(nic.id) for nic in nics)
-            LOGGER.info("deleted %s ..." % server.name)
+            LOGGER.info("deleted %s ...", server.name)
         except NovaNotFound:
             pass
 
@@ -222,7 +227,8 @@ class LoadBalancer:  # pragma: no coverage
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
         self.subnet = config.get('subnet')
-        # these attributes are set after create
+        # these attributes are set after creation
+        self.pool = None
         self._id = None
         self._subnet_id = None
         self._data = None
@@ -255,7 +261,7 @@ class LoadBalancer:  # pragma: no coverage
             for member in pool['members']:
                 self._del_member(client, member['id'], pool['id'])
 
-        self._add_members(client, pool['id'], master_ips)
+        self.add_member(client, pool['id'], master_ips[0])
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor ...")
         else:
@@ -345,6 +351,7 @@ class LoadBalancer:  # pragma: no coverage
         lb = client.list_lbaas_loadbalancers(retrieve_all=True,
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
+            LOGGER.warning("LB %s was not found", self.name)
             return
 
         lb = lb[0]
@@ -367,6 +374,9 @@ class LoadBalancer:  # pragma: no coverage
 
             fip = client.list_floatingips(
                 floating_ip_address=self.floatingip)['floatingips']
+            if not fip:
+                LOGGER.error("Could not find %s in the pool" % self.floatingip)
+                sys.exit(1)
             fip = fip[0]
         if not fip:
             fips = client.list_floatingips()['floatingips']
@@ -409,6 +419,7 @@ class LoadBalancer:  # pragma: no coverage
                       "protocol": "HTTPS",
                       "name": "%s-pool" % self.name},
              })
+        self.pool = pool['pool']
 
         return pool['pool']
 
@@ -422,19 +433,16 @@ class LoadBalancer:  # pragma: no coverage
               "name": "%s-health" % self.name}})
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
-    def _add_member(self, client, pool_id, ip_addr):
+    def add_member(self, client, pool_id, ip_addr):
+        """
+        add listener to a loadbalancers pool.
+        """
         client.create_lbaas_member(pool_id,
                                    {'member':
                                     {'subnet_id': self._subnet_id,
                                      'protocol_port': 6443,
                                      'address': ip_addr,
                                      }})
-
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
-    def _add_members(self, client, pool_id, master_ips):
-        for ip in master_ips:
-            self._add_member(client, pool_id, ip)
-            LOGGER.info("added pool member %s ...", ip)
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
@@ -491,7 +499,7 @@ class SecurityGroup:
         self.name = name
         self.subnet = subnet
         self._id = None
-        self._exists = False
+        self.exists = False
 
     def add_sec_rule(self, **kwargs):
         """
@@ -528,7 +536,7 @@ class SecurityGroup:
         secgroup = next(secgroup)['security_groups']
 
         if secgroup:
-            self._exists = True
+            self.exists = True
             self._id = secgroup[0]['id']
             return secgroup[0]
 
@@ -693,7 +701,6 @@ def distribute_host_zones(hosts, zones):
 
     n = len(zones)
     hosts = [hosts[start::len(zones)] for start in range(n)]
-
     return list(zip(hosts, zones))
 
 
@@ -755,7 +762,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             role,
                             volume_config)
             inst._ports.append(_server.interface_list()[0])
-            inst._exists = True
+            inst.exists = True
         except NovaNotFound:
             inst = Instance(self._cinderclient,
                             self._novaclient,

@@ -302,6 +302,9 @@ class CertBundle:
         """
         save a certificate bundle to the file system
         """
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+
         write_key(self.key,
                   filename=os.path.join(directory, name + key_suffix))
         write_cert(self.cert, os.path.join(directory, name + cert_suffix))
@@ -407,7 +410,6 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     nodes = []
     node_bundles = []
     node_ip = None
-    # todo: add node_ip
     for node in nodes:
         node_bundles.append(CertBundle.create_signed(ca_bundle,
                                                      country,

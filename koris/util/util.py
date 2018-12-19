@@ -1,7 +1,6 @@
 import base64
 import copy
 import logging
-import textwrap
 import time
 
 from functools import lru_cache
@@ -20,26 +19,10 @@ def get_logger(name, level=logging.INFO):
     return logger
 
 
-encryption_config_tmpl = """
-kind: EncryptionConfig
-apiVersion: v1
-resources:
-  - resources:
-      - secrets
-    providers:
-      - aescbc:
-          keys:
-            - name: key1
-              secret: %%ENCRYPTION_KEY%%
-      - identity: {}
-"""
-
 kubeconfig = {'apiVersion': 'v1',
               'clusters': [
-                  {'cluster': {'insecure-skip-tls-verify': True,
-                               'server': '%%%%MASTERURI%%%',
-                               'certificate-authority':
-                               '/var/lib/kubernetes/ca.pem'},
+                  {'cluster': {'server': '%%%%MASTERURI%%%%',
+                               'certificate-authority': '%%%%CA%%%%'},
                    'name': 'kubernetes'}],
               'contexts': [
                   {'context':
@@ -50,81 +33,29 @@ kubeconfig = {'apiVersion': 'v1',
               'kind': 'Config',
               'users': [
                   {'name': '%%%USERNAME%%%',
-                   'user': {'token': '%%%USERTOKEN%%%'}
+                   'user': {'client-certificate': '%%%%CLIENT_CERT%%%%',
+                            'client-key': '%%%%CLIENT_KEY%%%%'
+                            }
                    }]
               }
 
 
-def get_kubeconfig_yaml(master_uri, username, token,
-                        skip_tls=False,
-                        encode=True,
-                        ca="/var/lib/kubernetes/ca.pem"):
+def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
+                        client_key, encode=False):
     config = copy.deepcopy(kubeconfig)
-    if skip_tls:
-        config['clusters'][0]['cluster'].pop('insecure-skip-tls-verify')
-        config['clusters'][0]['cluster']['server'] = master_uri
-        config['clusters'][0]['cluster']['certificate-authority'] = ca
-    else:
-        config['clusters'][0]['cluster'].pop('server')
-
-    config['contexts'][0]['name'] = "%s-context" % username
+    config['clusters'][0]['cluster']['server'] = master_uri
+    config['clusters'][0]['cluster']['certificate-authority'] = ca_cert
     config['contexts'][0]['context']['user'] = "%s" % username
+    config['contexts'][0]['name'] = "%s-context" % username
     config['current-context'] = "%s-context" % username
     config['users'][0]['name'] = username
-    config['users'][0]['user']['token'] = token
+    config['users'][0]['user']['client-certificate'] = client_cert
+    config['users'][0]['user']['client-key'] = client_key
 
     yml_config = yaml.dump(config)
-
     if encode:
         yml_config = base64.b64encode(yml_config.encode()).decode()
     return yml_config
-
-
-calicoconfig = {
-    "name": "calico-k8s-network",
-    "type": "calico",
-    "datastore_type": "etcdv3",
-    "log_level": "DEBUG",
-    "etcd_endpoints": "",
-    "etcd_key_file": "/var/lib/kubernetes/kubernetes-key.pem",
-    "etcd_cert_file": "/var/lib/kubernetes/kubernetes.pem",
-    "etcd_ca_cert_file": "/var/lib/kubernetes/ca.pem",
-    "ipam": {
-        "type": "calico-ipam",
-        "assign_ipv4": "true",
-        "assign_ipv6": "false",
-        "ipv4_pools": ["10.233.0.0/16"]
-    },
-    "policy": {
-        "type": "k8s"
-    },
-    "nodename": "__NODENAME__"  # <- This is replaced during boot
-}
-
-#    "kubernetes": {
-#        "kubeconfig": "/etc/calico/kube/kubeconfig"
-#    }
-
-
-def get_token_csv(adminToken, calicoToken, kubeletToken):
-    """
-    write the content of
-    /var/lib/kubernetes/token.csv
-    """
-    # TODO: check how to get this working ...
-    # {bootstrapToken},kubelet,kubelet,10001,"system:node-bootstrapper"
-    content = """
-    {adminToken},admin,admin,"cluster-admin,system:masters"
-    {calicoToken},calico,calico,"cluster-admin,system:masters"
-    {kubeletToken},kubelet,kubelet,"cluster-admin,system:masters"
-    """.format(
-        adminToken=adminToken,
-        calicoToken=calicoToken,
-        kubeletToken=kubeletToken,
-        bootstrapToken=kubeletToken
-    )
-
-    return base64.b64encode(textwrap.dedent(content).encode()).decode()
 
 
 @lru_cache(maxsize=16)

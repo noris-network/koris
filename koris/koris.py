@@ -42,11 +42,12 @@ class Koris:
         self.nova = nova
         self.neutron = neutron
         self.cinder = cinder
-        self.parser.add_argument("--version", action="store_true",
-                                 help="show version and exit",
-                                 default=argparse.SUPPRESS)
+        self.parser.add_argument(  # pylint: disable=no-member
+            "--version", action="store_true",
+            help="show version and exit",
+            default=argparse.SUPPRESS)
 
-    def _get_version(self):
+    def _get_version(self):  # pylint: disable=no-self-use
         print("Kolt version:", __version__)
 
     def apply(self, config):
@@ -54,7 +55,6 @@ class Koris:
         Bootstrap a Kubernetes cluster
 
         config - configuration file
-        inventory - invetory file to write
         """
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
@@ -65,19 +65,17 @@ class Koris:
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))
-            delete_cluster(config, self.nova, self.neutron,
+            delete_cluster(config, self.nova, self.neutron, self.cinder,
                            True)
 
-    def k8s(self, config):  # pylint: disable=no-self-use
+    def k8s(self):  # pylint: disable=no-self-use
         """
         Bootstrap a Kubernetes cluster (deprecated)
 
         config - configuration file
-        inventory - invetory file to write
         """
-        print(yellow("This subcommand is deprecated and will be removed soon ...")) # noqa
+        print(yellow("This subcommand is deprecated.")) # noqa
         print(yellow("Use `apply` instead."))
-        self.apply(config)
 
     def destroy(self, config: str, force: bool = False):
         """

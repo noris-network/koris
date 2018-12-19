@@ -1,11 +1,7 @@
 """
 Test koris.cloud.builder
 """
-import base64
-import json
 import pytest
-import re
-import uuid
 from unittest import mock
 
 import koris.cloud.openstack
@@ -29,7 +25,7 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 
         self.name = name
         self.ip_address = ip_address
-        self._exists = False
+        self.exists = False
 
     def interface_list(self):
         return [DUMMYPORT, ]
@@ -81,21 +77,19 @@ def test_node_builder(os_info):
                                                                 "10.32.192.101")) # noqa
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
-    list(map(lambda x: setattr(x, "_exists", False), nodes))
+    list(map(lambda x: setattr(x, "exists", False), nodes))
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)
     assert nodes[0].name == 'node-1-test'
 
     certs = create_certs(CONFIG, ['node-1-test'], ['192.168.1.103'],
                          write=False)
 
-    calico_token = uuid.uuid4().hex[:32]
-    kubelet_token = uuid.uuid4().hex[:32]
     lb_ip = '212.58.134.78'
-    test_cluster = [DummyServer("master-%d-test",
-                                "10.32.192.10%d" % i) for i in range(1, 4)]
-    node_tasks = nb.create_nodes_tasks(certs, kubelet_token,
-                                       calico_token, test_cluster,
-                                       lb_ip)
+    node_tasks = nb.create_nodes_tasks(certs['ca'], lb_ip,
+                                       "6443",
+                                       "123456.abcdefg12345678",
+                                       "discovery_hash",
+                                       )
 
     coro_server_create = node_tasks[1]
 
@@ -105,15 +99,6 @@ def test_node_builder(os_info):
     assert call_args['keypair'] == 'otiram'
     assert call_args['self'].name == 'node-1-test'
     assert call_args['flavor'] == 'ECS.C1.4-8'
-    userdata = call_args['userdata']
-
-    se = re.search(
-        r"calico_config.*\n.*\n.*\n\s+content: (?P<file>.*==)", userdata)
-
-    calico_config = json.loads(base64.b64decode(se.groupdict()['file']))
-    assert calico_config['etcd_endpoints'] == (
-        'https://10.32.192.101:2739,'
-        'https://10.32.192.102:2739,https://10.32.192.103:2739')
 
 
 def test_controlplane_builder(os_info):

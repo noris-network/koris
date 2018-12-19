@@ -50,18 +50,18 @@ Get started
 
    .. code:: shell
 
-      $ koris -h
-      usage: koris [-h] {certs,destroy,k8s,kubespray,oc} ...
+   koris -h
+   usage: koris [-h] [--version] {apply,destroy,k8s} ...
 
-      positional arguments:
-        {certs,destroy,k8s,kubespray,oc}
-                              commands
-          certs               Create cluster certificates
-          destroy             Delete the complete cluster stack
-          k8s                 Bootstrap a Kubernetes cluster
-          ...
-      optional arguments:
-        -h, --help            show this help message and exit
+   positional arguments:
+     {apply,destroy,k8s}  commands
+       apply              Bootstrap a Kubernetes cluster
+       destroy            Delete the complete cluster stack
+       k8s                Bootstrap a Kubernetes cluster (deprecated)
+
+   optional arguments:
+     -h, --help           show this help message and exit
+     --version            show version and exit
 
 7. To view the help of each subcommand
 
