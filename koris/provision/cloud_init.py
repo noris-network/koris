@@ -4,14 +4,14 @@ to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
 provided
 """
 import base64
+from datetime import datetime
 import os
 import textwrap
-import yaml
-
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pkg_resources import (Requirement, resource_filename, get_distribution)
-from datetime import datetime
+
+import yaml
 
 from cryptography.hazmat.primitives import serialization
 
@@ -82,7 +82,7 @@ class BaseInit:
         part.add_header('Content-Disposition', 'attachment')
         self._attachments.append(part)
 
-    def add_ssh_public_key(self, ssh_key, username):
+    def add_ssh_public_key(self, ssh_key):
         """
         ssh_key should be the key pair to use of type:
             cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey
@@ -91,19 +91,6 @@ class BaseInit:
         keyline = ssh_key.public_key().public_bytes(
             serialization.Encoding.OpenSSH,
             serialization.PublicFormat.OpenSSH).decode()
-
-        """try:
-            self._cloud_config_data['users']
-        except KeyError:
-            self._cloud_config_data['users'] = []
-            self._cloud_config_data['users'].append("default")
-
-        self._cloud_config_data['users'].append({
-            "name": username,
-            "ssh_authorized_keys": [
-                keyline
-            ]
-        })"""
 
         self._cloud_config_data["ssh_authorized_keys"] = []
         self._cloud_config_data["ssh_authorized_keys"].append(keyline)
