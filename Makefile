@@ -218,8 +218,8 @@ curl-run:
 
 check-cluster-dns:
 	dns_check_hostname="kubernetes"; \
-    dns_check_namespace="default"; \
-    dns_check_cluster_domain="svc.cluster.local"; \
+        dns_check_namespace="default"; \
+        dns_check_cluster_domain="svc.cluster.local"; \
 	dns_check_with_search_domains="$${dns_check_hostname}.$${dns_check_namespace}"; \
 	dns_check_fqdn="$${dns_check_with_search_domains}.$${dns_check_cluster_domain}"; \
 	dns_check="dig +noall +answer -q $${dns_check_fqdn} -t A"; \
@@ -274,8 +274,8 @@ clean-lb: ## delete a loadbalancer with all it's components
 security-checks:
 	echo "Running security checks for K8S master nodes..."
 	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
-	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
-	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+	kubectl run --kubeconfig=${KUBECONFIG} -rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
 	echo "Running security checks for K8S worker nodes..."
 	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
 		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
