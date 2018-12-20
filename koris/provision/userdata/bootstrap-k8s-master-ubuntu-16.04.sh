@@ -211,7 +211,9 @@ function bootstrap_first_master() {
    systemctl start kubelet
    kubeadm -v=${V} alpha phase etcd local --config $1
    kubeadm -v=${V} alpha phase controlplane all --config $1
-   kubeadm -v=${V} alpha phase mark-master --config $1
+   until kubeadm -v=${V} alpha phase mark-master --config $1; do
+       sleep 1
+   done
 
    # wait for the API server, we need to do this before installing the addons,
    # otherwise weird timing problems occur irregularly:
@@ -221,8 +223,12 @@ function bootstrap_first_master() {
        do echo "api server is not up! trying again ...";
    done
 
-   kubeadm -v=${V} alpha phase addon kube-proxy --config $1
-   kubeadm -v=${V} alpha phase addon coredns --config $1
+   until kubeadm -v=${V} alpha phase addon kube-proxy --config $1; do
+       sleep 1
+   done
+   until kubeadm -v=${V} alpha phase addon coredns --config $1; do
+       sleep 1
+   done
    kubeadm alpha phase bootstrap-token all --config $1
 
    test -d /root/.kube || mkdir -p /root/.kube
