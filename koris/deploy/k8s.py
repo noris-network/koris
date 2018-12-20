@@ -3,13 +3,16 @@ deploy cluster service to kubernetes via the API server
 """
 import logging
 from functools import partial
+import time
 import urllib3
 
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from pkg_resources import resource_filename, Requirement
 
-# LOGGER = get_logger(__name__, level=logging.DEBUG)
+from koris.util.util import get_logger
+
+LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
 class K8S:
@@ -42,16 +45,16 @@ class K8S:
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
-    @property
-    def masters_ready(self):
+    def wait_for_all_masters_ready(self, n_masters):
         """
         If we find at least one node that has no Ready: True, return False.
         """
-        res = []
-        for item in self.client.list_node(pretty=True).items:
-            if {'Ready': 'True'} in [{c.type: c.status} for c
-                                     in item.status.conditions]:
-                res.append(True)
-            else:
-                res.append(False)
-        return all(res)
+        count = 0
+        cond = {'Ready': 'True'}
+        while True:
+            for item in self.client.list_node(pretty=True).items:
+                if cond in [{c.type: c.status} for c in item.status.conditions]:
+                    count += 1
+                    yield item.metadata.name, item.status.addresses[0].address
+            if count == n_masters:
+                raise StopIteration

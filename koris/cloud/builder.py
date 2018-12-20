@@ -25,7 +25,6 @@ from koris.util.util import get_logger
 from .openstack import OSClusterInfo, BuilderError
 from .openstack import (get_clients,
                         OSCloudConfig, LoadBalancer,
-                        NeutronConflict
                         )
 
 LOGGER = get_logger(__name__)
@@ -258,12 +257,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         first_master_ip = results[0].ip_address
         configure_lb_task = loop.create_task(
             lbinst.configure(NEUTRON, [first_master_ip]))
-        results = loop.run_until_complete(asyncio.gather(configure_lb_task))
 
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
         node_tasks = self.nodes_builder.create_nodes_tasks(
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
+
+        node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug(info("Done creating nodes tasks"))
 
@@ -290,18 +290,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             LOGGER.info("Kubernetes API Server is still not ready ...")
             time.sleep(2)
 
-        while not k8s.masters_ready:
-            LOGGER.info("Kubernetes API masters are still not ready ...")
-            time.sleep(2)
-
-        # Finally, we want to add the other master nodes to the LoadBalancer
-        LOGGER.info("Configuring load balancer again...")
-        masters = [master.result() for master in master_tasks]
-        for master in masters:
-            try:
-                lbinst.add_member(NEUTRON, lbinst.pool['id'], master.ip_address)
-            except NeutronConflict:
+        LOGGER.info("Kubernetes API is ready!")
+        LOGGER.info("Waiting for all masters to become Ready")
+        for name, master_ip in k8s.wait_for_all_masters_ready(len(master_tasks)):
+            if 'master-1' in name:
                 continue
+            LOGGER.info("%s is up and ready, adding it to loadbalancer pool", name)
+            lbinst.add_member(NEUTRON, lbinst.pool['id'], master_ip)
 
         LOGGER.info("Configured load balancer to use all API servers")
 
