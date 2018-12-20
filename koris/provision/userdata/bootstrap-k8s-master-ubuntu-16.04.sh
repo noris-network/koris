@@ -260,7 +260,7 @@ function add_master {
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config /home/${USER}/kubeadm-$1.yaml
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase controlplane all --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase mark-master --config /home/${USER}/kubeadm-$1.yaml
+   ssh ${SSHOPTS} ${USER}@$1 "until sudo kubeadm alpha phase mark-master --config /home/${USER}/kubeadm-$1.yaml; do sleep 1; done"
 }
 
 
