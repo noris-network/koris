@@ -123,7 +123,49 @@ done
 
 }
 
+# distributes configuration file and certificates to a master node
+function copy_keys() {
+    host=$1
+    USER=ubuntu # customizable
+
+    echo -n "waiting for ssh on $1"
+    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
+       echo -n "."
+       sleep 1
+    done
+
+    echo "distributing keys to $host";
+    # clean and recreate directory structure
+    ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
+    ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
+    ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
+
+    # copy over everything PKI related, copy to temporary directory with
+    # non-root write access
+    scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
+    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
+    scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
+    scp ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:/home/${USER}/kubernetes/
+    scp ${SSHOPTS} /etc/kubernetes/koris.conf "${USER}"@$host:/home/${USER}/kubernetes/
+    scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
+
+    # move back to /etc on remote machine
+    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
+    ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+    ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+
+    echo "done distributing keys to $host";
+}
+
+
 # distributes configuration files and certificates
+# use this only when all hosts are already up and running
 function distribute_keys() {
    USER=ubuntu # customizable
 
@@ -234,43 +276,46 @@ function wait_for_etcd () {
     done
 }
 
+# fetch and prepare calico manifests
+function get_calico(){
+    while [ ! -f rbac-kdd.yaml ]; do
+        curl -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+    done
+    while [ ! -f calico.yaml ]; do
+        curl -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+    done
+
+    sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
+}
+
 # the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
 function main() {
+    get_calico &
+    pid_get_calico=$!
+
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
     create_config_files
     bootstrap_first_master kubeadm-${first_master}.yaml
     wait_for_etcd ${first_master}
 
-    distribute_keys
+    wait $pid_get_calico
+    echo "installing calico"
+    kubectl apply -f rbac-kdd.yaml
+    kubectl apply -f calico.yaml
 
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
         echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
+        copy_keys $HOST_IP
         add_master $HOST_NAME $HOST_IP
         wait_for_etcd $HOST_NAME
         echo "done bootstrapping master ${MASTERS[$i]}";
     done
 
-    echo "installing calico"
-    # add calico! we should have these manifests in the base image
-    # this will prevent failure if there is a network problem
-    while [ ! -f rbac-kdd.yaml ]; do
-        curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-    done
-    while [ ! -f calico.yaml ]; do
-        curl -O https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
-    done
-
-    sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
-
-    kubectl apply -f rbac-kdd.yaml
-    kubectl apply -f calico.yaml
-
-    echo "done installing calico"
     echo "the installation has finished."
 }
 
