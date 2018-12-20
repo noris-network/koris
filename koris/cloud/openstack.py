@@ -437,12 +437,15 @@ class LoadBalancer:  # pragma: no coverage
         """
         add listener to a loadbalancers pool.
         """
-        client.create_lbaas_member(pool_id,
-                                   {'member':
-                                    {'subnet_id': self._subnet_id,
-                                     'protocol_port': 6443,
-                                     'address': ip_addr,
-                                     }})
+        try:
+            client.create_lbaas_member(pool_id,
+                                       {'member':
+                                        {'subnet_id': self._subnet_id,
+                                         'protocol_port': 6443,
+                                         'address': ip_addr,
+                                         }})
+        except NeutronConflict:
+            pass
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
