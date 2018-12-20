@@ -3,7 +3,6 @@ deploy cluster service to kubernetes via the API server
 """
 import logging
 from functools import partial
-import time
 import urllib3
 
 

@@ -43,6 +43,7 @@ function fetch_all() {
 # accross N hosts
 function main() {
     fetch_all
+    kubeadm config images pull
 }
 
 
