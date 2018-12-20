@@ -7,8 +7,8 @@
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 # MAKE SURE THIS MATCHED THE MASTER K8S VERSION
-KUBE_VERSION="1.12.3"
-# KUBE_VERSION="1.11.5"
+export KUBE_VERSION=1.12.3
+export DOCKER_VERSION=18.06
 
 iptables -P FORWARD ACCEPT
 swapoff -a
@@ -35,20 +35,6 @@ preferences: {}
 users: []
 EOF
 
-# config for 1.11.5
-if [ "$KUBE_VERSION" = "1.11.5" ]; then
-  cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
-apiVersion: kubeadm.k8s.io/v1alpha1
-kind: NodeConfiguration
-discoveryFile: /etc/kubernetes/cluster-info.yaml
-nodeName: $(hostname -s)
-tlsBootstrapToken: "${BOOTSTRAP_TOKEN}"
-discoveryTokenCACertHashes:
-  sha256:${DISCOVERY_HASH}
-caCertPath: /etkdfjs
-EOF
-fi
-
 # config for 1.12.3
 if [ "$KUBE_VERSION" = "1.12.3" ]; then
   cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
@@ -66,9 +52,26 @@ tlsBootstrapToken: "${BOOTSTRAP_TOKEN}"
 EOF
 fi
 
-# install kubeadm if not already done
-sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
+function fetch_all() {
+    apt-get update
+    apt-get install -y software-properties-common
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
+    apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
+
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update
+    apt -y --allow-downgrades install docker-ce=${DOCKER_VERSION}*
+    apt install -y socat conntrack ipset
+}
+
+# check if a binary version is found
+# version_check kube-scheduler --version v1.10.4 return 1 if binary is found
+# in that version
+function version_found() {  return $($1 $2 | grep -qi $3); }
+
+version_found docker $DOCKER_VERSION || fetch_all
 
 # join !
 until kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT
