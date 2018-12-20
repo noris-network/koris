@@ -32,11 +32,6 @@ export KUBE_VERSION=1.12.3
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 
-### Versions for Kube 1.11.5
-# export KUBE_VERSION=1.11.5
-# export DOCKER_VERSION=17.03
-# export CALICO_VERSION=3.1
-
 LOGLEVEL=4
 V=${LOGLEVEL}
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
@@ -276,16 +271,39 @@ function wait_for_etcd () {
     done
 }
 
+
+TRANSPORT_PACKAGES="apt-transport-https ca-certificates software-properties-common"
+
 # fetch and prepare calico manifests
 function get_calico(){
     while [ ! -f rbac-kdd.yaml ]; do
-        curl -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+        curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
     done
     while [ ! -f calico.yaml ]; do
-        curl -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+        curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
     done
 
     sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
+}
+
+
+
+# enforce docker version
+function get_docker() {
+    dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
+    curl --retry 10 -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update
+    apt-get -y install docker-ce=${DOCKER_VERSION}*
+    apt install -y socat conntrack ipset
+}
+
+# enforce kubeadm version
+function get_kubeadm() {
+    dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
+    curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
+    apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
 }
 
 # the entry point of the whole script.
@@ -295,9 +313,16 @@ function main() {
     get_calico &
     pid_get_calico=$!
 
+    get_docker
+    get_kubeadm &
+    pid_get_kubeadm=$!
+
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
     create_config_files
+
+    wait $pid_get_kubeadm
+
     bootstrap_first_master kubeadm-${first_master}.yaml
     wait_for_etcd ${first_master}
 
@@ -334,28 +359,20 @@ join_all_hosts() {
 }
 
 
+
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
 function fetch_all() {
-    sudo apt-get update
-    sudo apt-get install -y software-properties-common
-    sudo swapoff -a
-    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-    sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-    sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
-
-    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    sudo apt-get update
-    sudo apt-get -y install docker-ce=${DOCKER_VERSION}*
-    sudo apt install -y socat conntrack ipset
+    apt-get update
+    get_docker
+    get_kubeadm
 }
 
 
 function install_deps() {
     for K in "${ALLHOSTS[@]}"; do
         echo "***** ${K} ******"
-        ssh ${K} "KUBE_VERSION=${KUBE_VERSION}; $(typeset -f fetch_all);  fetch_all"
+        ssh ${K} "KUBE_VERSION=${KUBE_VERSION}; $(typeset -f fetch_all);  sudo fetch_all"
     done
 }
 
