@@ -53,7 +53,8 @@ class K8S:
         while True:
             for item in self.client.list_node(pretty=True).items:
                 if cond in [{c.type: c.status} for c in item.status.conditions]:
-                    count += 1
-                    yield item.metadata.name, item.status.addresses[0].address
+                    if 'master' in item.metadata.name:
+                        count += 1
+                        yield item.metadata.name, item.status.addresses[0].address
             if count == n_masters:
-                raise StopIteration
+                return
