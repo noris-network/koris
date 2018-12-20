@@ -57,4 +57,4 @@ class K8S:
                         count += 1
                         yield item.metadata.name, item.status.addresses[0].address
             if count == n_masters:
-                return
+                raise StopIteration  # pylint: disable=stop-iteration-return
