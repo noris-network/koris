@@ -1,11 +1,11 @@
 koris\.util package
-==================
+===================
 
 Submodules
-----------
+-----------
 
 koris\.util\.hue module
-----------------------
+-----------------------
 
 .. automodule:: koris.util.hue
     :members:
@@ -13,7 +13,7 @@ koris\.util\.hue module
     :show-inheritance:
 
 koris\.util\.util module
------------------------
+------------------------
 
 .. automodule:: koris.util.util
     :members:
@@ -22,7 +22,7 @@ koris\.util\.util module
 
 
 Module contents
----------------
+----------------
 
 .. automodule:: koris.util
     :members:

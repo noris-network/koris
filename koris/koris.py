@@ -1,6 +1,6 @@
 """
 koris
-====
+=====
 
 The main entry point for the kubernetes cluster build.
 Don't use it directly, instead install the package with setup.py.

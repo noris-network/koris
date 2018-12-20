@@ -86,9 +86,7 @@ class BaseInit:
 
     def add_ssh_public_key(self, ssh_key):
         """
-        ssh_key should be the key pair to use of type:
-            cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey
-        which is the return value of function koris.ssl.create_key
+        ssh_key istance of ``cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey``
         """
         keyline = ssh_key.public_key().public_bytes(
             serialization.Encoding.OpenSSH,

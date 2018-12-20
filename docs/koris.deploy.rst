@@ -1,13 +1,13 @@
-kolt\.deploy package
-====================
+koris\.deploy package
+=====================
 
 Submodules
 ----------
 
-kolt\.deploy\.k8s module
-------------------------
+koris\.deploy\.k8s module
+-------------------------
 
-.. automodule:: kolt.deploy.k8s
+.. automodule:: koris.deploy.k8s
     :members:
     :undoc-members:
     :show-inheritance:
@@ -16,7 +16,7 @@ kolt\.deploy\.k8s module
 Module contents
 ---------------
 
-.. automodule:: kolt.deploy
+.. automodule:: koris.deploy
     :members:
     :undoc-members:
     :show-inheritance:

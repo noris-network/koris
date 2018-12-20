@@ -1,48 +1,39 @@
-kolt package
-============
+koris package
+=============
 
 Subpackages
 -----------
 
 .. toctree::
 
-    kolt.cloud
-    kolt.deploy
-    kolt.provision
-    kolt.util
+    koris.cloud
+    koris.deploy
+    koris.provision
+    koris.util
 
 Submodules
 ----------
 
-kolt\.cli module
-----------------
-
-.. automodule:: kolt.cli
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-kolt\.kolt module
+koris\.cli module
 -----------------
 
-.. automodule:: kolt.kolt
+.. automodule:: koris.cli
     :members:
     :undoc-members:
     :show-inheritance:
 
-kolt\.ssl module
-----------------
+koris\.koris module
+-------------------
 
-.. automodule:: kolt.ssl
+.. automodule:: koris.koris
     :members:
     :undoc-members:
     :show-inheritance:
 
+koris\.ssl module
+-----------------
 
-Module contents
----------------
-
-.. automodule:: kolt
+.. automodule:: koris.ssl
     :members:
     :undoc-members:
     :show-inheritance:
