@@ -12,12 +12,12 @@ import sys
 import textwrap
 
 from functools import lru_cache
+
 import novaclient
-
 from novaclient import client as nvclient
-
 from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
+import cinderclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import Conflict as NeutronConflict
@@ -39,6 +39,11 @@ if getattr(sys, 'frozen', False):
         code uses __file__ which is not available in frozen build"""
         return ['2', '1']
     novaclient.api_versions.get_available_major_versions = monkey_patch
+
+    def monkey_patch_cider():
+        """the same spiel for cinder"""
+        return ['3']
+    cinderclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
 
 
 def remove_cluster(config, nova, neutron, cinder):
@@ -633,7 +638,6 @@ def get_clients():
 
     This should be replaced in the future with ``openstack.connect``
     """
-
     try:
         auth = identity.Password(**read_os_auth_variables())
         sess = session.Session(auth=auth)
