@@ -6,6 +6,7 @@ provided
 import base64
 from datetime import datetime
 import os
+import sys
 import textwrap
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -172,10 +173,17 @@ class NthMasterInit(BaseInit):
         name = "bootstrap-k8s-%s-%s-%s.sh" % (
             self.role, self.os_type, self.os_version)
 
-        fh = open(resource_filename(Requirement('koris'),
-                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                 name)))
-        script = fh.read()
+        if getattr(sys, 'frozen', False):
+            path = os.path.join(
+                sys._MEIPASS,  # pylint: disable=no-member, protected-access
+                'provision/userdata', name)
+        else:
+            path = resource_filename(Requirement('koris'),
+                                     os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                  name))
+        with open(path) as fh:
+            script = fh.read()
+
         return name, script
 
 

@@ -26,8 +26,10 @@ from .cloud.builder import ClusterBuilder
 
 LOGGER = get_logger(__name__)
 
-
-__version__ = pkg_resources.get_distribution('koris').version
+try:
+    __version__ = pkg_resources.get_distribution('koris').version
+except pkg_resources.DistributionNotFound:
+    __version__ = '0.9-dev'
 
 
 @mach1()

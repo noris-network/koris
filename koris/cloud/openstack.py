@@ -12,7 +12,10 @@ import sys
 import textwrap
 
 from functools import lru_cache
+import novaclient
+
 from novaclient import client as nvclient
+
 from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
 from cinderclient import client as cclient
@@ -29,6 +32,13 @@ from koris.util.util import (get_logger, host_names,
                              retry)
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
+
+if getattr(sys, 'frozen', False):
+    def monkey_patch():
+        """monkey patch get available versions, because the original
+        code uses __file__ which is not available in frozen build"""
+        return ['2', '1']
+    novaclient.api_versions.get_available_major_versions = monkey_patch
 
 
 def remove_cluster(config, nova, neutron, cinder):
