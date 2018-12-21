@@ -170,13 +170,24 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     def create_bootstrap_token():
         """create a new random bootstrap token like f62bcr.fedcba9876543210,
         a valid token matches the expression [a-z0-9]{6}.[a-z0-9]{16}"""
-        token = ""
-        token = token + "".join([random.choice(string.ascii_lowercase + string.digits)
-                                 for n in range(6)])
-        token = token + "."
+        token = "".join([random.choice(string.ascii_lowercase + string.digits)
+                         for n in range(6)])
+        token += "."
         token = token + "".join([random.choice(string.ascii_lowercase + string.digits)
                                  for n in range(16)])
         return token
+
+    @staticmethod
+    def calculate_discovery_hash(ca_bundle):
+        """
+        calculate the discovery hash for join
+        """
+        pub_key = ca_bundle.cert.public_key()
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(pub_key.public_bytes(
+            serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo))
+        return digest.finalize().hex()
 
     @staticmethod
     def create_ca():
@@ -235,12 +246,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         bootstrap_token = ClusterBuilder.create_bootstrap_token()
 
         # calculate discovery hash
-        pub_key = ca_bundle.cert.public_key()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(pub_key.public_bytes(
-            serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo))
-        discovery_hash = digest.finalize().hex()
+        discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
