@@ -5,7 +5,6 @@ Builder
 Build a kubernetes cluster on a cloud
 """
 import asyncio
-import os
 import random
 import string
 import sys
@@ -120,7 +119,7 @@ class ControlPlaneBuilder:
         masters = self.get_masters()
         if not len(masters) % 2:
             LOGGER.warnning("The number of masters should be odd!")
-            return
+            return []
 
         master_ips = [master.ip_address for master in masters]
         master_names = [master.name for master in masters]
@@ -288,9 +287,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                                       "k8s-client.pem", "k8s-client-key.pem")
 
         # Now connect to the the API server and query which masters are
-        # available. If every node is available and running, continue
-        manifest_path = os.path.join("koris", "deploy", "manifests")
-        k8s = K8S(kubeconfig, manifest_path)
+        # available.
+        k8s = K8S(kubeconfig)
 
         while not k8s.is_ready:
             LOGGER.info("Kubernetes API Server is still not ready ...")

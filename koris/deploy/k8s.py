@@ -22,9 +22,13 @@ class K8S:
     the DNS service (kube-dns)
 
     """
-    def __init__(self, config, manifest_path):
+    def __init__(self, config, manifest_path=None):
 
         self.config = config
+        if not manifest_path:
+            manifest_path = resource_filename(Requirement.parse("koris"),
+                                              'koris/deploy/manifests')
+
         self.manifest_path = manifest_path
         self.get_manifest = partial(resource_filename, Requirement('koris'))
         k8sconfig.load_kube_config(config)
