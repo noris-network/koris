@@ -54,11 +54,10 @@ class K8S:
         """
         count = 0
         cond = {'Ready': 'True'}
-        while True:
-            for item in self.client.list_node(pretty=True).items:
-                if cond in [{c.type: c.status} for c in item.status.conditions]:
-                    if 'master' in item.metadata.name:
-                        count += 1
-                        yield item.metadata.name, item.status.addresses[0].address
+        for item in self.client.list_node(pretty=True).items:
+            if cond in [{c.type: c.status} for c in item.status.conditions]:
+                if 'master' in item.metadata.name:
+                    count += 1
+                    yield item.metadata.name, item.status.addresses[0].address
             if count == n_masters:
                 raise StopIteration  # pylint: disable=stop-iteration-return
