@@ -252,7 +252,7 @@ argument-naming-style=snake_case
 
 # Regular expression matching correct argument names. Overrides argument-
 # naming-style.
-#argument-rgx=
+argument-rgx=[a-z_]*[a-z0-9_]{2,30}$
 
 # Naming style matching correct attribute names.
 attr-naming-style=snake_case
@@ -521,10 +521,10 @@ valid-metaclass-classmethod-first-arg=cls
 [DESIGN]
 
 # Maximum number of arguments for function / method.
-max-args=6
+max-args=8
 
 # Maximum number of attributes for a class (see R0902).
-max-attributes=10
+max-attributes=12
 
 # Maximum number of boolean expressions in an if statement.
 max-bool-expr=5
