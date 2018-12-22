@@ -22,6 +22,7 @@ from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import Conflict as NeutronConflict
 from neutronclient.common.exceptions import StateInvalidClient
+from neutronclient.common.exceptions import NotFound
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -86,7 +87,6 @@ def remove_cluster(config, nova, neutron, cinder):
 
 class BuilderError(Exception):
     """Raise a custom error if the build fails"""
-    pass
 
 
 class Instance:
@@ -367,7 +367,6 @@ class LoadBalancer:  # pragma: no coverage
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
             LOGGER.warning("LB %s was not found", self.name)
-            return
 
         lb = lb[0]
         self._id = lb['id']
@@ -384,13 +383,16 @@ class LoadBalancer:  # pragma: no coverage
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
             valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
                                 self.floatingip)
+            if not valid_ip:
+                LOGGER.error("Please specify a valid IP address")
+                sys.exit(1)
             if self._existing_floating_ip == self.floatingip:
                 return self._existing_floating_ip
 
             fip = client.list_floatingips(
                 floating_ip_address=self.floatingip)['floatingips']
             if not fip:
-                LOGGER.error("Could not find %s in the pool" % self.floatingip)
+                LOGGER.error("Could not find %s in the pool", self.floatingip)
                 sys.exit(1)
             fip = fip[0]
         if not fip:
@@ -468,7 +470,10 @@ class LoadBalancer:  # pragma: no coverage
         """
         delete a LB health monitor
         """
-        client.delete_lbaas_healthmonitor(id_)
+        try:
+            client.delete_lbaas_healthmonitor(id_)
+        except NotFound:
+            LOGGER.debug("Healthmonitor not found ...")
         LOGGER.info("deleted healthmonitor ...")
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1,
@@ -483,8 +488,10 @@ class LoadBalancer:  # pragma: no coverage
             if lb_id in pool['loadbalancers']:
                 if pool['healthmonitor_id']:
                     self._del_health_monitor(client, pool['healthmonitor_id'])
-
-                client.delete_lbaas_pool(pool['id'])
+                try:
+                    client.delete_lbaas_pool(pool['id'])
+                except NotFound:
+                    LOGGER.debug("Pool %s not found", pool['id'])
                 LOGGER.info("deleted pool ...")
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1,
@@ -496,21 +503,33 @@ class LoadBalancer:  # pragma: no coverage
         listeners = listeners[0]['listeners']
         for item in listeners:
             if lb_id in item['loadbalancers']:
-                client.delete_listener(item['id'])
+                try:
+                    client.delete_listener(item['id'])
+                except NotFound:
+                    LOGGER.debug("Listener %s not found", item['id'])
                 LOGGER.info("Deleted listener...")
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient),
            tries=12, backoff=1, logger=LOGGER.debug)
     def _del_loadbalancer(self, client):
-        client.delete_loadbalancer(self._id)
+        try:
+            client.delete_loadbalancer(self._id)
+        except NotFound:
+            LOGGER.debug("Could not find loadbalancer %s", self._id)
         LOGGER.info("Deleted loadbalancer...")
 
     @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10)
-    def _del_member(self, client, member_id, pool_id):
-        client.delete_lbaas_member(member_id, pool_id)
+    def _del_member(self, client, member_id, pool_id):  # pylint: disable=no-self-use
+        try:
+            client.delete_lbaas_member(member_id, pool_id)
+        except NotFound:
+            pass
 
 
 class SecurityGroup:
+    """
+    A class to create and configure a security group in openstack
+    """
 
     def __init__(self, neutron_client, name, subnet=None):
         self.client = neutron_client
@@ -562,7 +581,7 @@ class SecurityGroup:
             {'security_group': {'name': name}})['security_group']
 
         self._id = secgroup['id']
-        return
+        return {}
 
     def configure(self):
         """
@@ -716,8 +735,7 @@ def distribute_host_zones(hosts, zones):
     if len(zones) == len(hosts):
         return list(zip(hosts, zones))
 
-    n = len(zones)
-    hosts = [hosts[start::len(zones)] for start in range(n)]
+    hosts = [hosts[start::len(zones)] for start in range(len(zones))]
     return list(zip(hosts, zones))
 
 
