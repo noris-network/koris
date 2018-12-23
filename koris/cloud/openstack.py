@@ -63,11 +63,13 @@ def remove_cluster(config, nova, neutron, cinder):
     # delete volumes
 
     loop.close()
-    volumes = [vol for vol in cinder.volumes.list()
-               if config['cluster-name'] in vol.name]
-    for vol in volumes:
-        if vol.status != 'in-use':
-            vol.delete()
+    volumes = cinder.volumes.list()
+    if volumes:
+        volumes = [vol for vol in volumes if
+                   config['cluster-name'] in vol.name]
+        for vol in volumes:
+            if vol.status != 'in-use':
+                vol.delete()
 
 
 class BuilderError(Exception):
@@ -233,6 +235,7 @@ class LoadBalancer:  # pragma: no coverage
         self._subnet_id = None
         self._data = None
         self._existing_floating_ip = None
+        self.members = []
 
     async def configure(self, client, master_ips):
         """
@@ -261,6 +264,8 @@ class LoadBalancer:  # pragma: no coverage
             for member in pool['members']:
                 self._del_member(client, member['id'], pool['id'])
 
+        self.pool = pool['id']
+
         self.add_member(client, pool['id'], master_ips[0])
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor ...")
@@ -285,6 +290,7 @@ class LoadBalancer:  # pragma: no coverage
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
             self._data = lb
+            self.pool = lb[0]['pools'][0]['id']
 
         return lb, fip_addr
 
@@ -446,6 +452,7 @@ class LoadBalancer:  # pragma: no coverage
                                          'protocol_port': 6443,
                                          'address': ip_addr,
                                          }})
+            self.members.append(ip_addr)
         except NeutronConflict:
             pass
 
