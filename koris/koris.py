@@ -11,10 +11,9 @@ import argparse
 import sys
 import yaml
 
-import pkg_resources
-
 from mach import mach1
 
+from . import __version__
 from koris.cloud.openstack import get_clients
 from koris.cloud.openstack import BuilderError
 from .cli import delete_cluster
@@ -25,11 +24,6 @@ from .util.util import (get_logger, )
 from .cloud.builder import ClusterBuilder
 
 LOGGER = get_logger(__name__)
-
-try:
-    __version__ = pkg_resources.get_distribution('koris').version
-except pkg_resources.DistributionNotFound:
-    __version__ = '0.9-dev'
 
 
 @mach1()

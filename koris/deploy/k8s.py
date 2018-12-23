@@ -2,14 +2,24 @@
 deploy cluster service to kubernetes via the API server
 """
 import logging
-from functools import partial
+import os
+
 import urllib3
+import sys
 
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from pkg_resources import resource_filename, Requirement
 
 from koris.util.util import get_logger
+
+if getattr(sys, 'frozen', False):
+    MANIFESTSPATH = os.path.join(
+        sys._MEIPASS,  # pylint: disable=no-member, protected-access
+        'koris/deploy/manifests')
+else:
+    MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
+                                      'koris/deploy/manifests')
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
@@ -26,11 +36,8 @@ class K8S:
 
         self.config = config
         if not manifest_path:
-            manifest_path = resource_filename(Requirement.parse("koris"),
-                                              'koris/deploy/manifests')
-
+            manifest_path = MANIFESTSPATH
         self.manifest_path = manifest_path
-        self.get_manifest = partial(resource_filename, Requirement('koris'))
         k8sconfig.load_kube_config(config)
         self.client = k8sclient.CoreV1Api()
 

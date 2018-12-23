@@ -10,12 +10,13 @@ import sys
 import textwrap
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pkg_resources import (Requirement, resource_filename, get_distribution)
+from pkg_resources import (Requirement, resource_filename)
 
 import yaml
 
 from cryptography.hazmat.primitives import serialization
 
+from koris import __version__
 from koris.ssl import b64_cert, b64_key
 from koris.util.util import get_logger
 
