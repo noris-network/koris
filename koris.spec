@@ -43,9 +43,12 @@ from pkg_resources import resource_filename, Requirement
 os_service_types = resource_filename(Requirement("os_service_types"),
                                      "os_service_types/data")
 
+os_defaults = resource_filename(Requirement('openstacksdk'), 'openstack/config')
+
 a = Entrypoint('koris', 'console_scripts', 'koris',
                datas=[('koris/provision/userdata/*', 'provision/userdata'),
-	              (os_service_types, 'os_service_types/data')],
+	              (os_service_types, 'os_service_types/data'),
+		      (os_defaults, 'openstack/config/')],
 	       hiddenimports=['novaclient.v2', 'cinderclient.v3'])
 
 pyz = PYZ(a.pure, a.zipped_data,
