@@ -4,8 +4,8 @@ deploy cluster service to kubernetes via the API server
 import logging
 import os
 
-import sys
 import urllib3
+import sys
 
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
