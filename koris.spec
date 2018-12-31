@@ -49,7 +49,8 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                datas=[('koris/provision/userdata/*', 'provision/userdata'),
 	              (os_service_types, 'os_service_types/data'),
 		      (os_defaults, 'openstack/config/')],
-	       hiddenimports=['novaclient.v2', 'cinderclient.v3'])
+	       hiddenimports=['novaclient.v2', 'cinderclient.v3',
+	                      'keystoneauth1', 'keystoneclient'])
 
 pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)

@@ -121,6 +121,7 @@ install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
 
 build-exec: ## build a single file executable of koris
+	rm -vRf build
 	pyinstaller koris.spec
 
 integration-test: ## run the complete integration test from you local machine
