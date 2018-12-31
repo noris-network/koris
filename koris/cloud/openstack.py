@@ -46,6 +46,7 @@ def remove_cluster(config, nova, neutron, cinder):
     loop.run_until_complete(asyncio.wait(tasks))
     lbinst = LoadBalancer(config)
     lbinst.delete(neutron)
+    import pdb; pdb.set_trace()
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})
@@ -64,12 +65,9 @@ def remove_cluster(config, nova, neutron, cinder):
 
     loop.close()
     volumes = cinder.volumes.list()
-    if volumes:
-        volumes = [vol for vol in volumes if
-                   config['cluster-name'] in vol.name]
-        for vol in volumes:
-            if vol.status != 'in-use':
-                vol.delete()
+    for vol in volumes:
+        if config['cluster-name'] in vol.name and vol.status != 'in-use':
+            vol.delete()
 
 
 class BuilderError(Exception):
@@ -358,16 +356,16 @@ class LoadBalancer:  # pragma: no coverage
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
             LOGGER.warning("LB %s was not found", self.name)
+        else:
+            lb = lb[0]
+            self._id = lb['id']
 
-        lb = lb[0]
-        self._id = lb['id']
+            if lb['pools']:
+                self._del_pool(client)
+            if lb['listeners']:
+                self._del_listener(client)
 
-        if lb['pools']:
-            self._del_pool(client)
-        if lb['listeners']:
-            self._del_listener(client)
-
-        self._del_loadbalancer(client)
+            self._del_loadbalancer(client)
 
     def _associate_floating_ip(self, client, loadbalancer):
         fip = None
