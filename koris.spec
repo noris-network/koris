@@ -38,22 +38,32 @@ def Entrypoint(dist, group, name, **kwargs):
         **kwargs
     )
 
-from pkg_resources import resource_filename, Requirement
+from pkg_resources import resource_filename, Requirement, get_distribution
 
 os_service_types = resource_filename(Requirement("os_service_types"),
                                      "os_service_types/data")
 
 os_defaults = resource_filename(Requirement('openstacksdk'), 'openstack/config')
 
+keystoneauth1 = get_distribution('keystoneauth1')
+
 a = Entrypoint('koris', 'console_scripts', 'koris',
                datas=[('koris/provision/userdata/*', 'provision/userdata'),
 	              (os_service_types, 'os_service_types/data'),
-		      (os_defaults, 'openstack/config/')],
+		      (os_defaults, 'openstack/config/'),
+		       (keystoneauth1.egg_info,
+		       'keystoneauth1-%s.dist-info' % keystoneauth1.parsed_version.base_version)
+		      ],
 	       hiddenimports=['novaclient.v2', 'cinderclient.v3',
-	                      'keystoneauth1', 'keystoneclient'])
+	                      'keystoneauth1', 'keystoneclient',
+			      'keystoneauth1.loading._plugins',
+			      'keystoneauth1.loading._plugins.identity',
+			      'keystoneauth1.loading._plugins.identity.generic',
+			      'keystoneauth1.identity'])
 
 pyz = PYZ(a.pure, a.zipped_data,
-             cipher=block_cipher)
+          cipher=block_cipher)
+
 exe = EXE(pyz,
           a.scripts,
           a.binaries,
