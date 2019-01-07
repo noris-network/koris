@@ -61,7 +61,6 @@ def remove_cluster(config, nova, neutron, cinder):
     loop.run_until_complete(asyncio.wait(tasks))
     lbinst = LoadBalancer(config)
     lbinst.delete(neutron)
-    import pdb; pdb.set_trace()
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})
