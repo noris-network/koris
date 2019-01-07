@@ -120,6 +120,10 @@ dist: clean ## builds source and wheel package
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
 
+build-exec: ## build a single file executable of koris
+	rm -vRf dist
+	pyinstaller koris.spec
+
 integration-test: ## run the complete integration test from you local machine
 integration-test: \
 	reset-config \
@@ -148,7 +152,7 @@ launch-cluster: update-config
 
 
 show-nodes:
-	@echo "Waiting for nodes to join ..." 
+	@echo "Waiting for nodes to join ..."
 	for i in `seq 1 5`; do \
 		sleep 1; \
 	    kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \

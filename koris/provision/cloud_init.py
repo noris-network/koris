@@ -6,15 +6,17 @@ provided
 import base64
 from datetime import datetime
 import os
+import sys
 import textwrap
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pkg_resources import (Requirement, resource_filename, get_distribution)
+from pkg_resources import (Requirement, resource_filename)
 
 import yaml
 
 from cryptography.hazmat.primitives import serialization
 
+from koris import __version__
 from koris.ssl import b64_cert, b64_key
 from koris.util.util import get_logger
 
@@ -104,12 +106,29 @@ class BaseInit:
         koris_version={}
         creation_date={}
         """.format(
-            get_distribution('koris').version,
+            __version__,
             datetime.strftime(datetime.now(), format="%c"))
         content = textwrap.dedent(content)
 
         self.write_file("/etc/kubernetes/koris.conf", content, "root", "root",
                         "0644")
+
+    def _get_bootstrap_script(self):
+        name = "bootstrap-k8s-%s-%s-%s.sh" % (
+            self.role, self.os_type, self.os_version)
+
+        if getattr(sys, 'frozen', False):
+            path = os.path.join(
+                sys._MEIPASS,  # pylint: disable=no-member, protected-access
+                'provision/userdata', name)
+        else:
+            path = resource_filename(Requirement('koris'),
+                                     os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                                  name))
+        with open(path) as fh:
+            script = fh.read()
+
+        return name, script
 
     def _write_cloud_config(self):
         """
@@ -168,16 +187,6 @@ class NthMasterInit(BaseInit):
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key)
 
-    def _get_bootstrap_script(self):
-        name = "bootstrap-k8s-%s-%s-%s.sh" % (
-            self.role, self.os_type, self.os_version)
-
-        fh = open(resource_filename(Requirement('koris'),
-                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                 name)))
-        script = fh.read()
-        return name, script
-
 
 class FirstMasterInit(NthMasterInit):
     """
@@ -215,16 +224,6 @@ class FirstMasterInit(NthMasterInit):
         self._write_cloud_config()
         self._write_koris_env()
         self._write_ssh_private_key()
-
-    def _get_bootstrap_script(self):
-        name = "bootstrap-k8s-%s-%s-%s.sh" % (
-            self.role, self.os_type, self.os_version)
-
-        fh = open(resource_filename(Requirement('koris'),
-                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                 name)))
-        script = fh.read()
-        return name, script
 
     def _write_ssh_private_key(self):
         # path = "/home/{}/.ssh/id_rsa_masters".format(self.username)
@@ -284,16 +283,6 @@ class NodeInit(BaseInit):
 
         # assemble parts for the node
         self._write_koris_env()
-
-    def _get_bootstrap_script(self):
-        name = "bootstrap-k8s-%s-%s-%s.sh" % (
-            self.role, self.os_type, self.os_version)
-
-        fh = open(resource_filename(Requirement('koris'),
-                                    os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                                 name)))
-        script = fh.read()
-        return name, script
 
     def _write_koris_env(self):
         """
