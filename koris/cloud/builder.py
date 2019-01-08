@@ -22,7 +22,7 @@ from koris.util.hue import (  # pylint: disable=no-name-in-module
 
 from koris.util.util import get_logger
 from .openstack import OSClusterInfo, BuilderError
-from .openstack import (get_clients,
+from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer,
                         )
 
@@ -47,6 +47,27 @@ class NodeBuilder:
         self.config = config
         self._info = osinfo
 
+    def add_nodes(self,
+                  config,
+                  flavor,
+                  zone,
+                  role,
+                  ca_cert,
+                  token,
+                  discovery_hash,
+                  N):
+        """
+        add additional nodes
+        """
+        lb_ip = 'foo'  # get foo from self._info
+        lb_port = 9999  # get lb_port from self._info
+
+        # TODO: fix this to get the correct names
+        nodes = [Instance() for n in N]
+        self._create_nodes_tasks(ca_cert,
+                                 lb_ip, lb_port, token,
+                                 discovery_hash, nodes)
+
     def get_nodes(self):
         """
         get information on the nodes from openstack.
@@ -57,13 +78,23 @@ class NodeBuilder:
 
         return list(self._info.distribute_nodes())
 
-    def create_nodes_tasks(self, ca_bundle, lb_ip, lb_port, bootstrap_token,
-                           discovery_hash):
+    def create_initial_nodes(self,
+                             ca_bundle,
+                             lb_ip,
+                             lb_port,
+                             bootstrap_token,
+                             discovery_hash,
+                             ):
+        nodes = self._get_all_nodes()
+        self._create_nodes_tasks(ca_bundle.cert,
+                                 lb_ip, lb_port, bootstrap_token,
+                                 discovery_hash, nodes)
+
+    def _create_nodes_tasks(self, ca_cert, lb_ip, lb_port, bootstrap_token,
+                            discovery_hash, nodes):
         """
         Create future tasks for creating the cluster worker nodes
         """
-        nodes = self.get_nodes()
-
         loop = asyncio.get_event_loop()
         tasks = []
 
@@ -265,7 +296,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
-        node_tasks = self.nodes_builder.create_nodes_tasks(
+        node_tasks = self.nodes_builder.create_initial_nodes(
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
         node_tasks.append(configure_lb_task)

@@ -17,11 +17,12 @@ from . import __version__
 from koris.cloud.openstack import get_clients
 from koris.cloud.openstack import BuilderError
 from .cli import delete_cluster
+from .deploy import K8S
 
 from .util.hue import red, yellow  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
-from .cloud.builder import ClusterBuilder
+from .cloud.builder import ClusterBuilder, NodeBuilder
 
 LOGGER = get_logger(__name__)
 
@@ -86,6 +87,32 @@ class Koris:
 
         delete_cluster(config, self.nova, self.neutron, self.cinder, force)
         sys.exit(0)
+
+    def add(self, config: str, flavor: str, zone: str,
+            role: str = 'node', N: int = 1):
+        """
+        Add a worker node, or master node to the cluster.
+
+        config - configuration file
+        flavor - the machine flavor
+        role - one of node or master
+        N - the number of worker nodes to add (masters are not supported)
+        zone - the availablity zone
+        """
+        k8s = K8S()
+        token = k8s.get_bootstrap_token(config)
+        k8s.discovery_hash  # property which needs to be calculated
+
+        NodeBuilder.add_nodes(config,
+                              flavor,
+                              zone,
+                              role,
+                              k8s.ca_cert,
+                              token,
+                              k8s.discovery_hash,
+                              N=N)
+        # first use OSCLUSTERINFO to find the next node names.
+        # create a openstack.Instance with self._get_or_create()
 
 
 def main():
