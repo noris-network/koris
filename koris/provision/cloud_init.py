@@ -265,13 +265,13 @@ class NodeInit(BaseInit):
     """
     The node does nothing else than executing its bootstrap script.
     """
-    def __init__(self, ca_bundle, cloud_config, lb_ip, lb_port, bootstrap_token,
+    def __init__(self, ca_cert, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
                  os_version="16.04"):
         """
         """
         super().__init__(cloud_config)
-        self.ca_bundle = ca_bundle
+        self.ca_cert = ca_cert
         self.lb_ip = lb_ip
         self.lb_port = lb_port
         self.bootstrap_token = bootstrap_token
@@ -297,7 +297,7 @@ class NodeInit(BaseInit):
             export LOAD_BALANCER_PORT="{}"
             export BOOTSTRAP_TOKEN="{}"
             export DISCOVERY_HASH="{}"
-        """.format(b64_cert(self.ca_bundle.cert), self.lb_dns, self.lb_ip,
+        """.format(b64_cert(self.ca_cert), self.lb_dns, self.lb_ip,
                    self.lb_port, self.bootstrap_token, self.discovery_hash)
         content = textwrap.dedent(content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",

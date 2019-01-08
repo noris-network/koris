@@ -72,7 +72,7 @@ class NodeBuilder:
                 raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(node))
 
-            userdata = str(NodeInit(ca_bundle, self._info, lb_ip, lb_port,
+            userdata = str(NodeInit(ca_cert, self._info, lb_ip, lb_port,
                                     bootstrap_token,
                                     discovery_hash))
             tasks.append(loop.create_task(
