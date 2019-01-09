@@ -9,6 +9,7 @@ import yaml
 
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
+from kubernetes.client.rest import ApiException
 from pkg_resources import resource_filename, Requirement
 
 from koris.util.util import (get_logger, retry)
@@ -66,7 +67,7 @@ class K8S:
         self._kube_dns_service()
         self._kube_dns_deployment()
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_roles(self):
         LOGGER.debug("Applying calico roles")
         client = k8sclient.RbacAuthorizationV1beta1Api()
@@ -81,7 +82,7 @@ class K8S:
 
                 client.create_cluster_role(payload)
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_role_bindings(self):
         client = k8sclient.RbacAuthorizationV1beta1Api()
 
@@ -94,7 +95,7 @@ class K8S:
 
                 client.create_cluster_role_binding(yaml.safe_load(fh))
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_service_accounts(self):
         for file_ in ["calico/serviceaccount-controller",
                       "calico/serviceaccount-node"]:
@@ -106,7 +107,7 @@ class K8S:
                 self.client.create_namespaced_service_account(
                     "kube-system", yaml.safe_load(fh))
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _kubedns_service_account(self):
         LOGGER.debug("Applying kube-dns serviceaccount")
         for file_ in ["service_account_kube-dns"]:
@@ -118,7 +119,7 @@ class K8S:
                 self.client.create_namespaced_service_account(
                     "kube-system", yaml.safe_load(fh))
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _kube_config_map(self):
         LOGGER.debug("Applying calico configmaps")
         with open(
@@ -129,7 +130,7 @@ class K8S:
             configmap = yaml.safe_load(fh)
             self.client.create_namespaced_config_map("kube-system", configmap)
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_config_map(self, etcd_end_point):
         with open(
                 self.get_manifest(
@@ -142,7 +143,7 @@ class K8S:
 
             self.client.create_namespaced_config_map("kube-system", configmap)
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_secrets(self, k8s_key, k8s_cert, ca_cert):
         with open(self.get_manifest(
                 os.path.join(self.manifest_path,
@@ -154,7 +155,7 @@ class K8S:
         secret["data"]["etcd-ca"] = ca_cert
         self.client.create_namespaced_secret("kube-system", secret)
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_daemon_set(self):
         LOGGER.debug("Applying calico daemonsets")
         client = k8sclient.ExtensionsV1beta1Api()
@@ -166,7 +167,7 @@ class K8S:
             client.create_namespaced_daemon_set("kube-system",
                                                 yaml.safe_load(fh))
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _calico_controller(self):
         LOGGER.debug("Applying calico controeller deployments")
         client = k8sclient.ExtensionsV1beta1Api()
@@ -177,7 +178,7 @@ class K8S:
                 client.create_namespaced_deployment("kube-system",
                                                     yaml.safe_load(fh))
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _kube_dns_deployment(self):
         LOGGER.debug("Applying kube-dns deployments")
         client = k8sclient.ExtensionsV1beta1Api()
@@ -188,7 +189,7 @@ class K8S:
                 client.create_namespaced_deployment("kube-system",
                                                     yaml.safe_load(fh))
 
-    @retry(exceptions=OSError)
+    @retry(exceptions=(OSError, ApiException), tries=10)
     def _kube_dns_service(self):
         LOGGER.debug("Applying kube-dns service")
         for file_ in ["service_kube-dns.yml"]:

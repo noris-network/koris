@@ -117,7 +117,7 @@ Before you submit a pull request, check that it meets these guidelines:
 .. _dependencies:
 
 How we manage koris's dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Python loads modules and packages which are not in the standard library
 from a directory called ``site-packages`` (on Debian based systems

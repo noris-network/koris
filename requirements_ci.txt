@@ -7,4 +7,6 @@ pytest
 pytest-coverage
 pytest-runner
 
+pylint
+
 -r requirements.txt

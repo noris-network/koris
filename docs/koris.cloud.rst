@@ -1,30 +1,30 @@
-kolt\.cloud package
-===================
+koris\.cloud package
+====================
 
 Submodules
 ----------
 
-kolt\.cloud\.builder module
----------------------------
+koris\.cloud\.builder module
+----------------------------
 
-.. automodule:: kolt.cloud.builder
+.. automodule:: koris.cloud.builder
     :members:
     :undoc-members:
     :show-inheritance:
 
-kolt\.cloud\.openstack module
------------------------------
+koris\.cloud\.openstack module
+------------------------------
 
-.. automodule:: kolt.cloud.openstack
+.. automodule:: koris.cloud.openstack
     :members:
     :undoc-members:
     :show-inheritance:
 
 
 Module contents
----------------
+----------------
 
-.. automodule:: kolt.cloud
+.. automodule:: koris.cloud
     :members:
     :undoc-members:
     :show-inheritance:

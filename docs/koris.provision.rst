@@ -1,13 +1,13 @@
-kolt\.provision package
-=======================
+koris\.provision package
+========================
 
 Submodules
 ----------
 
-kolt\.provision\.cloud\_init module
------------------------------------
+koris\.provision\.cloud\_init module
+------------------------------------
 
-.. automodule:: kolt.provision.cloud_init
+.. automodule:: koris.provision.cloud_init
     :members:
     :undoc-members:
     :show-inheritance:
@@ -16,7 +16,7 @@ kolt\.provision\.cloud\_init module
 Module contents
 ---------------
 
-.. automodule:: kolt.provision
+.. automodule:: koris.provision
     :members:
     :undoc-members:
     :show-inheritance:

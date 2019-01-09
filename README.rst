@@ -75,32 +75,33 @@ Get started
    with ``--help``
 
    .. code:: shell
-
-      $ kolt -h
-      usage: kolt [-h] {certs,destroy,k8s} ...
-
-      positional arguments:
-        {certs,destroy,k8s}
-                              commands
-          certs               Create cluster certificates
-          destroy             Delete the complete cluster stack
-          k8s                 Bootstrap a Kubernetes cluster
-          ...
-      optional arguments:
-        -h, --help            show this help message and exit
+   
+     $ koris --help
+     usage: koris [-h] [--version] {apply,destroy,k8s} ...
+   
+     positional arguments:
+     {apply,destroy,k8s}  commands
+       apply              Bootstrap a Kubernetes cluster
+       destroy            Delete the complete cluster stack
+       k8s                Bootstrap a Kubernetes cluster (deprecated)
+   
+     optional arguments:
+       -h, --help           show this help message and exit
+       --version            show version and exit
 
 7. To view the help of each subcommand
 
    .. code:: shell
 
-      $ kolt destroy -h
-      usage: kolt destroy [-h] config
+      $ koris destroy -h
+      usage: koris destroy [-h] [--force] config
 
       positional arguments:
-      config
+        config
 
       optional arguments:
-      -h, --help  show this help message and exit
+        -h, --help   show this help message and exit
+        --force, -f
 
 .. note::
 
@@ -110,7 +111,7 @@ Get started
    .. code:: shell
 
       curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
-      scp kolt-v<LATEST_TAG>.zip remotehost:~/
+      scp koris-v<LATEST_TAG>.zip remotehost:~/
 
    repeat the steps to create and activate a virtual environment, and the install
    the package with pip directly:

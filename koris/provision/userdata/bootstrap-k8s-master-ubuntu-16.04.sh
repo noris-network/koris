@@ -14,7 +14,7 @@ ETCD_URL=https://github.com/coreos/etcd/releases/download
 ETCD_VERSION=v3.3.8
 
 # apiserver, controller-manager, scheduler
-K8S_VERSION=v1.11.4
+K8S_VERSION=v1.11.5
 K8S_URL=https://storage.googleapis.com/kubernetes-release/release
 BIN_PATH=/usr/bin
 
@@ -125,7 +125,8 @@ LimitNOFILE=30000
 WantedBy=multi-user.target
 EOF
 
-mkdir -pv /var/lib/kubernetes/
+echo "testing if /var/lib/kubernetes/ exists"
+test -d /var/lib/kubernetes || mkdir -pv /var/lib/kubernetes/
 
 ##
 # link certificates from /etc/ssl/kubernetes - these are injected with cloud-init

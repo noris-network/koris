@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    k8s-app: dnscheck
+  name: dnscheck
+  namespace: default
+spec:
+  containers:
+    - name: dnscheck
+      image: tutum/dnsutils
+      command:
+      - "sleep"
+      args:
+      - "86400"

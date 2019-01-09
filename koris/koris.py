@@ -31,7 +31,7 @@ __version__ = pkg_resources.get_distribution('koris').version
 
 
 @mach1()
-class Kolt:
+class Koris:
     """
     The main entry point for the program. This class does the CLI parsing
     and descides which action shoud be taken
@@ -98,7 +98,7 @@ def main():
     """
     run and execute koris
     """
-    k = Kolt()
+    k = Koris()
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically
     # creates the CLI parser. It also adds the method run to the class.

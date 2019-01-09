@@ -50,18 +50,18 @@ Get started
 
    .. code:: shell
 
-      $ koris -h
-      usage: koris [-h] {certs,destroy,k8s,kubespray,oc} ...
+      koris -h
+      usage: koris [-h] [--version] {apply,destroy,k8s} ...
 
       positional arguments:
-        {certs,destroy,k8s,kubespray,oc}
-                              commands
-          certs               Create cluster certificates
-          destroy             Delete the complete cluster stack
-          k8s                 Bootstrap a Kubernetes cluster
-          ...
+      {apply,destroy,k8s}  commands
+      apply              Bootstrap a Kubernetes cluster
+      destroy            Delete the complete cluster stack
+      k8s                Bootstrap a Kubernetes cluster (deprecated)
+
       optional arguments:
-        -h, --help            show this help message and exit
+      -h, --help           show this help message and exit
+      --version            show version and exit
 
 7. To view the help of each subcommand
 
@@ -108,3 +108,41 @@ Get started
 .. code:: shell
 
    $ koris apply <your-cluster-config.yml>
+
+
+Troubleshooting
+~~~~~~~~~~~~~~~
+
+In case the cluster fails to boot, you can try and either SSH to the cluster and figure it out yourself.
+A quick insight can be gained, without SSH, to what happened at boot time to the cluster.
+You can see the output of cloud-init with the following sequence of commands:
+
+.. code:: shell
+
+   $ openstack server list
+   +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+
+   | ID                                   | Name                                  | Status | Networks                             | Image | Flavor      |
+   +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+
+   | 3685eec8-494b-4e1c-9c06-dee2068727a5 | node-1-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.9  |       | ECS.C1.4-8  |
+   | 402cbc68-b7ad-463f-8657-f553aa263276 | master-2-koris-pipe-line-671a519-8034 | ACTIVE | korispipeline-office-net=10.36.18.24 |       | ECS.GP1.2-8 |
+   | 02752b0a-7f3d-47ac-a509-af9b52e2bf2a | master-3-koris-pipe-line-671a519-8034 | ACTIVE | korispipeline-office-net=10.36.18.20 |       | ECS.GP1.2-8 |
+   | 45ad854a-e484-44f8-bb87-a9e5d0a20b79 | master-1-koris-pipe-line-671a519-8034 | ACTIVE | korispipeline-office-net=10.36.18.12 |       | ECS.GP1.2-8 |
+   | 0c460ba9-4c73-4966-80ec-959f5aaabbe0 | node-2-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.11 |       | ECS.C1.4-8  |
+   | 0d4670a3-95b8-4f80-bd92-06b8266b3d6c | node-3-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.8  |       | ECS.C1.4-8  |
+   | 611e8b44-f88e-47fe-9ce6-bed168eaea8e | node-1-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.7  |       | ECS.C1.4-8  |
+   +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+
+
+   $  $ openstack console log show 3685eec8-494b-4e1c-9c06-dee2068727a5
+
+   [    0.000000] Initializing cgroup subsys cpuset
+   [    0.000000] Initializing cgroup subsys cpu
+   ... snipped ...
+   [   22.671075] cloud-init[1478]: Reading state information...
+   [   22.680297] cloud-init[1478]: Del docker-ce 17.12.1~ce-0~ubuntu [30.2 MB]
+   [   23.572631] cloud-init[1478]: mkdir: created directory '/var/lib/kubernetes/'
+   [   23.587803] cloud-init[1478]: Failed to execute operation: File exists
+
+
+This indicates that the cloud-init script failed to run, hence the nodes didn't join the cluster.
+
+
