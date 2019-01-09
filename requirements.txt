@@ -19,7 +19,6 @@ iso8601==0.1.12
 jmespath==0.9.3
 jsonpatch==1.23
 jsonpointer==2.0
-keystoneauth1==3.4.0
 kubernetes==7.0.0
 mach.py==0.4.1
 monotonic==1.4
@@ -47,7 +46,6 @@ pyparsing==2.2.0
 pyperclip==1.6.0
 python-cinderclient==3.6.1
 python-dateutil==2.7.3
-python-keystoneclient==3.15.0
 python-neutronclient==6.8.0
 python-novaclient==10.1.0
 pytz==2018.4
@@ -64,4 +62,6 @@ urllib3==1.22
 wcwidth==0.1.7
 websocket-client==0.53.0
 wrapt==1.10.11
+python-glanceclient==2.13.0
+keystoneauth1==3.11.2
 python-keystoneclient==3.15.0
