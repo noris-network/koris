@@ -44,7 +44,6 @@ BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sonobuoy_0.12.1_linux_amd64.tar.gz
 SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
-CIS_VERSION=1.11
 
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -119,10 +118,6 @@ dist: clean ## builds source and wheel package
 
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
-
-build-exec: ## build a single file executable of koris
-	rm -vRf dist
-	pyinstaller koris.spec
 
 integration-test: ## run the complete integration test from you local machine
 integration-test: \
