@@ -64,3 +64,4 @@ urllib3==1.22
 wcwidth==0.1.7
 websocket-client==0.53.0
 wrapt==1.10.11
+python-keystoneclient==3.15.0
