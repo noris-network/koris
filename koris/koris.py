@@ -8,6 +8,7 @@ It automatically creates an executable in your path.
 
 """
 import argparse
+import os
 import sys
 import yaml
 
@@ -17,9 +18,9 @@ from koris.cloud.openstack import get_clients
 from koris.cloud.openstack import BuilderError
 from . import __version__
 from .cli import delete_cluster
-from .deploy import K8S
+from .deploy.k8s import K8S
 
-from .util.hue import red, yellow  # pylint: disable=no-name-in-module
+from .util.hue import red  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder
@@ -65,15 +66,6 @@ class Koris:
             delete_cluster(config, self.nova, self.neutron, self.cinder,
                            True)
 
-    def k8s(self):  # pylint: disable=no-self-use
-        """
-        Bootstrap a Kubernetes cluster (deprecated)
-
-        config - configuration file
-        """
-        print(yellow("This subcommand is deprecated.")) # noqa
-        print(yellow("Use `apply` instead."))
-
     def destroy(self, config: str, force: bool = False):
         """
         Delete the complete cluster stack
@@ -88,8 +80,9 @@ class Koris:
         delete_cluster(config, self.nova, self.neutron, self.cinder, force)
         sys.exit(0)
 
-    def add(self, config: str, flavor: str, zone: str,
-            role: str = 'node', N: int = 1):
+    @staticmethod
+    def add(config: str, flavor: str, zone: str,
+            role: str = 'node', amount: int = 1):
         """
         Add a worker node, or master node to the cluster.
 
@@ -99,18 +92,18 @@ class Koris:
         N - the number of worker nodes to add (masters are not supported)
         zone - the availablity zone
         """
-        k8s = K8S()
-        token = k8s.get_bootstrap_token(config)
-        k8s.discovery_hash  # property which needs to be calculated
+        k8s_config_path = os.getenv("KUBECONFIG")
+        k8s = K8S(k8s_config_path)
+        token = k8s.get_bootstrap_token()
 
-        NodeBuilder.add_nodes(config,
-                              flavor,
-                              zone,
-                              role,
-                              k8s.ca_cert,
-                              token,
-                              k8s.discovery_hash,
-                              N=N)
+        NodeBuilder.create_nodes_tasks(config,
+                                       flavor,
+                                       zone,
+                                       role,
+                                       k8s.ca_cert,
+                                       token,
+                                       k8s.discovery_hash,
+                                       N=amount)
         # first use OSCLUSTERINFO to find the next node names.
         # create a openstack.Instance with self._get_or_create()
 

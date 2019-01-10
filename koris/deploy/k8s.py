@@ -41,6 +41,27 @@ class K8S:
         k8sconfig.load_kube_config(config)
         self.client = k8sclient.CoreV1Api()
 
+    @staticmethod
+    def get_bootstrap_token():
+        """
+        Generate a Bootstrap token
+        """
+        return "CalculatedToken"  # from self.config
+
+    @property
+    def ca_cert(self):
+        """
+        retrun the CA as b64 string
+        """
+        return "CACert"
+
+    @property
+    def discovery_hash(self):
+        """
+        calculate and return a discovery_hash based on the cluster CA
+        """
+        raise NotImplementedError
+
     @property
     def is_ready(self):
         """
