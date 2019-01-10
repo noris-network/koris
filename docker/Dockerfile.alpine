@@ -2,7 +2,7 @@ FROM alpine:3.8
 MAINTAINER Oz Tiram <oz.tiram@gmail.com>
 
 RUN apk update \
-    && apk add bash alpine-sdk python3-dev openssl-dev linux-headers py3-cryptography libffi-dev
+    && apk add bash alpine-sdk python3-dev libressl-dev linux-headers py3-cryptography libffi-dev
 
 COPY requirements.txt requirements_ci.txt ./
 
