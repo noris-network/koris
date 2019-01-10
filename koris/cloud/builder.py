@@ -68,6 +68,7 @@ class NodeBuilder:
         """
         add additional nodes
         """
+        flavor = self._info.compute_client.flavors.find(name='flavor')
 
         nodes = [Instance(self._info.storage_client,
                           self._info.compute_client,
@@ -95,11 +96,24 @@ class NodeBuilder:
                            amount=1):
         """
         Create tasks for adding nodes when running ``koris add --args ...``
+
+        Args:
+            ca_cert (CertBundle.cert)
+            token (str)
+            discovery_hash (str)
+            flavor (str or None)
+            zone (str)
+
         """
 
         lb = LoadBalancer(self.config, client=self._info.netclient)
         lb.get()
         lb_port = 6443
+
+        if flavor:
+            flavor = self._info.compute_client.flavors.find(name=flavor)
+        else:
+            flavor = self._info.node_flavor
 
         nodes = self.create_new_nodes(role=role,
                                       zone=zone,

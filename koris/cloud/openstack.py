@@ -846,7 +846,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             zone,
                             role,
                             volume_config,
-                            _server.flavor['id'])
+                            _server.flavor)
             inst.ports.append(_server.interface_list()[0])
             inst.exists = True
         except NovaNotFound:

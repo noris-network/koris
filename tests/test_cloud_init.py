@@ -103,7 +103,7 @@ def ci_first_master():
     ci = FirstMasterInit(create_key(),
                          CERTS['ca'],
                          CLOUD_CONFIG,
-                         hostnames,
+                         TEST_CLUSTER,
                          ips,
                          LB_IP,
                          "6443",

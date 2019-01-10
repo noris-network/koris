@@ -30,10 +30,11 @@ class DummyServer:  # pylint: disable=too-few-public-methods
     """
     Mock an OpenStack server
     """
-    def __init__(self, name, ip_address):
+    def __init__(self, name, ip_address, flavor):
 
         self.name = name
         self.ip_address = ip_address
+        self.flavor = {'name': flavor, 'id': 'abcdefg12345678'}
         self.exists = False
 
     def interface_list(self):
@@ -98,8 +99,10 @@ def os_info():
 
 def test_node_builder(os_info):
     """ test the node builder class """
-    NOVA.servers.find = mock.MagicMock(return_value=DummyServer("node-1-test",
-                                                                "10.32.192.101")) # noqa
+    NOVA.servers.find = mock.MagicMock(
+        return_value=DummyServer("node-1-test",
+                                 "10.32.192.101",
+                                 'ECS.C1.4-8'))
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "exists", False), nodes))
@@ -123,13 +126,15 @@ def test_node_builder(os_info):
     # will create a future with the correct user data
     assert call_args['keypair'] == 'otiram'
     assert call_args['self'].name == 'node-1-test'
-    assert call_args['flavor'] == 'ECS.C1.4-8'
+    assert call_args['flavor'] == {'name': 'ECS.C1.4-8', 'id': 'abcdefg12345678'}
 
 
 def test_controlplane_builder(os_info):
     """ test the control plane builder class """
-    NOVA.servers.find = mock.MagicMock(return_value=DummyServer("master-1-test", # noqa
-                                                                "10.32.192.102")) # noqa
+    NOVA.servers.find = mock.MagicMock(
+        return_value=DummyServer("master-1-test",
+                                 "10.32.192.102",
+                                 'ECS.C1.4-8'))
     cpb = ControlPlaneBuilder(CONFIG, os_info)
     masters = cpb.get_masters()
     assert isinstance(masters[0], koris.cloud.openstack.Instance)
@@ -139,13 +144,14 @@ def test_controlplane_builder(os_info):
 def test_create_nodes(os_info):
     NOVA.servers.list = mock.MagicMock(
         return_value=[DummyServer("node-%d-test" % i,
-                                  "10.32.192.10%d" % i) for i in range(1, 4)])
+                                  "10.32.192.10%d" % i,
+                                  'ECS.C1.4-8') for i in range(1, 4)])
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1")
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)
     assert nodes[0].name == 'node-4-test'
 
-    nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1", N=3)
+    nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1", amount=3)
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)
     assert nodes[0].name == 'node-4-test'
     assert nodes[1].name == 'node-5-test'
