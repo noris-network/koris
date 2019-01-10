@@ -1,6 +1,8 @@
 """
 ssl.py hold all ssl certifcates creation utilities and classes
 """
+# pylint: disable=too-many-locals,too-many-arguments
+
 import base64
 import datetime
 import ipaddress
@@ -266,11 +268,17 @@ def write_cert(cert, filename):  # pragma: no coverage
 
 
 class CertBundle:
+    """
+    a simple class to hold a certifacte data with its own key
+    """
 
     @classmethod
     def create_signed(cls, ca_bundle, country, state, locality,
                       orga, unit, name, hosts, ips):
 
+        """
+        create a sign certificate
+        """
         key = create_key()
         cert = create_certificate(ca_bundle,
                                   key.public_key(),
@@ -321,9 +329,9 @@ def read_cert(cert):  # pragma: no coverage
         cert (inst) - a certificate instance
     """
 
-    with open(cert, "rb") as f:
+    with open(cert, "rb") as fh:
         cert = x509.load_pem_x509_certificate(
-            f.read(), default_backend())
+            fh.read(), default_backend())
     return cert
 
 
