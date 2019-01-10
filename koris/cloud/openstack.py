@@ -59,8 +59,7 @@ def remove_cluster(config, nova, neutron, cinder):
     tasks += [host.delete(neutron) for host in workers]
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
-    lbinst = LoadBalancer(config)
-    lbinst.delete(neutron)
+    LoadBalancer(config, neutron).delete()
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})
@@ -78,8 +77,7 @@ def remove_cluster(config, nova, neutron, cinder):
     # delete volumes
 
     loop.close()
-    volumes = cinder.volumes.list()
-    for vol in volumes:
+    for vol in cinder.volumes.list():
         if config['cluster-name'] in vol.name and vol.status != 'in-use':
             vol.delete()
 
@@ -88,23 +86,24 @@ class BuilderError(Exception):
     """Raise a custom error if the build fails"""
 
 
-class Instance:
+class Instance:  # pylint: disable=too-many-instance-attributes, too-many-arguments
     """
     Create an Openstack Server with an attached volume
     """
 
     def __init__(self, cinder, nova, name, network, zone, role,
-                 volume_config):
+                 volume_config, flavor):
         self.cinder = cinder
         self.nova = nova
         self.name = name
         self.network = network
         self.zone = zone
+        self.flavor = flavor
         self.volume_size = volume_config.get('size', '25')
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
         self.role = role
-        self._ports = []
+        self.ports = []
         self._ip_address = None
         self.exists = False
 
@@ -112,15 +111,15 @@ class Instance:
     def nics(self):
         """return all network interfaces attached to the instance"""
         return [{'net-id': self.network['id'],
-                 'port-id': self._ports[0]['port']['id']}]
+                 'port-id': self.ports[0]['port']['id']}]
 
     @property
     def ip_address(self):
         """return the IP address of the first NIC"""
         try:
-            return self._ports[0]['port']['fixed_ips'][0]['ip_address']
+            return self.ports[0]['port']['fixed_ips'][0]['ip_address']
         except TypeError:
-            return self._ports[0].fixed_ips[0]['ip_address']
+            return self.ports[0].fixed_ips[0]['ip_address']
         except IndexError:
             raise AttributeError("Instance has no ports attached")
 
@@ -129,7 +128,7 @@ class Instance:
         port = netclient.create_port({"port": {"admin_state_up": True,
                                                "network_id": net,
                                                "security_groups": secgroups}})
-        self._ports.append(port)
+        self.ports.append(port)
 
     async def _create_volume(self):  # pragma: no coverage
         bdm_v2 = {
@@ -286,7 +285,7 @@ class LoadBalancer:  # pragma: no coverage
             self._add_health_monitor(client, pool['id'])
             LOGGER.info("Added health monitor ...")
 
-    def get(self, client=None, provider='octavia'):
+    def get(self, client=None):
         """
         get loadbalancer information
         """
@@ -324,6 +323,9 @@ class LoadBalancer:  # pragma: no coverage
 
     @property
     def ip_address(self):
+        """
+        return the loadbalancer's IP address or it's Floating IP address
+        """
         if not self._data:
             self.get(self.client)
 
@@ -344,6 +346,8 @@ class LoadBalancer:  # pragma: no coverage
                 'floatingips'][0]['floating_ip_address']
 
             return self._existing_floating_ip
+
+        return None
 
     def _floating_ip_address(self, client, lb):
         floatingips = client.list_floatingips(retrieve_all=True,
@@ -392,7 +396,7 @@ class LoadBalancer:  # pragma: no coverage
         return lb['loadbalancer'], fip_addr
 
     @retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
-    def delete(self, client):
+    def delete(self, client=None):
         """
         Delete the cluster API loadbalancer
 
@@ -405,6 +409,9 @@ class LoadBalancer:  # pragma: no coverage
             client (neutron client)
             suffix (str) - the suffix of the name, appended to name
         """
+        if not client:
+            client = self.client
+
         lb = client.list_lbaas_loadbalancers(retrieve_all=True,
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
@@ -578,7 +585,7 @@ class SecurityGroup:
         self.client = neutron_client
         self.name = name
         self.subnet = subnet
-        self._id = None
+        self.id = None
         self.exists = False
 
     def add_sec_rule(self, **kwargs):
@@ -586,7 +593,7 @@ class SecurityGroup:
         add a security group rule
         """
         try:
-            kwargs.update({'security_group_id': self._id})
+            kwargs.update({'security_group_id': self.id})
             self.client.create_security_group_rule({'security_group_rule': kwargs})
         except NeutronConflict:
             kwargs.pop('security_group_id')
@@ -596,7 +603,7 @@ class SecurityGroup:
         """
         delete security rule
         """
-        connection.delete_security_group_rule(self._id)
+        connection.delete_security_group_rule(self.id)
 
     @lru_cache()
     def get_or_create_sec_group(self, name):
@@ -617,13 +624,13 @@ class SecurityGroup:
 
         if secgroup:
             self.exists = True
-            self._id = secgroup[0]['id']
+            self.id = secgroup[0]['id']
             return secgroup[0]
 
         secgroup = self.client.create_security_group(
             {'security_group': {'name': name}})['security_group']
 
-        self._id = secgroup['id']
+        self.id = secgroup['id']
         return {}
 
     def configure(self):
@@ -802,7 +809,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
         secgroup.get_or_create_sec_group(config['cluster-name'])
         self.secgroup = secgroup
-        self.secgroups = [secgroup._id]
+        self.secgroups = [secgroup.id]
 
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
         if 'subnet' in config:
@@ -822,7 +829,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._cinderclient = cinder_client
 
     @lru_cache()
-    def _get_or_create(self, hostname, zone, role):
+    def _get_or_create(self, hostname, zone, role, flavor):
         """
         Find if a instance exists Openstack.
 
@@ -838,8 +845,9 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             self.net,
                             zone,
                             role,
-                            volume_config)
-            inst._ports.append(_server.interface_list()[0])
+                            volume_config,
+                            _server.flavor['id'])
+            inst.ports.append(_server.interface_list()[0])
             inst.exists = True
         except NovaNotFound:
             inst = Instance(self._cinderclient,
@@ -848,11 +856,27 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             self.net,
                             zone,
                             role,
-                            volume_config)
+                            volume_config,
+                            flavor)
             inst.attach_port(self._neutronclient,
                              self.net['id'],
                              self.secgroups)
         return inst
+
+    @property
+    def netclient(self):
+        """return the current network client"""
+        return self._neutronclient
+
+    @property
+    def compute_client(self):
+        """return the current compute client"""
+        return self._novaclient
+
+    @property
+    def storage_client(self):
+        """return the current storage client"""
+        return self._cinderclient
 
     @property
     def nodes_names(self):
@@ -871,7 +895,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         mz = list(distribute_host_zones(self.management_names, self.azones))
         for hosts, zone in mz:
             for host in hosts:
-                yield self._get_or_create(host, zone, 'master')
+                yield self._get_or_create(host, zone, 'master', self.master_flavor)
 
     def distribute_nodes(self):
         """
@@ -880,4 +904,4 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         hz = list(distribute_host_zones(self.nodes_names, self.azones))
         for hosts, zone in hz:
             for host in hosts:
-                yield self._get_or_create(host, zone, 'node')
+                yield self._get_or_create(host, zone, 'node', self.node_flavor)

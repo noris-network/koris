@@ -31,7 +31,7 @@ LOGGER = get_logger(__name__)
 NOVA, NEUTRON, CINDER = get_clients()
 
 
-def get_server_range(servers, cluster_name, role, N):
+def get_server_range(servers, cluster_name, role, amount):
     """
     Given a list of servers find the last server name and add N more
     """
@@ -41,7 +41,7 @@ def get_server_range(servers, cluster_name, role, N):
 
     lastname = sorted(servers, key=lambda x: x.name)[-1].name
     idx = int(lastname.split('-')[1])
-    return range(idx + 1, idx + N + 1)
+    return range(idx + 1, idx + amount + 1)
 
 
 class NodeBuilder:
@@ -62,26 +62,27 @@ class NodeBuilder:
 
     def create_new_nodes(self,
                          role='node',
-                         flavor=None,
                          zone=None,
-                         N=1):
+                         flavor=None,
+                         amount=1):
         """
         add additional nodes
         """
 
-        nodes = [Instance(self._info._cinderclient,
-                          self._info._novaclient,
+        nodes = [Instance(self._info.storage_client,
+                          self._info.compute_client,
                           '%s-%d-%s' % (role, n, self.config['cluster-name']),
                           self._info.net,
                           zone,
                           role,
                           {'image': self._info.image,
-                           'class': self._info.storage_class}
+                           'class': self._info.storage_class},
+                          flavor
                           ) for n in
-                 get_server_range(self._info._novaclient.servers.list(),
+                 get_server_range(self._info.compute_client.servers.list(),
                                   self.config['cluster-name'],
                                   role,
-                                  N)]
+                                  amount)]
         return nodes
 
     def create_nodes_tasks(self,
@@ -91,20 +92,28 @@ class NodeBuilder:
                            role='node',
                            flavor=None,
                            zone=None,
-                           N=1):
+                           amount=1):
+        """
+        Create tasks for adding nodes when running ``koris add --args ...``
+        """
 
-        lb = LoadBalancer(self.config, client=self._info._neutronclient)
+        lb = LoadBalancer(self.config, client=self._info.netclient)
         lb.get()
         lb_port = 6443
 
-        nodes = self.create_new_nodes(role=role, flavor=flavor, zone=zone, N=N)
+        nodes = self.create_new_nodes(role=role,
+                                      zone=zone,
+                                      amount=amount,
+                                      flavor=flavor)
         nodes = self._create_nodes_tasks(ca_cert,
                                          lb.ip_address, lb_port, token,
                                          discovery_hash, nodes)
         return nodes
 
     def launch_new_nodes(self, nodes):
-        pass
+        """
+        Launch all nodes when running ``koris add ...``
+        """
 
     def get_nodes(self):
         """
@@ -123,14 +132,22 @@ class NodeBuilder:
                              bootstrap_token,
                              discovery_hash,
                              ):
+        """
+        Create all initial nodes when running ``koris apply <config>``
+        """
         nodes = self.get_nodes()
         nodes = self._create_nodes_tasks(ca_bundle.cert,
                                          lb_ip, lb_port, bootstrap_token,
                                          discovery_hash, nodes)
         return nodes
 
-    def _create_nodes_tasks(self, ca_cert, lb_ip, lb_port, bootstrap_token,
-                            discovery_hash, nodes):
+    def _create_nodes_tasks(self,
+                            ca_cert,
+                            lb_ip,
+                            lb_port,
+                            bootstrap_token,
+                            discovery_hash,
+                            nodes):
         """
         Create future tasks for creating the cluster worker nodes
         """
@@ -146,7 +163,7 @@ class NodeBuilder:
                                     bootstrap_token,
                                     discovery_hash))
             tasks.append(loop.create_task(
-                node.create(self._info.node_flavor, self._info.secgroups,
+                node.create(node.flavor, self._info.secgroups,
                             self._info.keypair, userdata)
             ))
 
@@ -186,13 +203,11 @@ class ControlPlaneBuilder:
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
+
         masters = self.get_masters()
         if not len(masters) % 2:
             LOGGER.warnning("The number of masters should be odd!")
             return []
-
-        master_ips = [master.ip_address for master in masters]
-        master_names = [master.name for master in masters]
 
         loop = asyncio.get_event_loop()
         tasks = []
@@ -204,8 +219,8 @@ class ControlPlaneBuilder:
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
-                                               cloud_config, master_ips,
-                                               master_names, lb_ip, lb_port,
+                                               cloud_config, masters,
+                                               lb_ip, lb_port,
                                                bootstrap_token, lb_dns))
             else:
                 # create userdata for following master nodes if not existing

@@ -26,7 +26,7 @@ LOGGER = get_logger(__name__)
 BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 
-class BaseInit:
+class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
     """
     Args:
        cloud_config   An OSCloudConfig instance describing the information
@@ -142,7 +142,8 @@ class BaseInit:
         """
         write out flags for kubelet systemd unit
         """
-        content = '''KUBELET_EXTRA_ARGS="--cloud-provider=openstack --cloud-config=/etc/kubernetes/cloud.config"'''  # noqa
+        content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=openstack'''
+                   '''--cloud-config=/etc/kubernetes/cloud.config"''')
         self.write_file("/etc/default/kubelet", content, "root",
                         "root", "0600")
 
@@ -188,13 +189,14 @@ class NthMasterInit(BaseInit):
         self.add_ssh_public_key(self.ssh_key)
 
 
+# pylint: disable=too-many-arguments
 class FirstMasterInit(NthMasterInit):
     """
     First node is a special nth node. Therefore we inherit from NthMasterInit.
     First node needs to execute bootstrap script.
     """
-    def __init__(self, ssh_key, ca_bundle, cloud_config, master_ips,
-                 master_names, lb_ip, lb_port, bootstrap_token, lb_dns='',
+    def __init__(self, ssh_key, ca_bundle, cloud_config,
+                 masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
                  os_type='ubuntu', os_version="16.04"):
         """
         ssh_key is a RSA keypair (return value from create_key from koris.ssl module)
@@ -206,8 +208,9 @@ class FirstMasterInit(NthMasterInit):
         """
         super().__init__(cloud_config, ssh_key, os_type, os_version)
         self.ca_bundle = ca_bundle
-        self.master_ips = master_ips
-        self.master_names = master_names
+
+        self.master_ips = [master.ip_address for master in masters]
+        self.master_names = [master.name for master in masters]
         self.lb_ip = lb_ip
         self.lb_port = lb_port
         self.bootstrap_token = bootstrap_token

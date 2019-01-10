@@ -103,7 +103,7 @@ class Koris:
                                        k8s.ca_cert,
                                        token,
                                        k8s.discovery_hash,
-                                       N=amount)
+                                       amount=amount)
         # first use OSCLUSTERINFO to find the next node names.
         # create a openstack.Instance with self._get_or_create()
 
