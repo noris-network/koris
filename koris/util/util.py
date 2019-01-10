@@ -1,3 +1,6 @@
+"""
+General purpose utilities
+"""
 import base64
 import copy
 import logging
@@ -10,6 +13,10 @@ import yaml
 
 
 def get_logger(name, level=logging.INFO):
+    """
+    return a logging.Logger instance which can be used
+    in each module
+    """
     logger = logging.getLogger(name)
     logger.setLevel(level)
     ch = logging.StreamHandler()
@@ -19,16 +26,13 @@ def get_logger(name, level=logging.INFO):
     return logger
 
 
-kubeconfig = {'apiVersion': 'v1',
-              'clusters': [
-                  {'cluster': {'server': '%%%%MASTERURI%%%%',
-                               'certificate-authority': '%%%%CA%%%%'},
-                   'name': 'kubernetes'}],
-              'contexts': [
-                  {'context':
-                      {'cluster': 'kubernetes',
-                       'user': '%%%USERNAME%%%'},
-                   'name': '%%%USERNAME%%%-context'}],
+KUBECONFIG = {'apiVersion': 'v1',
+              'clusters': [{'cluster': {'server': '%%%%MASTERURI%%%%',
+                                        'certificate-authority': '%%%%CA%%%%'},
+                            'name': 'kubernetes'}],
+              'contexts': [{'context': {'cluster': 'kubernetes',
+                                        'user': '%%%USERNAME%%%'},
+                            'name': '%%%USERNAME%%%-context'}],
               'current-context': '%%%USERNAME%%%-context',
               'kind': 'Config',
               'users': [
@@ -42,7 +46,10 @@ kubeconfig = {'apiVersion': 'v1',
 
 def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
                         client_key, encode=False):
-    config = copy.deepcopy(kubeconfig)
+    """
+    format a kube configuration file
+    """
+    config = copy.deepcopy(KUBECONFIG)
     config['clusters'][0]['cluster']['server'] = master_uri
     config['clusters'][0]['cluster']['certificate-authority'] = ca_cert
     config['contexts'][0]['context']['user'] = "%s" % username
@@ -60,6 +67,9 @@ def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
 
 @lru_cache(maxsize=16)
 def host_names(role, num, cluster_name):
+    """
+    format host names
+    """
     return ["%s-%s-%s" % (role, i, cluster_name) for i in
             range(1, num + 1)]
 
@@ -75,7 +85,7 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
         backoff: Backoff multiplier (e.g. value of 2 will double the delay each retry).
         logger: Logger to use. If None, print.
     """
-    def deco_retry(f):
+    def deco_retry(f):  # pylint: disable=invalid-name
 
         @wraps(f)
         def f_retry(*args, **kwargs):
@@ -83,7 +93,7 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
             while mtries > 1:
                 try:
                     return f(*args, **kwargs)
-                except exceptions as e:
+                except exceptions as e:  # pylint: disable=invalid-name
                     msg = '{}, Retrying in {} seconds...'.format(e,
                                                                  int(mdelay))
                     if logger:

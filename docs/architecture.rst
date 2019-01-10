@@ -49,23 +49,25 @@ Steps 4 and 7 actually happen in parallel, since these steps are not dependent o
 other. The nodes will wait for the kubernetes cluster API to become available if they
 complete the boot sequence first.
 
-The ``kolt`` source code is devided into modules and packages responsible for the steps
-above.
+The :ref:`koris` source code is devided into modules and packages responsible for
+the steps above.
 
-The main driver of the steps describe above is in ``kolt.cloud.builder`` which abstracts
-the dirty details of communication with the OpenStack API, which is found in
-``kolt.cloud.openstack``.
+The main driver of the steps describe above is in :py:mod:`koris.cloud.builder`
+which abstracts the dirty details of communication with the OpenStack API,
+which is found in :py:mod:`koris.cloud.openstack`.
 
-The package ``koris.provision`` includes a python module ``cloud_init`` responsible of
-preparing the cloud-init file (also known as ``userdata``) for each machine type.
-The directory ``koris.provision.userdata`` contains all the BASH shell scripts for each
+The package :py:mod:`koris.provision` includes a python module :py:mod:`cloud_init`
+responsible of preparing the cloud-init file (also known as ``userdata``)
+for each machine type.
+The directory :ref:`userdata` contains all the BASH shell scripts for each
 machine type. These shell scripts can be used to provision bare metal
 clusters with minimal effort too. 
 
-The module ``koris.ssl`` is responsible of creating SSL keys and certificates used by
-``kubeadm`` for creating the etcd cluster and kubernetes cluster which uses it for its
-storage backend. The modules is also used to create SSH key infrastructure use by the
+The module :py:mod:`koris.ssl` is responsible of creating SSL keys and
+certificates used by ``kubeadm`` for creating the etcd cluster and kubernetes
+cluster which uses it for its storage backend.
+The module is also used to create SSH key infrastructure use by the
 cluster first master to SSH into the other masters.
 
-The packages ``koris.util`` contains general purpose code to handle exceptions, logging
-and coloring output.
+The packages :py:mod:`koris.util` contains general purpose code to handle
+exceptions, logging and coloring output.

@@ -120,10 +120,6 @@ dist: clean ## builds source and wheel package
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
 
-build-exec: ## build a single file executable of koris
-	rm -vRf dist
-	pyinstaller koris.spec
-
 integration-test: ## run the complete integration test from you local machine
 integration-test: \
 	reset-config \

@@ -1,4 +1,6 @@
 # -*- mode: python -*-
+from pkg_resources import resource_filename, Requirement, get_distribution
+import os
 
 block_cipher = None
 
@@ -38,31 +40,47 @@ def Entrypoint(dist, group, name, **kwargs):
         **kwargs
     )
 
-from pkg_resources import resource_filename, Requirement, get_distribution
 
 os_service_types = resource_filename(Requirement("os_service_types"),
-                                     "os_service_types/data")
+                                     "os_service_types")
 
-os_defaults = resource_filename(Requirement('openstacksdk'), 'openstack/config')
+os_defaults = resource_filename(Requirement('openstacksdk'), 'openstack')
 
+os_service_types_ = get_distribution('os_service_types')
 keystoneauth1 = get_distribution('keystoneauth1')
+sdk_dist = get_distribution('openstacksdk')
+nova = get_distribution('python-novaclient')
+debtc = get_distribution('debtcollector')
+cinder_ = get_distribution('python-cinderclient')
+
 
 a = Entrypoint('koris', 'console_scripts', 'koris',
                datas=[('koris/provision/userdata/*', 'provision/userdata'),
-	              (os_service_types, 'os_service_types/data'),
-		      (os_defaults, 'openstack/config/'),
-		       (keystoneauth1.egg_info,
-		       'keystoneauth1-%s.dist-info' % keystoneauth1.parsed_version.base_version)
-		      ],
-	       hiddenimports=['novaclient.v2', 'cinderclient.v3',
-	                      'keystoneauth1', 'keystoneclient',
-			      'keystoneauth1.loading._plugins',
-			      'keystoneauth1.loading._plugins.identity',
-			      'keystoneauth1.loading._plugins.identity.generic',
-			      'keystoneauth1.identity'])
+                      (os_service_types, 'os_service_types'),
+                      (os_defaults, 'openstack'),
+                      (keystoneauth1.egg_info,
+                       'keystoneauth1-%s.dist-info' % keystoneauth1.parsed_version.base_version),
+                      (os_service_types_.egg_info,
+                       'os_service_types-%s.dist-info' % os_service_types_.parsed_version.base_version),
+                      (sdk_dist.egg_info, 'openstacksdk-%s.dist-info' % sdk_dist.parsed_version.base_version),
+                      (nova.egg_info, 'python_novaclient-%s.dist-info' % nova.parsed_version.base_version),
+                      (debtc.egg_info, 'debtcollector-%s.dist-info' % debtc.parsed_version.base_version),
+                      (cinder_.egg_info, 'python_cinderclient-%s.dist-info' % cinder_.parsed_version.base_version),
+                      ],
+               hiddenimports=['novaclient.v2', 'cinderclient.v3',
+                              'keystoneauth1', 'keystoneclient',
+                              'keystoneauth1.loading._plugins',
+                              'keystoneauth1.loading._plugins.identity',
+                              'keystoneauth1.loading._plugins.identity.generic',
+                              'keystoneauth1.identity',
+                              'os_service_types',
+                              'openstacksdk',
+                              'openstack'])
+
 
 pyz = PYZ(a.pure, a.zipped_data,
           cipher=block_cipher)
+
 
 exe = EXE(pyz,
           a.scripts,
@@ -76,7 +94,8 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           runtime_tmpdir=None,
-          console=True )
+          console=True)
+
 
 coll = COLLECT(
     exe,
