@@ -235,7 +235,7 @@ class LoadBalancer:  # pragma: no coverage
     During the boot of the machines, we configure the LoadBalancer.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, client=None):
         self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
@@ -248,6 +248,7 @@ class LoadBalancer:  # pragma: no coverage
         self._data = None
         self._existing_floating_ip = None
         self.members = []
+        self.client = client
 
     async def configure(self, client, master_ips):
         """
@@ -285,12 +286,32 @@ class LoadBalancer:  # pragma: no coverage
             self._add_health_monitor(client, pool['id'])
             LOGGER.info("Added health monitor ...")
 
+    def get(self, client=None, provider='octavia'):
+        """
+        get loadbalancer information
+        """
+        if client:
+            self.client = client
+        lb = self.client.list_lbaas_loadbalancers(retrieve_all=True,
+                                                  name=self.name)['loadbalancers']
+        if lb:
+            lb = lb[0]
+            self._id = lb['id']
+            self._subnet_id = lb['vip_subnet_id']
+            self._data = lb
+            try:
+                self.pool = lb['pools'][0]['id']
+            except KeyError:
+                self.pool = None
+
+        return lb
+
     def get_or_create(self, client, provider='octavia'):
         """
-        find if a load balancer exists
+        find if a load balancer exists, if not create it
         """
-        lb = client.list_lbaas_loadbalancers(retrieve_all=True,
-                                             name=self.name)['loadbalancers']
+        lb = self.get(client)
+
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
             lb, fip_addr = self.create(client, provider=provider)
         else:
@@ -298,13 +319,31 @@ class LoadBalancer:  # pragma: no coverage
             self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(client, lb[0])
             LOGGER.info("Loadbalancer IP: %s", fip_addr)
-            lb = lb[0]
-            self._id = lb['id']
-            self._subnet_id = lb['vip_subnet_id']
-            self._data = lb
-            self.pool = lb[0]['pools'][0]['id']
 
         return lb, fip_addr
+
+    @property
+    def ip_address(self):
+        if not self._data:
+            self.get(self.client)
+
+        if self._data['vip_address']:
+            return self._data['vip_address']
+
+        if self._existing_floating_ip:
+            return self._existing_floating_ip
+
+        try:
+            floatingips = self.client.list_floatingips(retrieve_all=True,
+                                                       port_id=self._data['vip_port_id'])
+        except (AttributeError, TypeError):
+            pass
+
+        if floatingips['floatingips']:
+            self._existing_floating_ip = floatingips[
+                'floatingips'][0]['floating_ip_address']
+
+            return self._existing_floating_ip
 
     def _floating_ip_address(self, client, lb):
         floatingips = client.list_floatingips(retrieve_all=True,

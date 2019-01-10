@@ -31,6 +31,19 @@ LOGGER = get_logger(__name__)
 NOVA, NEUTRON, CINDER = get_clients()
 
 
+def get_server_range(servers, cluster_name, role, N):
+    """
+    Given a list of servers find the last server name and add N more
+    """
+    servers = [s for s in servers if
+               s.name.endswith(cluster_name)]
+    servers = [s for s in servers if s.name.startswith(role)]
+
+    lastname = sorted(servers, key=lambda x: x.name)[-1].name
+    idx = int(lastname.split('-')[1])
+    return range(idx + 1, idx + N + 1)
+
+
 class NodeBuilder:
     """
     Interact with openstack and create a virtual machines with a volume,
@@ -47,26 +60,51 @@ class NodeBuilder:
         self.config = config
         self._info = osinfo
 
-    def add_nodes(self,
-                  config,
-                  flavor,
-                  zone,
-                  role,
-                  ca_cert,
-                  token,
-                  discovery_hash,
-                  N):
+    def create_new_nodes(self,
+                         role='node',
+                         flavor=None,
+                         zone=None,
+                         N=1):
         """
         add additional nodes
         """
-        lb_ip = 'foo'  # get foo from self._info
-        lb_port = 9999  # get lb_port from self._info
 
-        # TODO: fix this to get the correct names
-        nodes = [Instance() for n in N]
-        self._create_nodes_tasks(ca_cert,
-                                 lb_ip, lb_port, token,
-                                 discovery_hash, nodes)
+        nodes = [Instance(self._info._cinderclient,
+                          self._info._novaclient,
+                          '%s-%d-%s' % (role, n, self.config['cluster-name']),
+                          self._info.net,
+                          zone,
+                          role,
+                          {'image': self._info.image,
+                           'class': self._info.storage_class}
+                          ) for n in
+                 get_server_range(self._info._novaclient.servers.list(),
+                                  self.config['cluster-name'],
+                                  role,
+                                  N)]
+        return nodes
+
+    def create_nodes_tasks(self,
+                           ca_cert,
+                           token,
+                           discovery_hash,
+                           role='node',
+                           flavor=None,
+                           zone=None,
+                           N=1):
+
+        lb = LoadBalancer(self.config, client=self._info._neutronclient)
+        lb.get()
+        lb_port = 6443
+
+        nodes = self.create_new_nodes(role=role, flavor=flavor, zone=zone, N=N)
+        nodes = self._create_nodes_tasks(ca_cert,
+                                         lb.ip_address, lb_port, token,
+                                         discovery_hash, nodes)
+        return nodes
+
+    def launch_new_nodes(self, nodes):
+        pass
 
     def get_nodes(self):
         """
@@ -85,10 +123,11 @@ class NodeBuilder:
                              bootstrap_token,
                              discovery_hash,
                              ):
-        nodes = self._get_all_nodes()
-        self._create_nodes_tasks(ca_bundle.cert,
-                                 lb_ip, lb_port, bootstrap_token,
-                                 discovery_hash, nodes)
+        nodes = self.get_nodes()
+        nodes = self._create_nodes_tasks(ca_bundle.cert,
+                                         lb_ip, lb_port, bootstrap_token,
+                                         discovery_hash, nodes)
+        return nodes
 
     def _create_nodes_tasks(self, ca_cert, lb_ip, lb_port, bootstrap_token,
                             discovery_hash, nodes):
