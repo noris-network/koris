@@ -17,6 +17,14 @@ DUMMYPORT = {"port": {"admin_state_up": True,
                       "fixed_ips": [{"ip_address": "192.168.1.101"}]}}
 
 
+class Flavor:
+
+    def __init__(self, name):
+
+        self.name = name
+        self.id = 'abcdefg12345678'
+
+
 def get_ca():
     _key = create_key(size=2048)
     _ca = create_ca(_key, _key.public_key(),
@@ -34,7 +42,7 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 
         self.name = name
         self.ip_address = ip_address
-        self.flavor = {'name': flavor, 'id': 'abcdefg12345678'}
+        self.flavor = Flavor(flavor)
         self.exists = False
 
     def interface_list(self):
@@ -60,7 +68,7 @@ CONFIG = {
 
 NOVA.keypairs.get = mock.MagicMock(return_value='otiram')
 NOVA.glance.find_image = mock.MagicMock(return_value='Ubuntu')
-NOVA.flavors.find = mock.MagicMock(return_value='ECS.C1.4-8')
+NOVA.flavors.find = mock.MagicMock(return_value=Flavor('ECS.C1.4-8'))
 NEUTRON.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
 NEUTRON.create_port = mock.MagicMock(
     return_value=DUMMYPORT)
@@ -90,6 +98,13 @@ NEUTRON.list_lbaas_loadbalancers = mock.MagicMock(
 
 
 @pytest.fixture
+def dummy_server():
+    return DummyServer("node-1-test",
+                       "10.32.192.101",
+                       Flavor('ECS.C1.4-8'))
+
+
+@pytest.fixture
 def os_info():
     NEUTRON.list_security_groups = mock.MagicMock(
         return_value=iter([{"security_groups": []}]))
@@ -97,12 +112,9 @@ def os_info():
     return osinfo
 
 
-def test_node_builder(os_info):
+def test_node_builder(os_info, dummy_server):
     """ test the node builder class """
-    NOVA.servers.find = mock.MagicMock(
-        return_value=DummyServer("node-1-test",
-                                 "10.32.192.101",
-                                 'ECS.C1.4-8'))
+    NOVA.servers.find = mock.MagicMock(return_value=dummy_server)
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "exists", False), nodes))
@@ -126,7 +138,7 @@ def test_node_builder(os_info):
     # will create a future with the correct user data
     assert call_args['keypair'] == 'otiram'
     assert call_args['self'].name == 'node-1-test'
-    assert call_args['flavor'] == {'name': 'ECS.C1.4-8', 'id': 'abcdefg12345678'}
+    assert isinstance(call_args['flavor'], Flavor)
 
 
 def test_controlplane_builder(os_info):
@@ -134,7 +146,7 @@ def test_controlplane_builder(os_info):
     NOVA.servers.find = mock.MagicMock(
         return_value=DummyServer("master-1-test",
                                  "10.32.192.102",
-                                 'ECS.C1.4-8'))
+                                 Flavor('ECS.C1.4-8')))
     cpb = ControlPlaneBuilder(CONFIG, os_info)
     masters = cpb.get_masters()
     assert isinstance(masters[0], koris.cloud.openstack.Instance)
@@ -145,7 +157,7 @@ def test_create_nodes(os_info):
     NOVA.servers.list = mock.MagicMock(
         return_value=[DummyServer("node-%d-test" % i,
                                   "10.32.192.10%d" % i,
-                                  'ECS.C1.4-8') for i in range(1, 4)])
+                                  Flavor('ECS.C1.4-8')) for i in range(1, 4)])
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1")
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)

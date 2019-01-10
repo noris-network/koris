@@ -300,7 +300,7 @@ class LoadBalancer:  # pragma: no coverage
             self._data = lb
             try:
                 self.pool = lb['pools'][0]['id']
-            except KeyError:
+            except (IndexError, KeyError):
                 self.pool = None
 
         return lb
@@ -311,12 +311,12 @@ class LoadBalancer:  # pragma: no coverage
         """
         lb = self.get(client)
 
-        if not lb or 'DELETE' in lb[0]['provisioning_status']:
+        if not lb or 'DELETE' in lb['provisioning_status']:
             lb, fip_addr = self.create(client, provider=provider)
         else:
             LOGGER.info("Reusing an existing loadbalancer")
             self._existing_floating_ip = None
-            fip_addr = self._floating_ip_address(client, lb[0])
+            fip_addr = self._floating_ip_address(client, lb)
             LOGGER.info("Loadbalancer IP: %s", fip_addr)
 
         return lb, fip_addr
@@ -895,7 +895,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         mz = list(distribute_host_zones(self.management_names, self.azones))
         for hosts, zone in mz:
             for host in hosts:
-                yield self._get_or_create(host, zone, 'master', self.master_flavor)
+                yield self._get_or_create(host, zone, 'master', self.master_flavor.id)
 
     def distribute_nodes(self):
         """
@@ -904,4 +904,4 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         hz = list(distribute_host_zones(self.nodes_names, self.azones))
         for hosts, zone in hz:
             for host in hosts:
-                yield self._get_or_create(host, zone, 'node', self.node_flavor)
+                yield self._get_or_create(host, zone, 'node', self.node_flavor.id)
