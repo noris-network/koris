@@ -4,11 +4,11 @@ asn1crypto==0.24.0
 babel==2.5.3
 cachetools==2.1.0
 certifi==2018.1.18
-cffi==1.11.5
+cffi
 chardet==3.0.4
 cliff==2.11.0
 cmd2==0.8.4
-cryptography==2.2.1
+cryptography
 debtcollector==1.19.0
 decorator==4.2.1
 deprecation==2.0.2
