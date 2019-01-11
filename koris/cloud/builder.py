@@ -124,10 +124,14 @@ class NodeBuilder:
                                          discovery_hash, nodes)
         return nodes
 
-    def launch_new_nodes(self, nodes):
+    @staticmethod
+    def launch_new_nodes(node_tasks):
         """
         Launch all nodes when running ``koris add ...``
         """
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.gather(*node_tasks))
+        loop.close()
 
     def get_nodes(self):
         """
@@ -401,3 +405,4 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # At this point, we're ready with our cluster
         LOGGER.info("Kubernetes cluster is ready to use !!!")
+        loop.close()

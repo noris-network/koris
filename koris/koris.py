@@ -29,7 +29,7 @@ LOGGER = get_logger(__name__)
 
 
 @mach1()
-class Koris:
+class Koris:  # pylint: disable=no-self-use
     """
     The main entry point for the program. This class does the CLI parsing
     and descides which action shoud be taken
@@ -80,21 +80,23 @@ class Koris:
         delete_cluster(config, self.nova, self.neutron, self.cinder, force)
         sys.exit(0)
 
-    @staticmethod
-    def add(config: str, flavor: str, zone: str,
+    def add(self, config: str, flavor: str, zone: str,
             role: str = 'node', amount: int = 1):
         """
-        Add a worker node, or master node to the cluster.
+        Add a worker node or master node to the cluster.
 
         config - configuration file
         flavor - the machine flavor
         role - one of node or master
-        N - the number of worker nodes to add (masters are not supported)
+        amount - the number of worker nodes to add (masters are not supported)
         zone - the availablity zone
         """
         k8s_config_path = os.getenv("KUBECONFIG")
         k8s = K8S(k8s_config_path)
+
+        # this is now implemented
         token = k8s.get_bootstrap_token()
+        # implement discovery hash here
 
         NodeBuilder.create_nodes_tasks(config,
                                        flavor,
@@ -104,8 +106,6 @@ class Koris:
                                        token,
                                        k8s.discovery_hash,
                                        amount=amount)
-        # first use OSCLUSTERINFO to find the next node names.
-        # create a openstack.Instance with self._get_or_create()
 
 
 def main():
