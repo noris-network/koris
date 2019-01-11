@@ -90,6 +90,14 @@ class Koris:  # pylint: disable=no-self-use
         role - one of node or master
         amount - the number of worker nodes to add (masters are not supported)
         zone - the availablity zone
+
+        Per default add will use the default kube configuration file. Within this
+        file the default context will  be used. Hence, check which context you
+        have. Before running this command you should issue:
+        kubectl config get-contexts
+
+        You can specify any other configuration file by overriding the
+        KUBECONFIG environment variable.
         """
         k8s_config_path = os.getenv("KUBECONFIG")
         k8s = K8S(k8s_config_path)
