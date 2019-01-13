@@ -9,6 +9,7 @@ import random
 import string
 import sys
 import time
+import urllib
 
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
@@ -66,8 +67,6 @@ class NodeBuilder:
         """
         add additional nodes
         """
-        flavor = self._info.compute_client.flavors.find(name='flavor')
-
         nodes = [Instance(self._info.storage_client,
                           self._info.compute_client,
                           '%s-%d-%s' % (role, n, self.config['cluster-name']),
@@ -82,12 +81,15 @@ class NodeBuilder:
                                   self.config['cluster-name'],
                                   role,
                                   amount)]
+        for node in nodes:
+            node.attach_port(self._info.netclient, self._info.net['id'],
+                             self._info.secgroups)
         return nodes
 
     def create_nodes_tasks(self,
-                           ca_cert,
+                           host,
                            token,
-                           discovery_hash,
+                           ca_info,
                            role='node',
                            flavor=None,
                            zone=None,
@@ -99,14 +101,21 @@ class NodeBuilder:
             ca_cert (CertBundle.cert)
             token (str)
             discovery_hash (str)
+            host (str) - the address of the master or loadbalancer
             flavor (str or None)
             zone (str)
 
         """
 
-        lb = LoadBalancer(self.config, client=self._info.netclient)
-        lb.get()
-        lb_port = 6443
+        ca_cert = ca_info['ca_cert']
+        discovery_hash = ca_info['discovery_hash']
+
+        url = urllib.parse.urlparse(host)
+        host_addr = url.netloc.split(":")[0]
+        if ":" in url.netloc:
+            host_port = url.netloc.split(":")[-1]
+        else:
+            host_port = 6443
 
         if flavor:
             flavor = self._info.compute_client.flavors.find(name=flavor)
@@ -118,7 +127,7 @@ class NodeBuilder:
                                       amount=amount,
                                       flavor=flavor)
         nodes = self._create_nodes_tasks(ca_cert,
-                                         lb.ip_address, lb_port, token,
+                                         host_addr, host_port, token,
                                          discovery_hash, nodes)
         return nodes
 

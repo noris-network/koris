@@ -24,6 +24,7 @@ from .util.hue import red  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder
+from .cloud.openstack import OSClusterInfo
 
 LOGGER = get_logger(__name__)
 
@@ -95,20 +96,22 @@ class Koris:  # pylint: disable=no-self-use
         You can specify any other configuration file by overriding the
         KUBECONFIG environment variable.
         """
+        with open(config, 'r') as stream:
+            config = yaml.safe_load(stream)
+
         k8s_config_path = os.getenv("KUBECONFIG")
         k8s = K8S(k8s_config_path)
 
-        # this is now implemented
-        token = k8s.get_bootstrap_token()
-
-        NodeBuilder.create_nodes_tasks(config,
-                                       flavor,
-                                       zone,
-                                       role,
-                                       k8s.ca_cert,
-                                       token,
-                                       k8s.discovery_hash,
-                                       amount=amount)
+        info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
+        node_builder = NodeBuilder(config, info)
+        tasks = node_builder.create_nodes_tasks(k8s.host,
+                                                k8s.get_bootstrap_token(),
+                                                k8s.ca_info,
+                                                role=role,
+                                                zone=zone,
+                                                flavor=flavor,
+                                                amount=amount)
+        node_builder.launch_new_nodes(tasks)
 
 
 def main():

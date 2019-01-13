@@ -93,19 +93,28 @@ class K8S:
         return ".".join((tid, token_secret))
 
     @property
+    def host(self):
+        """retrieve the host or loadbalancer info"""
+        return self.api.api_client.configuration.host
+
+    @property
+    def ca_info(self):
+        """return a dict with the read ca and the discovery hash"""
+        return {"ca_cert": self.ca_cert, "discovery_hash": self.discovery_hash}
+
+    @property
     def ca_cert(self):
         """
         retrun the CA as b64 string
         """
-        return self.api.api_client.configuration.ssl_ca_cert
+        return read_cert(self.api.api_client.configuration.ssl_ca_cert)
 
     @property
     def discovery_hash(self):
         """
         calculate and return a discovery_hash based on the cluster CA
         """
-        crt = read_cert(self.ca_cert)
-        return discovery_hash(crt)
+        return discovery_hash(self.ca_cert)
 
     @property
     def is_ready(self):
