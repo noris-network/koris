@@ -16,6 +16,7 @@ from pkg_resources import resource_filename, Requirement
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
 
+from koris.ssl import read_cert, discovery_hash
 from koris.util.util import get_logger
 
 if getattr(sys, 'frozen', False):
@@ -96,14 +97,15 @@ class K8S:
         """
         retrun the CA as b64 string
         """
-        return "CACert"
+        return self.api.api_client.configuration.ssl_ca_cert
 
     @property
     def discovery_hash(self):
         """
         calculate and return a discovery_hash based on the cluster CA
         """
-        raise NotImplementedError
+        crt = read_cert(self.ca_cert)
+        return discovery_hash(crt)
 
     @property
     def is_ready(self):

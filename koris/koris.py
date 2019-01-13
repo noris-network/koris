@@ -100,7 +100,6 @@ class Koris:  # pylint: disable=no-self-use
 
         # this is now implemented
         token = k8s.get_bootstrap_token()
-        # implement discovery hash here
 
         NodeBuilder.create_nodes_tasks(config,
                                        flavor,

@@ -10,13 +10,11 @@ import string
 import sys
 import time
 
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.backends import default_backend
-
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
+from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
@@ -282,14 +280,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     @staticmethod
     def calculate_discovery_hash(ca_bundle):
         """
-        calculate the discovery hash for join
+        calculate the discovery hash based on the ca_bundle
         """
-        pub_key = ca_bundle.cert.public_key()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(pub_key.public_bytes(
-            serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo))
-        return digest.finalize().hex()
+        return get_discovery_hash(ca_bundle.cert)
 
     @staticmethod
     def create_ca():
