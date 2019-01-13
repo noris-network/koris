@@ -63,6 +63,18 @@ build-cluster:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+add-nodes:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.2
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install  -r requirements.txt"
+  - "pip3 install -e ."
+  - "make add-nodes"
+
 integration-test:
   stage: integration-test
   image: oz123/koris-alpine:0.1.2
