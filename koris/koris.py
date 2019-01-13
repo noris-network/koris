@@ -101,11 +101,11 @@ class Koris:  # pylint: disable=no-self-use
 
         k8s_config_path = os.getenv("KUBECONFIG")
         k8s = K8S(k8s_config_path)
-
+        token = k8s.get_bootstrap_token()
         info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
         node_builder = NodeBuilder(config, info)
         tasks = node_builder.create_nodes_tasks(k8s.host,
-                                                k8s.get_bootstrap_token(),
+                                                token,
                                                 k8s.ca_info,
                                                 role=role,
                                                 zone=zone,

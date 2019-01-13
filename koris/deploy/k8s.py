@@ -80,7 +80,7 @@ class K8S:
                 'usage-bootstrap-authentication': 'true',
                 'usage-bootstrap-signing': 'true',
                 'auth-extra-groups':
-                'system:bootstrappers:worker,system:bootstrappers:ingress'}
+                'system:bootstrappers:kubeadm:default-node-token', }
 
         for k, val in data.items():
             data[k] = base64.b64encode(val.encode()).decode()
