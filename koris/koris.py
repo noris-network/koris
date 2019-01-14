@@ -20,7 +20,7 @@ from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
 
-from .util.hue import red  # pylint: disable=no-name-in-module
+from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder
@@ -97,13 +97,13 @@ class Koris:  # pylint: disable=no-self-use
         KUBECONFIG environment variable.
         """
         with open(config, 'r') as stream:
-            config = yaml.safe_load(stream)
+            config_dict = yaml.safe_load(stream)
 
         k8s_config_path = os.getenv("KUBECONFIG")
         k8s = K8S(k8s_config_path)
         token = k8s.get_bootstrap_token()
-        info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
-        node_builder = NodeBuilder(config, info)
+        info = OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict)
+        node_builder = NodeBuilder(config_dict, info)
         tasks = node_builder.create_nodes_tasks(k8s.host,
                                                 token,
                                                 k8s.ca_info,
@@ -112,6 +112,15 @@ class Koris:  # pylint: disable=no-self-use
                                                 flavor=flavor,
                                                 amount=amount)
         node_builder.launch_new_nodes(tasks)
+        config_dict['n-nodes'] = config_dict['n-nodes'] + amount
+        updated_name = config.split(".")
+        updated_name.insert(-1, "updated")
+        updated_name = ".".join(updated_name)
+        with open(updated_name, 'w') as stream:
+            yaml.dump(config_dict, stream=stream)
+
+        print(infomsg("An updated cluster configuration was written to: {}".format(
+            updated_name)))
 
 
 def main():

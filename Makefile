@@ -158,6 +158,7 @@ add-nodes:
 		sleep 1; \
 	done
 	@echo "all nodes successfully joined!"
+	@mv -v tests/koris_test.updated.yml tests/koris_test.yml
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."
