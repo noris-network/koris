@@ -152,8 +152,10 @@ add-nodes:
 	KUBECONFIG=${KUBECONFIG} koris add --amount 2 de-nbg6-1a $(FLAVOR) tests/koris_test.yml
 	# wait for the 2 nodes to join.
 	# assert cluster has now 5 nodes
-	until [ $(kubectl get nodes --kubeconfig=${KUBECONFIG} | grep -c 5) -eq 5 ]; do
-		echo "waiting for nodes to join"
+	echo "waiting for nodes to join"; \
+	until [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} | grep node | grep Ready -c ) -eq 5 ]; do \
+		echo -n "."; \
+		sleep 1; \
 	done
 	@echo "all nodes successfully joined!"
 
