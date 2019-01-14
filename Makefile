@@ -124,6 +124,7 @@ integration-test: ## run the complete integration test from you local machine
 integration-test: \
 	reset-config \
 	launch-cluster \
+	add-nodes \
 	integration-run \
 	integration-wait \
 	integration-patch-wait \
@@ -146,12 +147,24 @@ launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
 	koris apply tests/koris_test.yml
 
+add-nodes: FLAVOR ?= ECS.UC1.4-4
+add-nodes:
+	KUBECONFIG=${KUBECONFIG} koris add --amount 2 de-nbg6-1a $(FLAVOR) tests/koris_test.yml
+	# wait for the 2 nodes to join.
+	# assert cluster has now 5 nodes
+	echo "waiting for nodes to join"; \
+	until [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} | grep node | grep Ready -c ) -eq 5 ]; do \
+		echo -n "."; \
+		sleep 1; \
+	done
+	@echo "all nodes successfully joined!"
+	@mv -v tests/koris_test.updated.yml tests/koris_test.yml
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."
 	for i in `seq 1 5`; do \
 		sleep 1; \
-	    kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
+		kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
 	done
 
 integration-run:

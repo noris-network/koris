@@ -103,7 +103,7 @@ def ci_first_master():
     ci = FirstMasterInit(create_key(),
                          CERTS['ca'],
                          CLOUD_CONFIG,
-                         hostnames,
+                         TEST_CLUSTER,
                          ips,
                          LB_IP,
                          "6443",
@@ -115,7 +115,7 @@ def ci_first_master():
 @pytest.fixture
 def ci_node():
     ci = NodeInit(
-        CERTS['ca'],
+        CERTS['ca'].cert,
         CLOUD_CONFIG,
         LB_IP,
         "6443",
