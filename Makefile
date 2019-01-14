@@ -147,7 +147,7 @@ launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
 	koris apply tests/koris_test.yml
 
-add-nodes: FLAVOR ?= ECS.C1.4-8
+add-nodes: FLAVOR ?= ECS.UC1.4-4
 add-nodes:
 	KUBECONFIG=${KUBECONFIG} koris add --amount 2 de-nbg6-1a $(FLAVOR) tests/koris_test.yml
 	# wait for the 2 nodes to join.
