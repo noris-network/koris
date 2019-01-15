@@ -325,7 +325,7 @@ class LoadBalancer:  # pragma: no coverage
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
             self._data = lb
-            self.pool = lb[0]['pools'][0]['id']
+            self.pool = lb['pools'][0]['id']
 
         return lb, fip_addr
 
