@@ -293,6 +293,40 @@ function get_calico(){
 }
 
 
+# fetch the manifest for flannel
+function get_flannel(){
+    while [ ! -r kube-flannel.yml ]; do
+         curl --retry 10 -sfLO https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
+    done
+}
+
+# get the correct network plugin
+function get_net_plugin(){
+    case "${POD_NETWORK}" in
+        "CALICO")
+            get_calico
+            ;;
+        "FLANNEL")
+            get_flannel
+            ;;
+    esac
+}
+
+
+# apply the correct network plugin
+function apply_net_plugin(){
+    case "${POD_NETWORK}" in
+        "CALICO")
+            echo "installing calico"
+            kubectl apply -f rbac-kdd.yaml
+            kubectl apply -f calico.yaml
+            ;;
+        "FLANNEL")
+            echo "installing flannel"
+            kubectl apply -f kube-flannel.yaml
+            ;;
+    esac
+}
 
 # enforce docker version
 function get_docker() {
@@ -316,8 +350,8 @@ function get_kubeadm() {
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
 function main() {
-    get_calico &
-    pid_get_calico=$!
+    get_net_plugin &
+    pid_get_net_plugin=$!
 
     get_docker
     get_kubeadm &
@@ -332,10 +366,8 @@ function main() {
     bootstrap_first_master kubeadm-${first_master}.yaml
     wait_for_etcd ${first_master}
 
-    wait $pid_get_calico
-    echo "installing calico"
-    kubectl apply -f rbac-kdd.yaml
-    kubectl apply -f calico.yaml
+    wait $pid_get_net_plugin
+    apply_net_plugin
 
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
         echo "bootstrapping master ${MASTERS[$i]}";
@@ -387,3 +419,5 @@ function install_deps() {
 cd /root
 
 main
+
+# vi: expandtab ts=4 sw=4 ai

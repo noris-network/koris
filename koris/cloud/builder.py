@@ -195,7 +195,7 @@ class NodeBuilder:
         return tasks
 
 
-class ControlPlaneBuilder:
+class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     """
     Interact with openstack and create a virtual machines with a volume,
     and network interface. The machines are provisioned with cloud-init.
@@ -224,7 +224,9 @@ class ControlPlaneBuilder:
         return list(self._info.distribute_management())
 
     def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
-                             lb_port, bootstrap_token, lb_dns=''):
+                             lb_port, bootstrap_token, lb_dns='',
+                             pod_subnet="10.233.0.0/16",
+                             pod_network="CALICO"):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -246,7 +248,9 @@ class ControlPlaneBuilder:
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
                                                cloud_config, masters,
                                                lb_ip, lb_port,
-                                               bootstrap_token, lb_dns))
+                                               bootstrap_token, lb_dns,
+                                               pod_subnet,
+                                               pod_network))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(cloud_config, ssh_key))
@@ -265,8 +269,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     Plan and build a kubernetes cluster in the cloud
     """
     def __init__(self, config):
-        if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
-            print(red("You must have an odd number (>1) of etcd machines!"))
+        if not (config['n-masters'] % 2 and config['n-masters'] >= 1):
+            print(red("You must have an odd number (>=1) of masters!"))
             sys.exit(2)
 
         self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
@@ -357,7 +361,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Waiting for the master machines to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(
             ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
-            bootstrap_token, lb_dns)
+            bootstrap_token, lb_dns,
+            config.get("pod_subnet", "10.233.0.0/16"),
+            config.get("pod_network", "CALICO"))
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 

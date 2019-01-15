@@ -235,6 +235,7 @@ class LoadBalancer:  # pragma: no coverage
     Thus we create a LoadBalancer, so we have it's IP. The IP
     of the LoadBalancer, is then stored in the SSL certificates.
     During the boot of the machines, we configure the LoadBalancer.
+
     """
 
     def __init__(self, config, client=None):
@@ -408,9 +409,11 @@ class LoadBalancer:  # pragma: no coverage
             - if healthmonitor in pool, delete it first
             - remove listener (LB is pending update)
             - remove LB (LB is pending delete)
+
         Args:
             client (neutron client)
             suffix (str) - the suffix of the name, appended to name
+
         """
         if not client:
             client = self.client
