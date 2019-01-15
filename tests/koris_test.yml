@@ -10,14 +10,14 @@ node_flavor: 'ECS.C1.4-8'
 private_net: 'korispipeline-office-net'
 # optionally specify the subnet name
 # subnet: 'subnet name'
-cluster-name: 'koris-pipe-line-e9aad22'
+cluster-name: '%%CLUSTER_NAME%%'
 availibility-zones:
  - de-nbg6-1b
  - de-nbg6-1a
-n-masters: 1
-n-nodes: 1
-n-etcds: 1
-keypair: otiram
+n-masters: 3
+n-nodes: 3
+n-etcds: 3
+keypair: kube
 #security_group: 'default'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
