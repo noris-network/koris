@@ -9,26 +9,38 @@ import random
 import string
 import sys
 import time
-
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.backends import default_backend
+import urllib
 
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
+from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
 from koris.util.util import get_logger
 from .openstack import OSClusterInfo, BuilderError
-from .openstack import (get_clients,
+from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer,
                         )
 
 LOGGER = get_logger(__name__)
 
 NOVA, NEUTRON, CINDER = get_clients()
+
+
+def get_server_range(servers, cluster_name, role, amount):
+    """
+    Given a list of servers find the last server name and add N more
+    """
+    servers = [s for s in servers if
+               s.name.endswith(cluster_name)]
+    servers = [s for s in servers if s.name.startswith(role)]
+
+    lastname = sorted(servers, key=lambda x: x.name)[-1].name
+    idx = int(lastname.split('-')[1])
+    return range(idx + 1, idx + amount + 1)
 
 
 class NodeBuilder:
@@ -47,6 +59,87 @@ class NodeBuilder:
         self.config = config
         self._info = osinfo
 
+    def create_new_nodes(self,
+                         role='node',
+                         zone=None,
+                         flavor=None,
+                         amount=1):
+        """
+        add additional nodes
+        """
+        nodes = [Instance(self._info.storage_client,
+                          self._info.compute_client,
+                          '%s-%d-%s' % (role, n, self.config['cluster-name']),
+                          self._info.net,
+                          zone,
+                          role,
+                          {'image': self._info.image,
+                           'class': self._info.storage_class},
+                          flavor
+                          ) for n in
+                 get_server_range(self._info.compute_client.servers.list(),
+                                  self.config['cluster-name'],
+                                  role,
+                                  amount)]
+        for node in nodes:
+            node.attach_port(self._info.netclient, self._info.net['id'],
+                             self._info.secgroups)
+        return nodes
+
+    def create_nodes_tasks(self,
+                           host,
+                           token,
+                           ca_info,
+                           role='node',
+                           flavor=None,
+                           zone=None,
+                           amount=1):
+        """
+        Create tasks for adding nodes when running ``koris add --args ...``
+
+        Args:
+            ca_cert (CertBundle.cert)
+            token (str)
+            discovery_hash (str)
+            host (str) - the address of the master or loadbalancer
+            flavor (str or None)
+            zone (str)
+
+        """
+
+        ca_cert = ca_info['ca_cert']
+        discovery_hash = ca_info['discovery_hash']
+
+        url = urllib.parse.urlparse(host)
+        host_addr = url.netloc.split(":")[0]
+        if ":" in url.netloc:
+            host_port = url.netloc.split(":")[-1]
+        else:
+            host_port = 6443
+
+        if flavor:
+            flavor = self._info.compute_client.flavors.find(name=flavor)
+        else:
+            flavor = self._info.node_flavor
+
+        nodes = self.create_new_nodes(role=role,
+                                      zone=zone,
+                                      amount=amount,
+                                      flavor=flavor)
+        nodes = self._create_nodes_tasks(ca_cert,
+                                         host_addr, host_port, token,
+                                         discovery_hash, nodes)
+        return nodes
+
+    @staticmethod
+    def launch_new_nodes(node_tasks):
+        """
+        Launch all nodes when running ``koris add ...``
+        """
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.gather(*node_tasks))
+        loop.close()
+
     def get_nodes(self):
         """
         get information on the nodes from openstack.
@@ -57,13 +150,32 @@ class NodeBuilder:
 
         return list(self._info.distribute_nodes())
 
-    def create_nodes_tasks(self, ca_bundle, lb_ip, lb_port, bootstrap_token,
-                           discovery_hash):
+    def create_initial_nodes(self,
+                             ca_bundle,
+                             lb_ip,
+                             lb_port,
+                             bootstrap_token,
+                             discovery_hash,
+                             ):
+        """
+        Create all initial nodes when running ``koris apply <config>``
+        """
+        nodes = self.get_nodes()
+        nodes = self._create_nodes_tasks(ca_bundle.cert,
+                                         lb_ip, lb_port, bootstrap_token,
+                                         discovery_hash, nodes)
+        return nodes
+
+    def _create_nodes_tasks(self,
+                            ca_cert,
+                            lb_ip,
+                            lb_port,
+                            bootstrap_token,
+                            discovery_hash,
+                            nodes):
         """
         Create future tasks for creating the cluster worker nodes
         """
-        nodes = self.get_nodes()
-
         loop = asyncio.get_event_loop()
         tasks = []
 
@@ -72,11 +184,11 @@ class NodeBuilder:
                 raise BuilderError("Node {} already exists! Skipping "
                                    "creation of the cluster.".format(node))
 
-            userdata = str(NodeInit(ca_bundle, self._info, lb_ip, lb_port,
+            userdata = str(NodeInit(ca_cert, self._info, lb_ip, lb_port,
                                     bootstrap_token,
                                     discovery_hash))
             tasks.append(loop.create_task(
-                node.create(self._info.node_flavor, self._info.secgroups,
+                node.create(node.flavor, self._info.secgroups,
                             self._info.keypair, userdata)
             ))
 
@@ -116,13 +228,11 @@ class ControlPlaneBuilder:
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
+
         masters = self.get_masters()
         if not len(masters) % 2:
             LOGGER.warnning("The number of masters should be odd!")
             return []
-
-        master_ips = [master.ip_address for master in masters]
-        master_names = [master.name for master in masters]
 
         loop = asyncio.get_event_loop()
         tasks = []
@@ -134,8 +244,8 @@ class ControlPlaneBuilder:
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
-                                               cloud_config, master_ips,
-                                               master_names, lb_ip, lb_port,
+                                               cloud_config, masters,
+                                               lb_ip, lb_port,
                                                bootstrap_token, lb_dns))
             else:
                 # create userdata for following master nodes if not existing
@@ -179,14 +289,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     @staticmethod
     def calculate_discovery_hash(ca_bundle):
         """
-        calculate the discovery hash for join
+        calculate the discovery hash based on the ca_bundle
         """
-        pub_key = ca_bundle.cert.public_key()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(pub_key.public_bytes(
-            serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo))
-        return digest.finalize().hex()
+        return get_discovery_hash(ca_bundle.cert)
 
     @staticmethod
     def create_ca():
@@ -265,7 +370,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
-        node_tasks = self.nodes_builder.create_nodes_tasks(
+        node_tasks = self.nodes_builder.create_initial_nodes(
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
         node_tasks.append(configure_lb_task)
@@ -302,3 +407,4 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # At this point, we're ready with our cluster
         LOGGER.info("Kubernetes cluster is ready to use !!!")
+        loop.close()
