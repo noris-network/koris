@@ -78,7 +78,7 @@ def remove_cluster(config, nova, neutron, cinder):
     # delete volumes
 
     loop.close()
-    for vol in cinder.volumes.list()
+    for vol in cinder.volumes.list():
         try:
             if config['cluster-name'] in vol.name and vol.status != 'in-use':
                 vol.delete()
