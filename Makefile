@@ -44,6 +44,7 @@ BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sonobuoy_0.12.1_linux_amd64.tar.gz
 SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
+CIS_VERSION=1.11
 
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -123,6 +124,7 @@ integration-test: ## run the complete integration test from you local machine
 integration-test: \
 	reset-config \
 	launch-cluster \
+	add-nodes \
 	integration-run \
 	integration-wait \
 	integration-patch-wait \
@@ -145,12 +147,24 @@ launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
 	koris apply tests/koris_test.yml
 
+add-nodes: FLAVOR ?= ECS.UC1.4-4
+add-nodes:
+	KUBECONFIG=${KUBECONFIG} koris add --amount 2 de-nbg6-1a $(FLAVOR) tests/koris_test.yml
+	# wait for the 2 nodes to join.
+	# assert cluster has now 5 nodes
+	echo "waiting for nodes to join"; \
+	until [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} | grep node | grep Ready -c ) -eq 5 ]; do \
+		echo -n "."; \
+		sleep 1; \
+	done
+	@echo "all nodes successfully joined!"
+	@mv -v tests/koris_test.updated.yml tests/koris_test.yml
 
 show-nodes:
-	@echo "Waiting for nodes to join ..." 
+	@echo "Waiting for nodes to join ..."
 	for i in `seq 1 5`; do \
 		sleep 1; \
-	    kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
+		kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
 	done
 
 integration-run:
@@ -222,8 +236,8 @@ curl-run:
 
 check-cluster-dns:
 	dns_check_hostname="kubernetes"; \
-    dns_check_namespace="default"; \
-    dns_check_cluster_domain="svc.cluster.local"; \
+        dns_check_namespace="default"; \
+        dns_check_cluster_domain="svc.cluster.local"; \
 	dns_check_with_search_domains="$${dns_check_hostname}.$${dns_check_namespace}"; \
 	dns_check_fqdn="$${dns_check_with_search_domains}.$${dns_check_cluster_domain}"; \
 	dns_check="dig +noall +answer -q $${dns_check_fqdn} -t A"; \
@@ -268,20 +282,31 @@ clean-lb-after-integration-test:
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
-# loadbalancer koris-pipe-line-6e754fe-7008-lb one would need to set 
+# loadbalancer koris-pipe-line-6e754fe-7008-lb one would need to set
 # LOADBALANCER_NAME to koris-pipe-line-6e754fe-7008 (without the -lb)
 clean-lb: ## delete a loadbalancer with all it's components
 	$(call ndef,LOADBALANCER_NAME)
 	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy
 
-security-checks:
+security-checks: security-checks-nodes security-checks-masters
+
+security-checks-masters: OVERRIDES="{ \"apiVersion\": \"v1\", \
+	\"spec\": { \"hostPID\": true, \"nodeSelector\": \
+	{ \"node-role.kubernetes.io/master\": \"\" }, \
+	\"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \
+	                  \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }"
+security-checks-masters:
 	echo "Running security checks for K8S master nodes..."
-	echo "TODO: If we have a self-containing cluster, then we can acitvate the following comment in the source code."
-	# kubectl run --rm -i -t kube-bench-master --image=aquasec/kube-bench:latest --restart=Never \
-	#	--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true, \"nodeSelector\": { \"kubernetes.io/role\": \"master\" }, \"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }" -- master --version 1.11
+	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-master \
+		--image=aquasec/kube-bench:latest --restart=Never \
+		--overrides=$(OVERRIDES) -- master --version ${CIS_VERSION}
+	sleep 30
+	kubectl logs kube-bench-master --kubeconfig=${KUBECONFIG}
+
+security-checks-nodes:
 	echo "Running security checks for K8S worker nodes..."
 	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
-		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version 1.11
+		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version ${CIS_VERSION}
 	sleep 30
 	kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 

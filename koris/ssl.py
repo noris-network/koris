@@ -1,6 +1,8 @@
 """
 ssl.py hold all ssl certifcates creation utilities and classes
 """
+# pylint: disable=too-many-locals,too-many-arguments
+
 import base64
 import datetime
 import ipaddress
@@ -265,12 +267,30 @@ def write_cert(cert, filename):  # pragma: no coverage
         fh.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
+def discovery_hash(cert):
+    """
+    calculate a discovery hash based on the cert's public key
+    """
+    pub_key = cert.public_key()
+    digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+    digest.update(pub_key.public_bytes(
+        serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo))
+    return digest.finalize().hex()
+
+
 class CertBundle:
+    """
+    a simple class to hold a certifacte data with its own key
+    """
 
     @classmethod
     def create_signed(cls, ca_bundle, country, state, locality,
                       orga, unit, name, hosts, ips):
 
+        """
+        create a sign certificate
+        """
         key = create_key()
         cert = create_certificate(ca_bundle,
                                   key.public_key(),
@@ -302,6 +322,9 @@ class CertBundle:
         """
         save a certificate bundle to the file system
         """
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+
         write_key(self.key,
                   filename=os.path.join(directory, name + key_suffix))
         write_cert(self.cert, os.path.join(directory, name + cert_suffix))
@@ -318,9 +341,9 @@ def read_cert(cert):  # pragma: no coverage
         cert (inst) - a certificate instance
     """
 
-    with open(cert, "rb") as f:
+    with open(cert, "rb") as fh:
         cert = x509.load_pem_x509_certificate(
-            f.read(), default_backend())
+            fh.read(), default_backend())
     return cert
 
 
@@ -407,7 +430,6 @@ def create_certs(config, names, ips, write=True, ca_bundle=None):
     nodes = []
     node_bundles = []
     node_ip = None
-    # todo: add node_ip
     for node in nodes:
         node_bundles.append(CertBundle.create_signed(ca_bundle,
                                                      country,

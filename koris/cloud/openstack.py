@@ -5,19 +5,24 @@ functions and classes to interact with openstack
 import asyncio
 import base64
 import copy
+import logging
 import os
 import re
 import sys
 import textwrap
 
 from functools import lru_cache
+
+import novaclient
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
 
+import cinderclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import Conflict as NeutronConflict
 from neutronclient.common.exceptions import StateInvalidClient
+from neutronclient.common.exceptions import NotFound
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -26,8 +31,20 @@ from koris.cloud import OpenStackAPI
 from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
-import logging
+
 LOGGER = get_logger(__name__, level=logging.DEBUG)
+
+if getattr(sys, 'frozen', False):
+    def monkey_patch():
+        """monkey patch get available versions, because the original
+        code uses __file__ which is not available in frozen build"""
+        return ['2', '1']
+    novaclient.api_versions.get_available_major_versions = monkey_patch
+
+    def monkey_patch_cider():
+        """the same spiel for cinder"""
+        return ['3']
+    cinderclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
 
 
 def remove_cluster(config, nova, neutron, cinder):
@@ -42,8 +59,7 @@ def remove_cluster(config, nova, neutron, cinder):
     tasks += [host.delete(neutron) for host in workers]
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
-    lbinst = LoadBalancer(config)
-    lbinst.delete(neutron)
+    LoadBalancer(config, neutron).delete()
     connection = OpenStackAPI.connect()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})
@@ -61,16 +77,16 @@ def remove_cluster(config, nova, neutron, cinder):
     # delete volumes
 
     loop.close()
-    volumes = [vol for vol in cinder.volumes.list()
-               if config['cluster-name'] in vol.name]
-    for vol in volumes:
-        if vol.status != 'in-use':
-            vol.delete()
+    for vol in cinder.volumes.list():
+        try:
+            if config['cluster-name'] in vol.name and vol.status != 'in-use':
+                vol.delete()
+        except TypeError:
+            continue
 
 
 class BuilderError(Exception):
     """Raise a custom error if the build fails"""
-    pass
 
 
 class Instance:
@@ -79,33 +95,34 @@ class Instance:
     """
 
     def __init__(self, cinder, nova, name, network, zone, role,
-                 volume_config):
+                 volume_config, flavor):
         self.cinder = cinder
         self.nova = nova
         self.name = name
         self.network = network
         self.zone = zone
+        self.flavor = flavor
         self.volume_size = volume_config.get('size', '25')
         self.volume_class = volume_config.get('class')
         self.volume_img = volume_config.get('image')
         self.role = role
-        self._ports = []
+        self.ports = []
         self._ip_address = None
-        self._exists = False
+        self.exists = False
 
     @property
     def nics(self):
         """return all network interfaces attached to the instance"""
         return [{'net-id': self.network['id'],
-                 'port-id': self._ports[0]['port']['id']}]
+                 'port-id': self.ports[0]['port']['id']}]
 
     @property
     def ip_address(self):
         """return the IP address of the first NIC"""
         try:
-            return self._ports[0]['port']['fixed_ips'][0]['ip_address']
+            return self.ports[0]['port']['fixed_ips'][0]['ip_address']
         except TypeError:
-            return self._ports[0].fixed_ips[0]['ip_address']
+            return self.ports[0].fixed_ips[0]['ip_address']
         except IndexError:
             raise AttributeError("Instance has no ports attached")
 
@@ -114,7 +131,7 @@ class Instance:
         port = netclient.create_port({"port": {"admin_state_up": True,
                                                "network_id": net,
                                                "security_groups": secgroups}})
-        self._ports.append(port)
+        self.ports.append(port)
 
     async def _create_volume(self):  # pragma: no coverage
         bdm_v2 = {
@@ -149,9 +166,10 @@ class Instance:
     async def create(self, flavor, secgroups, keypair, userdata):  # pragma: no coverage
         """
         Boot the instance on openstack
+        returns the OpenStack instance
         """
-        if self._exists:
-            return
+        if self.exists:
+            return self
 
         volume_data = await self._create_volume()
 
@@ -193,6 +211,9 @@ class Instance:
             "Instance booted! Name: %s, IP: %s, Status : %s",
             self.name, instance.status, self._ip_address)
 
+        self.exists = True
+        return self
+
     async def delete(self, netclient):
         """stop and terminate an instance"""
         try:
@@ -200,7 +221,7 @@ class Instance:
             nics = [nic for nic in server.interface_list()]
             server.delete()
             list(netclient.delete_port(nic.id) for nic in nics)
-            LOGGER.info("deleted %s ..." % server.name)
+            LOGGER.info("deleted %s ...", server.name)
         except NovaNotFound:
             pass
 
@@ -216,17 +237,20 @@ class LoadBalancer:  # pragma: no coverage
     During the boot of the machines, we configure the LoadBalancer.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, client=None):
         self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
         self.subnet = config.get('subnet')
-        # these attributes are set after create
+        # these attributes are set after creation
+        self.pool = None
         self._id = None
         self._subnet_id = None
         self._data = None
         self._existing_floating_ip = None
+        self.members = []
+        self.client = client
 
     async def configure(self, client, master_ips):
         """
@@ -255,32 +279,83 @@ class LoadBalancer:  # pragma: no coverage
             for member in pool['members']:
                 self._del_member(client, member['id'], pool['id'])
 
-        self._add_members(client, pool['id'], master_ips)
+        self.pool = pool['id']
+
+        self.add_member(client, pool['id'], master_ips[0])
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor ...")
         else:
             self._add_health_monitor(client, pool['id'])
             LOGGER.info("Added health monitor ...")
 
+    def get(self, client=None):
+        """
+        get loadbalancer information
+        """
+        if client:
+            self.client = client
+        lb = self.client.list_lbaas_loadbalancers(retrieve_all=True,
+                                                  name=self.name)['loadbalancers']
+        if lb:
+            lb = lb[0]
+            self._id = lb['id']
+            self._subnet_id = lb['vip_subnet_id']
+            self._data = lb
+            try:
+                self.pool = lb['pools'][0]['id']
+            except (IndexError, KeyError):
+                self.pool = None
+
+        return lb
+
     def get_or_create(self, client, provider='octavia'):
         """
-        find if a load balancer exists
+        find if a load balancer exists, if not create it
         """
-        lb = client.list_lbaas_loadbalancers(retrieve_all=True,
-                                             name=self.name)['loadbalancers']
-        if not lb or 'DELETE' in lb[0]['provisioning_status']:
+        lb = self.get(client)
+
+        if not lb or 'DELETE' in lb['provisioning_status']:
             lb, fip_addr = self.create(client, provider=provider)
         else:
             LOGGER.info("Reusing an existing loadbalancer")
             self._existing_floating_ip = None
-            fip_addr = self._floating_ip_address(client, lb[0])
+            fip_addr = self._floating_ip_address(client, lb)
             LOGGER.info("Loadbalancer IP: %s", fip_addr)
             lb = lb[0]
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
             self._data = lb
+            self.pool = lb['pools'][0]['id']
 
         return lb, fip_addr
+
+    @property
+    def ip_address(self):
+        """
+        return the loadbalancer's IP address or it's Floating IP address
+        """
+        if not self._data:
+            self.get(self.client)
+
+        if self._data['vip_address']:
+            return self._data['vip_address']
+
+        if self._existing_floating_ip:
+            return self._existing_floating_ip
+
+        try:
+            floatingips = self.client.list_floatingips(retrieve_all=True,
+                                                       port_id=self._data['vip_port_id'])
+        except (AttributeError, TypeError):
+            pass
+
+        if floatingips['floatingips']:
+            self._existing_floating_ip = floatingips[
+                'floatingips'][0]['floating_ip_address']
+
+            return self._existing_floating_ip
+
+        return None
 
     def _floating_ip_address(self, client, lb):
         floatingips = client.list_floatingips(retrieve_all=True,
@@ -329,7 +404,7 @@ class LoadBalancer:  # pragma: no coverage
         return lb['loadbalancer'], fip_addr
 
     @retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
-    def delete(self, client):
+    def delete(self, client=None):
         """
         Delete the cluster API loadbalancer
 
@@ -342,31 +417,40 @@ class LoadBalancer:  # pragma: no coverage
             client (neutron client)
             suffix (str) - the suffix of the name, appended to name
         """
+        if not client:
+            client = self.client
+
         lb = client.list_lbaas_loadbalancers(retrieve_all=True,
                                              name=self.name)['loadbalancers']
         if not lb or 'DELETE' in lb[0]['provisioning_status']:
-            return
+            LOGGER.warning("LB %s was not found", self.name)
+        else:
+            lb = lb[0]
+            self._id = lb['id']
 
-        lb = lb[0]
-        self._id = lb['id']
+            if lb['pools']:
+                self._del_pool(client)
+            if lb['listeners']:
+                self._del_listener(client)
 
-        if lb['pools']:
-            self._del_pool(client)
-        if lb['listeners']:
-            self._del_listener(client)
-
-        self._del_loadbalancer(client)
+            self._del_loadbalancer(client)
 
     def _associate_floating_ip(self, client, loadbalancer):
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
             valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
                                 self.floatingip)
+            if not valid_ip:
+                LOGGER.error("Please specify a valid IP address")
+                sys.exit(1)
             if self._existing_floating_ip == self.floatingip:
                 return self._existing_floating_ip
 
             fip = client.list_floatingips(
                 floating_ip_address=self.floatingip)['floatingips']
+            if not fip:
+                LOGGER.error("Could not find %s in the pool", self.floatingip)
+                sys.exit(1)
             fip = fip[0]
         if not fip:
             fips = client.list_floatingips()['floatingips']
@@ -409,6 +493,7 @@ class LoadBalancer:  # pragma: no coverage
                       "protocol": "HTTPS",
                       "name": "%s-pool" % self.name},
              })
+        self.pool = pool['pool']
 
         return pool['pool']
 
@@ -422,19 +507,20 @@ class LoadBalancer:  # pragma: no coverage
               "name": "%s-health" % self.name}})
 
     @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
-    def _add_member(self, client, pool_id, ip_addr):
-        client.create_lbaas_member(pool_id,
-                                   {'member':
-                                    {'subnet_id': self._subnet_id,
-                                     'protocol_port': 6443,
-                                     'address': ip_addr,
-                                     }})
-
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
-    def _add_members(self, client, pool_id, master_ips):
-        for ip in master_ips:
-            self._add_member(client, pool_id, ip)
-            LOGGER.info("added pool member %s ...", ip)
+    def add_member(self, client, pool_id, ip_addr):
+        """
+        add listener to a loadbalancers pool.
+        """
+        try:
+            client.create_lbaas_member(pool_id,
+                                       {'member':
+                                        {'subnet_id': self._subnet_id,
+                                         'protocol_port': 6443,
+                                         'address': ip_addr,
+                                         }})
+            self.members.append(ip_addr)
+        except NeutronConflict:
+            pass
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
@@ -442,7 +528,10 @@ class LoadBalancer:  # pragma: no coverage
         """
         delete a LB health monitor
         """
-        client.delete_lbaas_healthmonitor(id_)
+        try:
+            client.delete_lbaas_healthmonitor(id_)
+        except NotFound:
+            LOGGER.debug("Healthmonitor not found ...")
         LOGGER.info("deleted healthmonitor ...")
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1,
@@ -457,8 +546,10 @@ class LoadBalancer:  # pragma: no coverage
             if lb_id in pool['loadbalancers']:
                 if pool['healthmonitor_id']:
                     self._del_health_monitor(client, pool['healthmonitor_id'])
-
-                client.delete_lbaas_pool(pool['id'])
+                try:
+                    client.delete_lbaas_pool(pool['id'])
+                except NotFound:
+                    LOGGER.debug("Pool %s not found", pool['id'])
                 LOGGER.info("deleted pool ...")
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1,
@@ -470,35 +561,47 @@ class LoadBalancer:  # pragma: no coverage
         listeners = listeners[0]['listeners']
         for item in listeners:
             if lb_id in item['loadbalancers']:
-                client.delete_listener(item['id'])
+                try:
+                    client.delete_listener(item['id'])
+                except NotFound:
+                    LOGGER.debug("Listener %s not found", item['id'])
                 LOGGER.info("Deleted listener...")
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient),
            tries=12, backoff=1, logger=LOGGER.debug)
     def _del_loadbalancer(self, client):
-        client.delete_loadbalancer(self._id)
+        try:
+            client.delete_loadbalancer(self._id)
+        except NotFound:
+            LOGGER.debug("Could not find loadbalancer %s", self._id)
         LOGGER.info("Deleted loadbalancer...")
 
     @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10)
-    def _del_member(self, client, member_id, pool_id):
-        client.delete_lbaas_member(member_id, pool_id)
+    def _del_member(self, client, member_id, pool_id):  # pylint: disable=no-self-use
+        try:
+            client.delete_lbaas_member(member_id, pool_id)
+        except NotFound:
+            pass
 
 
 class SecurityGroup:
+    """
+    A class to create and configure a security group in openstack
+    """
 
     def __init__(self, neutron_client, name, subnet=None):
         self.client = neutron_client
         self.name = name
         self.subnet = subnet
-        self._id = None
-        self._exists = False
+        self.id = None
+        self.exists = False
 
     def add_sec_rule(self, **kwargs):
         """
         add a security group rule
         """
         try:
-            kwargs.update({'security_group_id': self._id})
+            kwargs.update({'security_group_id': self.id})
             self.client.create_security_group_rule({'security_group_rule': kwargs})
         except NeutronConflict:
             kwargs.pop('security_group_id')
@@ -508,7 +611,7 @@ class SecurityGroup:
         """
         delete security rule
         """
-        connection.delete_security_group_rule(self._id)
+        connection.delete_security_group_rule(self.id)
 
     @lru_cache()
     def get_or_create_sec_group(self, name):
@@ -528,15 +631,15 @@ class SecurityGroup:
         secgroup = next(secgroup)['security_groups']
 
         if secgroup:
-            self._exists = True
-            self._id = secgroup[0]['id']
+            self.exists = True
+            self.id = secgroup[0]['id']
             return secgroup[0]
 
         secgroup = self.client.create_security_group(
             {'security_group': {'name': name}})['security_group']
 
-        self._id = secgroup['id']
-        return
+        self.id = secgroup['id']
+        return {}
 
     def configure(self):
         """
@@ -612,7 +715,6 @@ def get_clients():
 
     This should be replaced in the future with ``openstack.connect``
     """
-
     try:
         auth = identity.Password(**read_os_auth_variables())
         sess = session.Session(auth=auth)
@@ -691,9 +793,7 @@ def distribute_host_zones(hosts, zones):
     if len(zones) == len(hosts):
         return list(zip(hosts, zones))
 
-    n = len(zones)
-    hosts = [hosts[start::len(zones)] for start in range(n)]
-
+    hosts = [hosts[start::len(zones)] for start in range(len(zones))]
     return list(zip(hosts, zones))
 
 
@@ -717,7 +817,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
         secgroup.get_or_create_sec_group(config['cluster-name'])
         self.secgroup = secgroup
-        self.secgroups = [secgroup._id]
+        self.secgroups = [secgroup.id]
 
         self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
         if 'subnet' in config:
@@ -737,7 +837,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._cinderclient = cinder_client
 
     @lru_cache()
-    def _get_or_create(self, hostname, zone, role):
+    def _get_or_create(self, hostname, zone, role, flavor):
         """
         Find if a instance exists Openstack.
 
@@ -753,9 +853,10 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             self.net,
                             zone,
                             role,
-                            volume_config)
-            inst._ports.append(_server.interface_list()[0])
-            inst._exists = True
+                            volume_config,
+                            _server.flavor)
+            inst.ports.append(_server.interface_list()[0])
+            inst.exists = True
         except NovaNotFound:
             inst = Instance(self._cinderclient,
                             self._novaclient,
@@ -763,11 +864,27 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             self.net,
                             zone,
                             role,
-                            volume_config)
+                            volume_config,
+                            flavor)
             inst.attach_port(self._neutronclient,
                              self.net['id'],
                              self.secgroups)
         return inst
+
+    @property
+    def netclient(self):
+        """return the current network client"""
+        return self._neutronclient
+
+    @property
+    def compute_client(self):
+        """return the current compute client"""
+        return self._novaclient
+
+    @property
+    def storage_client(self):
+        """return the current storage client"""
+        return self._cinderclient
 
     @property
     def nodes_names(self):
@@ -786,7 +903,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         mz = list(distribute_host_zones(self.management_names, self.azones))
         for hosts, zone in mz:
             for host in hosts:
-                yield self._get_or_create(host, zone, 'master')
+                yield self._get_or_create(host, zone, 'master', self.master_flavor.id)
 
     def distribute_nodes(self):
         """
@@ -795,4 +912,4 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         hz = list(distribute_host_zones(self.nodes_names, self.azones))
         for hosts, zone in hz:
             for host in hosts:
-                yield self._get_or_create(host, zone, 'node')
+                yield self._get_or_create(host, zone, 'node', self.node_flavor.id)

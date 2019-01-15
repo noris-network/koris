@@ -1,4 +1,4 @@
-const regex = /v\d\.\d{1,2}\.\d{1,2}/gm;
+const regex = /v\d\.\d{1,2}\.\d{1,2}\w/gm;
 let title = $(document).find("title").text();
 let version = title.match(regex)[0].substring(1,);
 

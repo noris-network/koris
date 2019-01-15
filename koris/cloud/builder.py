@@ -5,30 +5,42 @@ Builder
 Build a kubernetes cluster on a cloud
 """
 import asyncio
-import base64
-import os
-import uuid
+import random
+import string
 import sys
 import time
-
-from koris.deploy.k8s import K8S
+import urllib
 
 from koris.cli import write_kubeconfig
-from koris.provision.cloud_init import MasterInit, NodeInit
-from koris.ssl import create_certs, b64_key, b64_cert, create_key, create_ca, CertBundle
+from koris.deploy.k8s import K8S
+from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
+from koris.ssl import create_key, create_ca, CertBundle
+from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
-from koris.util.util import (get_logger,
-                             get_token_csv)
-from .openstack import OSClusterInfo
-from .openstack import (get_clients,
+from koris.util.util import get_logger
+from .openstack import OSClusterInfo, BuilderError
+from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer,
                         )
 
 LOGGER = get_logger(__name__)
 
 NOVA, NEUTRON, CINDER = get_clients()
+
+
+def get_server_range(servers, cluster_name, role, amount):
+    """
+    Given a list of servers find the last server name and add N more
+    """
+    servers = [s for s in servers if
+               s.name.endswith(cluster_name)]
+    servers = [s for s in servers if s.name.startswith(role)]
+
+    lastname = sorted(servers, key=lambda x: x.name)[-1].name
+    idx = int(lastname.split('-')[1])
+    return range(idx + 1, idx + amount + 1)
 
 
 class NodeBuilder:
@@ -47,30 +59,86 @@ class NodeBuilder:
         self.config = config
         self._info = osinfo
 
-    def create_userdata(self, nodes, etcd_cluster_info,
-                        cert_bundle, **kwargs):
+    def create_new_nodes(self,
+                         role='node',
+                         zone=None,
+                         flavor=None,
+                         amount=1):
         """
-        create the userdata which is given to cloud init
+        add additional nodes
+        """
+        nodes = [Instance(self._info.storage_client,
+                          self._info.compute_client,
+                          '%s-%d-%s' % (role, n, self.config['cluster-name']),
+                          self._info.net,
+                          zone,
+                          role,
+                          {'image': self._info.image,
+                           'class': self._info.storage_class},
+                          flavor
+                          ) for n in
+                 get_server_range(self._info.compute_client.servers.list(),
+                                  self.config['cluster-name'],
+                                  role,
+                                  amount)]
+        for node in nodes:
+            node.attach_port(self._info.netclient, self._info.net['id'],
+                             self._info.secgroups)
+        return nodes
+
+    def create_nodes_tasks(self,
+                           host,
+                           token,
+                           ca_info,
+                           role='node',
+                           flavor=None,
+                           zone=None,
+                           amount=1):
+        """
+        Create tasks for adding nodes when running ``koris add --args ...``
 
         Args:
-            nodes - a list of koris.cloud.openstack.Instance
-            etcd_cluster_info - a list of EtcServer instances.
-            This is need since calico communicates with etcd.
+            ca_cert (CertBundle.cert)
+            token (str)
+            discovery_hash (str)
+            host (str) - the address of the master or loadbalancer
+            flavor (str or None)
+            zone (str)
+
         """
-        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
 
-        kubelet_token = kwargs.get('kubelet_token')
-        ca_cert = kwargs.get('ca_cert')
-        calico_token = kwargs.get('calico_token')
-        service_account_bundle = kwargs.get('service_account_bundle')
-        lb_ip = kwargs.get("lb_ip")
+        ca_cert = ca_info['ca_cert']
+        discovery_hash = ca_info['discovery_hash']
 
-        for node in nodes:
-            userdata = str(NodeInit(node, kubelet_token, ca_cert,
-                                    cert_bundle, service_account_bundle,
-                                    etcd_cluster_info, calico_token, lb_ip,
-                                    cloud_provider=cloud_provider_info))
-            yield userdata
+        url = urllib.parse.urlparse(host)
+        host_addr = url.netloc.split(":")[0]
+        if ":" in url.netloc:
+            host_port = url.netloc.split(":")[-1]
+        else:
+            host_port = 6443
+
+        if flavor:
+            flavor = self._info.compute_client.flavors.find(name=flavor)
+        else:
+            flavor = self._info.node_flavor
+
+        nodes = self.create_new_nodes(role=role,
+                                      zone=zone,
+                                      amount=amount,
+                                      flavor=flavor)
+        nodes = self._create_nodes_tasks(ca_cert,
+                                         host_addr, host_port, token,
+                                         discovery_hash, nodes)
+        return nodes
+
+    @staticmethod
+    def launch_new_nodes(node_tasks):
+        """
+        Launch all nodes when running ``koris add ...``
+        """
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.gather(*node_tasks))
+        loop.close()
 
     def get_nodes(self):
         """
@@ -82,42 +150,47 @@ class NodeBuilder:
 
         return list(self._info.distribute_nodes())
 
-    def create_nodes_tasks(self, certs,
-                           kubelet_token,
-                           calico_token,
-                           etcd_host_list,
-                           lb_ip,
-                           ):
+    def create_initial_nodes(self,
+                             ca_bundle,
+                             lb_ip,
+                             lb_port,
+                             bootstrap_token,
+                             discovery_hash,
+                             ):
+        """
+        Create all initial nodes when running ``koris apply <config>``
+        """
+        nodes = self.get_nodes()
+        nodes = self._create_nodes_tasks(ca_bundle.cert,
+                                         lb_ip, lb_port, bootstrap_token,
+                                         discovery_hash, nodes)
+        return nodes
+
+    def _create_nodes_tasks(self,
+                            ca_cert,
+                            lb_ip,
+                            lb_port,
+                            bootstrap_token,
+                            discovery_hash,
+                            nodes):
         """
         Create future tasks for creating the cluster worker nodes
         """
-        cloud_provider_info = OSCloudConfig(self._info.subnet_id)
-
-        node_args = {'kubelet_token': kubelet_token,
-                     'etcd_cluster_info': etcd_host_list,
-                     'calico_token': calico_token,
-                     }
-
-        nodes = self.get_nodes()
-        node_args.update({
-            'nodes': nodes,
-            'ca_cert': certs['ca'],
-            'service_account_bundle': certs[
-                'service-account'],  # noqa
-            'cert_bundle': certs['k8s'],
-            'lb_ip': lb_ip,
-            'cloud_provider': cloud_provider_info})
-
-        user_data = self.create_userdata(**node_args)
-
         loop = asyncio.get_event_loop()
-        tasks = [loop.create_task(
-            node.create(self._info.node_flavor,
-                        self._info.secgroups,
-                        self._info.keypair,
-                        data
-                        )) for node, data in zip(nodes, user_data)
-                 if not node._exists]
+        tasks = []
+
+        for node in nodes:
+            if node.exists:
+                raise BuilderError("Node {} already exists! Skipping "
+                                   "creation of the cluster.".format(node))
+
+            userdata = str(NodeInit(ca_cert, self._info, lb_ip, lb_port,
+                                    bootstrap_token,
+                                    discovery_hash))
+            tasks.append(loop.create_task(
+                node.create(node.flavor, self._info.secgroups,
+                            self._info.keypair, userdata)
+            ))
 
         return tasks
 
@@ -137,42 +210,9 @@ class ControlPlaneBuilder:
     """
 
     def __init__(self, config, osinfo):
-
-        LOGGER.info(info(cyan(
-            "gathering control plane information from openstack ...")))
+        LOGGER.info("gathering control plane information from openstack ...")
         self._config = config
         self._info = osinfo
-
-    def create_userdata(self,
-                        etcds,
-                        admin_token,
-                        calico_token,
-                        kubelet_token,
-                        certs):
-        """
-        create the userdata which is given to cloud init
-
-        Args:
-            etcds - a list of Instance instances
-        """
-        # generate a random string
-        # this should be the equal of
-        # ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
-
-        encryption_key = base64.b64encode(
-            uuid.uuid4().hex[:32].encode()).decode()
-        cloud_provider = OSCloudConfig(self._info.subnet_id)
-
-        token_csv_data = get_token_csv(admin_token,
-                                       calico_token,
-                                       kubelet_token)
-
-        for host in etcds:
-            userdata = str(MasterInit(host.name, etcds, certs,
-                                      encryption_key,
-                                      cloud_provider,
-                                      token_csv_data=token_csv_data))
-            yield userdata
 
     def get_masters(self):
         """
@@ -183,32 +223,38 @@ class ControlPlaneBuilder:
         """
         return list(self._info.distribute_management())
 
-    def create_masters_tasks(self, certs,
-                             kubelet_token,
-                             calico_token,
-                             admin_token,
-                             ):
+    def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
+                             lb_port, bootstrap_token, lb_dns=''):
         """
-        Create future tasks for creating the cluster control plane nodes
+        Create future tasks for creating the cluster control plane nodesself.
         """
 
         masters = self.get_masters()
-
-        user_data = self.create_userdata(
-            masters,
-            admin_token,
-            calico_token,
-            kubelet_token,
-            certs)
+        if not len(masters) % 2:
+            LOGGER.warnning("The number of masters should be odd!")
+            return []
 
         loop = asyncio.get_event_loop()
-        tasks = [loop.create_task(
-            master.create(self._info.master_flavor,
-                          self._info.secgroups,
-                          self._info.keypair,
-                          data
-                          )) for master, data in zip(masters, user_data) if
-                 not master._exists]
+        tasks = []
+
+        for index, master in enumerate(masters):
+            if master.exists:
+                raise BuilderError("Node {} already exists! Skipping "
+                                   "creation of the cluster.".format(master))
+            if not index:
+                # create userdata for first master node if not existing
+                userdata = str(FirstMasterInit(ssh_key, ca_bundle,
+                                               cloud_config, masters,
+                                               lb_ip, lb_port,
+                                               bootstrap_token, lb_dns))
+            else:
+                # create userdata for following master nodes if not existing
+                userdata = str(NthMasterInit(cloud_config, ssh_key))
+
+            tasks.append(loop.create_task(
+                master.create(self._info.master_flavor, self._info.secgroups,
+                              self._info.keypair, userdata)
+            ))
 
         return tasks
 
@@ -224,33 +270,28 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             sys.exit(2)
 
         self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
-        LOGGER.debug(info("Done collecting infromation from OpenStack"))
+        LOGGER.debug(info("Done collecting information from OpenStack"))
 
         self.nodes_builder = NodeBuilder(config, self.info)
         self.masters_builder = ControlPlaneBuilder(config, self.info)
 
     @staticmethod
-    def _create_tokes():
-        for _ in range(3):
-            yield uuid.uuid4().hex[:32]
+    def create_bootstrap_token():
+        """create a new random bootstrap token like f62bcr.fedcba9876543210,
+        a valid token matches the expression [a-z0-9]{6}.[a-z0-9]{16}"""
+        token = "".join([random.choice(string.ascii_lowercase + string.digits)
+                         for n in range(6)])
+        token += "."
+        token = token + "".join([random.choice(string.ascii_lowercase + string.digits)
+                                 for n in range(16)])
+        return token
 
     @staticmethod
-    def _cluster_ips(cp_hosts, worker_hosts):
-        cluster_ips = []
-        cluster_ips += [node.ip_address for node in worker_hosts]
-        cluster_ips += [host.ip_address for host in cp_hosts]
-        cluster_ips += ['127.0.0.1', "10.32.0.1"]
-        return cluster_ips
-
-    @staticmethod
-    def _hostnames(cp_hosts, worker_hosts):
-        all_hosts = []
-        all_hosts += [host.name for host in cp_hosts]
-        all_hosts += [host.name for host in worker_hosts]
-        all_hosts += ["kubernetes.default",
-                      "kubernetes.default.svc.cluster.local",
-                      "kubernetes"]
-        return all_hosts
+    def calculate_discovery_hash(ca_bundle):
+        """
+        calculate the discovery hash based on the ca_bundle
+        """
+        return get_discovery_hash(ca_bundle.cert)
 
     @staticmethod
     def create_ca():
@@ -258,153 +299,112 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         _key = create_key(size=2048)
         _ca = create_ca(_key, _key.public_key(),
                         "DE", "BY", "NUE",
-                        "Kubernetes", "CDA-PI",
-                        "kubernetes")
+                        "Kubernetes", "CDA-RT",
+                        "kubernetes-ca")
         return CertBundle(_key, _ca)
-
-    def create_etcd_certs(self, names, ips):
-        """
-        create a certificate and key pair for each etcd host
-        """
-        ca_bundle = self.create_ca()
-
-        api_etcd_client = CertBundle.create_signed(ca_bundle=ca_bundle,
-                                                   country="",  # country
-                                                   state="",  # state
-                                                   locality="",  # locality
-                                                   orga="system:masters",  # orga
-                                                   unit="",  # unit
-                                                   name="kube-apiserver-etcd-client",
-                                                   hosts=[],
-                                                   ips=[])
-
-        # calico seems to want access to a key value store (etcd),so we need
-        # client certificates for nodes, too.
-        # TODO: do we want this for security reasons? Do we want to have
-        # ONE etcd with kubernetes information and calico onformation?
-        # What can a worker node read/write? Feels somewhat fishy...
-        calico_etcd_client = CertBundle.create_signed(ca_bundle=ca_bundle,
-                                                      country="",  # country
-                                                      state="",  # state
-                                                      locality="",  # locality
-                                                      orga="system:masters",  # orga
-                                                      unit="",  # unit
-                                                      name="calico-etcd-client",
-                                                      hosts=[],
-                                                      ips=[])
-
-        for host, ip in zip(names, ips):
-            peer = CertBundle.create_signed(ca_bundle,
-                                            "",  # country
-                                            "",  # state
-                                            "",  # locality
-                                            "",  # orga
-                                            "",  # unit
-                                            "kubernetes",  # name
-                                            [host, 'localhost', host],
-                                            [ip, '127.0.0.1', ip]
-                                            )
-
-            server = CertBundle.create_signed(ca_bundle,
-                                              "",  # country
-                                              "",  # state
-                                              "",  # locality
-                                              "",  # orga
-                                              "",  # unit
-                                              host,  # name CN
-                                              [host, 'localhost', host],
-                                              [ip, '127.0.0.1', ip]
-                                              )
-            yield {'%s-server' % host: server, '%s-peer' % host: peer}
-
-        yield {'apiserver-etcd-client': api_etcd_client}
-        yield {'calico_etcd_client': calico_etcd_client}
-        yield {'etcd_ca': ca_bundle}
 
     def run(self, config):  # pylint: disable=too-many-locals
         """
         execute the complete cluster build
         """
-        worker_nodes = self.nodes_builder.get_nodes()
-        cp_hosts = self.masters_builder.get_masters()
-
-        cluster_host_names = self._hostnames(cp_hosts, worker_nodes)
-        cluster_ips = self._cluster_ips(cp_hosts, worker_nodes)
-        loop = asyncio.get_event_loop()
-        cluster_info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
-
-        if cluster_info.secgroup._exists:
+        # create a security group for the cluster if not already present
+        if self.info.secgroup.exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
                     'cluster-name'])))
             LOGGER.info(
                 info(red("I will add my own rules, please manually review all others")))  # noqa
 
-        cluster_info.secgroup.configure()
+        self.info.secgroup.configure()
 
+        try:
+            subnet = NEUTRON.find_resource('subnet', config['subnet'])
+        except KeyError:
+            subnet = NEUTRON.list_subnets()['subnets'][-1]
+
+        cloud_config = OSCloudConfig(subnet['id'])
+        LOGGER.info("Using subnet %s", subnet['name'])
+
+        # generate CA key pair for the cluster, that is used to authenticate
+        # the clients that can use kubeadm
+        ca_bundle = self.create_ca()
+        cert_dir = "-".join(("certs", config["cluster-name"]))
+        ca_bundle.save("k8s", cert_dir)
+
+        # generate ssh key pair for first master node. It is used to connect
+        # to the other nodes so that they can join the cluster
+        ssh_key = create_key()
+
+        # create a load balancer for accessing the API server of the cluster;
+        # do not add a listener, since we created no machines yet.
+        LOGGER.info("Creating the load balancer...")
         lbinst = LoadBalancer(config)
-
         lb, floatingip = lbinst.get_or_create(NEUTRON)
+        lb_port = "6443"
 
+        lb_dns = config['loadbalancer'].get('dnsname') or floatingip
+        lb_ip = floatingip if floatingip else lb['vip_address']
+
+        # calculate information needed for joining nodes to the cluster...
+        # calculate bootstrap token
+        bootstrap_token = ClusterBuilder.create_bootstrap_token()
+
+        # calculate discovery hash
+        discovery_hash = self.calculate_discovery_hash(ca_bundle)
+
+        # create the master nodes with ssh_key (private and public key)
+        # first task in returned list is task for first master node
+        LOGGER.info("Waiting for the master machines to be launched...")
+        master_tasks = self.masters_builder.create_masters_tasks(
+            ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
+            bootstrap_token, lb_dns)
+        loop = asyncio.get_event_loop()
+        results = loop.run_until_complete(asyncio.gather(*master_tasks))
+
+        # add a listener for the first master node, since this is the node we
+        # call kubeadm init on
+        LOGGER.info("Configuring the LoadBalancer...")
+        first_master_ip = results[0].ip_address
         configure_lb_task = loop.create_task(
-            lbinst.configure(NEUTRON, [host.ip_address for host in cp_hosts]))
+            lbinst.configure(NEUTRON, [first_master_ip]))
 
-        if floatingip:
-            lb_ip = floatingip
-        else:
-            lb_ip = lb['vip_address']
+        # create the worker nodes
+        LOGGER.info("Waiting for the worker machines to be launched...")
+        node_tasks = self.nodes_builder.create_initial_nodes(
+            ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
-        cluster_ips.append(lb_ip)
-        certs = create_certs(config, cluster_host_names, cluster_ips)
-
-        # generate etcd certifcates for control plane
-        etcd_certs = list(self.create_etcd_certs([host.name for host in cp_hosts],
-                                                 [host.ip_address for host in
-                                                 cp_hosts]))
-
-        for item in etcd_certs:
-            certs.update(item)
-
+        node_tasks.append(configure_lb_task)
+        results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug(info("Done creating nodes tasks"))
 
-        calico_t, kubelet_t, admin_t = list(self._create_tokes())
-        tasks = self.nodes_builder.create_nodes_tasks(certs,
-                                                      kubelet_t,
-                                                      calico_t,
-                                                      cp_hosts,
-                                                      lb_ip)
+        # We should no be able to query the API server for available nodes
+        # with a valid certificate from the generated CA. Hence, generate
+        # a client certificate.
+        LOGGER.info("Talking to the API server and waiting for masters to be "
+                    "online.")
+        client_cert = CertBundle.create_signed(
+            ca_bundle, "DE", "BY", "NUE", "system:masters", "system:masters",
+            "kubernetes-admin", "", "")
+        client_cert.save("k8s-client", cert_dir)
 
-        cp_tasks = self.masters_builder.create_masters_tasks(certs,
-                                                             kubelet_t,
-                                                             calico_t,
-                                                             admin_t)  # noqa
+        kubeconfig = write_kubeconfig(config["cluster-name"], lb_ip,
+                                      lb_port, cert_dir, "k8s.pem",
+                                      "k8s-client.pem", "k8s-client-key.pem")
 
-        LOGGER.debug(info("Done creating control plane tasks"))
-        tasks = cp_tasks + tasks
+        # Now connect to the the API server and query which masters are
+        # available.
+        k8s = K8S(kubeconfig)
 
-        if tasks:
-            loop = asyncio.get_event_loop()
-            tasks.append(configure_lb_task)
-            loop.run_until_complete(asyncio.gather(*tasks))
-            kubeconfig = write_kubeconfig(config, lb_ip,
-                                          admin_t,
-                                          True)
-            LOGGER.info("Waiting for K8S API server to launch")
+        while not k8s.is_ready:
+            LOGGER.info("Kubernetes API Server is still not ready ...")
+            time.sleep(2)
 
-            manifest_path = os.path.join("koris", "deploy", "manifests")
-            k8s = K8S(kubeconfig, manifest_path)
+        LOGGER.info("Kubernetes API is ready!")
+        LOGGER.info("Waiting for all masters to become Ready")
+        k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
 
-            while not k8s.is_ready:
-                LOGGER.info("Kubernetes API Server is still not ready ...")
-                time.sleep(2)
+        LOGGER.info("Configured load balancer to use all API servers")
 
-            LOGGER.info("Kubernetes API Server is ready !!!")
-
-            etcd_endpoints = ",".join(
-                "https://%s:%d" % (host.ip_address, 2379)
-                for host in cp_hosts)
-            k8s.apply_calico(b64_key(certs["calico_etcd_client"].key),
-                             b64_cert(certs["calico_etcd_client"].cert),
-                             b64_cert(certs["etcd_ca"].cert),
-                             etcd_endpoints)
-            k8s.apply_kube_dns()
+        # At this point, we're ready with our cluster
+        LOGGER.info("Kubernetes cluster is ready to use !!!")
+        loop.close()
