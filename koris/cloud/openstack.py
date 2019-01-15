@@ -82,8 +82,8 @@ def remove_cluster(config, nova, neutron, cinder):
         try:
             if config['cluster-name'] in vol.name and vol.status != 'in-use':
                 vol.delete()
-            except TypeError:
-                continue
+        except TypeError:
+            continue
 
 
 class BuilderError(Exception):
