@@ -34,7 +34,7 @@ parsed and the following actions will be taken:
    This master has an SSH key which can access the other master.
    When these masters will have SSH up and running, the bootstrap script
    will execute a set of commands on them. This commmand will configure the kubernetes
-   control plane components to run on them and and extend the etcd cluster by 
+   control plane components to run on them and and extend the etcd cluster by
    adding cluster members.
 
 7. Create a set of virtual machines that will become kubernetes worker nodes.
@@ -61,7 +61,7 @@ responsible of preparing the cloud-init file (also known as ``userdata``)
 for each machine type.
 The directory :ref:`userdata` contains all the BASH shell scripts for each
 machine type. These shell scripts can be used to provision bare metal
-clusters with minimal effort too. 
+clusters with minimal effort too.
 
 The module :py:mod:`koris.ssl` is responsible of creating SSL keys and
 certificates used by ``kubeadm`` for creating the etcd cluster and kubernetes
