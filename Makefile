@@ -158,7 +158,6 @@ add-nodes:
 		sleep 1; \
 	done
 	@echo "all nodes successfully joined!"
-	@mv -v tests/koris_test.updated.yml tests/koris_test.yml
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."
@@ -323,6 +322,12 @@ clean-cluster: update-config
 	koris destroy tests/koris_test.yml --force
 
 clean-all:
+	if [ -r tests/koris_test.updated.yml ]; then \
+		mv -v tests/koris_test.updated.yml tests/koris_test.yml \
+	else \
+		$(MAKE) reset-config \
+		$(MAKE) update-config \
+	fi
 	koris destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
 	rm -fv ${KUBECONFIG}
