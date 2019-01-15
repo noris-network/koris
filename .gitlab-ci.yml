@@ -74,6 +74,9 @@ add-nodes:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - "make add-nodes"
+  artifacts:
+    paths:
+      - "tests/koris_test.yml"
 
 integration-test:
   stage: integration-test
@@ -165,8 +168,6 @@ cleanup:
   - apk add make
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
-  - make reset-config
-  - make update-config
   - make clean-all
   when: always
   except:
