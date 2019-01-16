@@ -60,8 +60,8 @@ def clean_resources():
 
     volumes = cinder.volumes.list()
 
-    volumes = [vol for vol in cinder.volumes.list()
-               if not vol.name.endswith(tuple(running_ids))]
+    volumes = list(filter(lambda x: x.name.endswith(tuple(running_ids)),
+                   filter(lambda x: x.name, cinder.volumes.list())))
 
     # TODO: shall we also look for machines and delete them???
     for vol in volumes:
