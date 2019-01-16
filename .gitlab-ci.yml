@@ -74,6 +74,11 @@ add-nodes:
   - "pip3 install  -r requirements.txt"
   - "pip3 install -e ."
   - "make add-nodes"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
 
 integration-test:
   stage: integration-test
