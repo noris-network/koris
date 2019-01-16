@@ -323,10 +323,9 @@ clean-cluster: update-config
 
 clean-all:
 	if [ -r tests/koris_test.updated.yml ]; then \
-		mv -v tests/koris_test.updated.yml tests/koris_test.yml \
+		mv -v tests/koris_test.updated.yml tests/koris_test.yml; \
 	else \
-		$(MAKE) reset-config \
-		$(MAKE) update-config \
+		$(MAKE) reset-config update-config; \
 	fi
 	koris destroy tests/koris_test.yml --force
 	git checkout tests/koris_test.yml
