@@ -15,7 +15,7 @@ from functools import lru_cache
 
 import novaclient
 from novaclient import client as nvclient
-from novaclient.exceptions import (NotFound as NovaNotFound)  # noqa
+from novaclient.exceptions import (NotFound as NovaNotFound, NoUniqueMatch)  # noqa
 
 import cinderclient
 from cinderclient import client as cclient
@@ -811,7 +811,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                  config):
 
         self.keypair = nova_client.keypairs.get(config['keypair'])
-        self.image = nova_client.glance.find_image(config['image'])
+
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
@@ -835,10 +835,19 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.n_masters = config['n-masters']
         self.azones = config['availibility-zones']
         self.storage_class = config['storage_class']
-
+        self._image_name = config['image']
         self._novaclient = nova_client
         self._neutronclient = neutron_client
         self._cinderclient = cinder_client
+
+    @property
+    def image(self):
+        try:
+            return self._novaclient.glance.find_image(self._image_name)
+        except NoUniqueMatch:
+            conn = OpenStackAPI.connect()
+            return self._novaclient.glance.find_image(
+                [l.id for l in conn.list_images() if l.name == self._image_name][0])
 
     @lru_cache()
     def _get_or_create(self, hostname, zone, role, flavor):
