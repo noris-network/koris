@@ -15,7 +15,7 @@ import yaml
 from mach import mach1
 
 from koris.cloud.openstack import get_clients
-from koris.cloud.openstack import BuilderError
+from koris.cloud.openstack import BuilderError, InstanceExists
 from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
@@ -61,6 +61,8 @@ class Koris:  # pylint: disable=no-self-use
         builder = ClusterBuilder(config)
         try:
             builder.run(config)
+        except InstanceExists:
+            pass
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))

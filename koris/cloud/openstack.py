@@ -89,6 +89,10 @@ class BuilderError(Exception):
     """Raise a custom error if the build fails"""
 
 
+class InstanceExists(Exception):
+    """raise a custom error if the machine exists"""
+
+
 class Instance:
     """
     Create an Openstack Server with an attached volume
