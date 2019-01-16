@@ -267,6 +267,18 @@ def write_cert(cert, filename):  # pragma: no coverage
         fh.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
+def discovery_hash(cert):
+    """
+    calculate a discovery hash based on the cert's public key
+    """
+    pub_key = cert.public_key()
+    digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+    digest.update(pub_key.public_bytes(
+        serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo))
+    return digest.finalize().hex()
+
+
 class CertBundle:
     """
     a simple class to hold a certifacte data with its own key
