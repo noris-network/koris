@@ -47,7 +47,7 @@ class Koris:  # pylint: disable=no-self-use
             default=argparse.SUPPRESS)
 
     def _get_version(self):  # pylint: disable=no-self-use
-        print("Kolt version:", __version__)
+        print("%s version: %s" % (self.__class__.__name__, __version__))
 
     def apply(self, config):
         """
