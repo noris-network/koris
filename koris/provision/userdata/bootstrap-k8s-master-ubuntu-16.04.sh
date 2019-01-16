@@ -323,7 +323,7 @@ function apply_net_plugin(){
             ;;
         "FLANNEL")
             echo "installing flannel"
-            kubectl apply -f kube-flannel.yaml
+            kubectl apply -f kube-flannel.yml
             ;;
     esac
 }
