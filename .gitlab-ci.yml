@@ -76,7 +76,7 @@ add-nodes:
   - "make add-nodes"
   artifacts:
     paths:
-      - "tests/koris_test.yml"
+      - "tests/koris_test.updated.yml"
 
 integration-test:
   stage: integration-test
