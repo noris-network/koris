@@ -89,7 +89,7 @@ class BuilderError(Exception):
     """Raise a custom error if the build fails"""
 
 
-class Instance:  # pylint: disable=too-many-instance-attributes, too-many-arguments
+class Instance:
     """
     Create an Openstack Server with an attached volume
     """
@@ -322,6 +322,11 @@ class LoadBalancer:  # pragma: no coverage
             self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(client, lb)
             LOGGER.info("Loadbalancer IP: %s", fip_addr)
+            lb = lb[0]
+            self._id = lb['id']
+            self._subnet_id = lb['vip_subnet_id']
+            self._data = lb
+            self.pool = lb['pools'][0]['id']
 
         return lb, fip_addr
 
