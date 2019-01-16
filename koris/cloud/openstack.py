@@ -94,7 +94,8 @@ class Instance:
     Create an Openstack Server with an attached volume
     """
 
-    def __init__(self, cinder, nova, name, network, zone, role,
+    def __init__(self, cinder, nova, name,  # pylint: disable=too-many-arguments
+                 network, zone, role,
                  volume_config, flavor):
         self.cinder = cinder
         self.nova = nova
@@ -102,9 +103,7 @@ class Instance:
         self.network = network
         self.zone = zone
         self.flavor = flavor
-        self.volume_size = volume_config.get('size', '25')
-        self.volume_class = volume_config.get('class')
-        self.volume_img = volume_config.get('image')
+        self.volume_config = volume_config
         self.role = role
         self.ports = []
         self._ip_address = None
@@ -137,15 +136,16 @@ class Instance:
         bdm_v2 = {
             "boot_index": 0,
             "source_type": "volume",
-            "volume_size": str(self.volume_size),
+            "volume_size": str(self.volume_config.get('size', 25)),
             "destination_type": "volume",
             "delete_on_termination": True}
 
-        vol = self.cinder.volumes.create(self.volume_size,
-                                         name=self.name,
-                                         imageRef=self.volume_img.id,
-                                         availability_zone=self.zone,
-                                         volume_type=self.volume_class)
+        vol = self.cinder.volumes.create(
+            self.volume_config.get('size', 25),
+            name=self.name,
+            imageRef=self.volume_config.get('image').id,
+            availability_zone=self.zone,
+            volume_type=self.volume_config.get('class'))
 
         while vol.status != 'available':
             await asyncio.sleep(1)
