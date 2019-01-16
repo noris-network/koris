@@ -191,7 +191,7 @@ integration-patch-wait:
 		fi; \
 		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 		sleep 1; \
-		echo -n "."
+		echo -n "."; \
 	done ; \
 
 
@@ -211,7 +211,7 @@ expose-wait:
 		if [ ! -z $${IP} ]; then \
 			break; \
 		fi; \
-		echo -n "."
+		echo -n "."; \
 		sleep 1; \
 	done; \
 	echo "Got an IP!"; \
