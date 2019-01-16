@@ -537,7 +537,7 @@ class LoadBalancer:  # pragma: no coverage
             LOGGER.debug("Healthmonitor not found ...")
         LOGGER.info("deleted healthmonitor ...")
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1,
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1.05,
            logger=LOGGER.debug)
     def _del_pool(self, client):
         # if pool has health monitor delete it first
@@ -555,7 +555,7 @@ class LoadBalancer:  # pragma: no coverage
                     LOGGER.debug("Pool %s not found", pool['id'])
                 LOGGER.info("deleted pool ...")
 
-    @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1,
+    @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1.05,
            logger=LOGGER.debug)
     def _del_listener(self, client):
         lb_id = {'id': self._id}

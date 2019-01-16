@@ -269,6 +269,7 @@ check-cluster-dns:
 	#kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck
 
 clean-lb-after-integration-test:
+	kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG}; \
 	kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
@@ -277,7 +278,7 @@ clean-lb-after-integration-test:
 			break; \
 		fi; \
 	done;
-	sleep 90
+	sleep 60
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
