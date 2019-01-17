@@ -298,6 +298,7 @@ function get_flannel(){
     while [ ! -r kube-flannel.yml ]; do
          curl --retry 10 -sfLO https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
     done
+    sed -i "s@\"Type\": \"vxlan\"@\"Type\": \"host-gw\"@g" kube-flannel.yml
 }
 
 # get the correct network plugin

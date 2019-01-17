@@ -45,9 +45,8 @@ class Koris:  # pylint: disable=no-self-use
             "--version", action="store_true",
             help="show version and exit",
             default=argparse.SUPPRESS)
-    
-    @staticmethod
-    def _get_version():
+
+    def _get_version(self):
         print("%s version: %s" % (self.__class__.__name__, __version__))
 
     def apply(self, config):
