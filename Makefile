@@ -73,7 +73,7 @@ clean-test: ## remove test and coverage artifacts
 lint: pylint flake8  ## check style with pylint and flake8
 
 pylint: ## check style with pylint
-	pylint --rcfile=.pylintrc koris || pylint-exit $$?
+	pylint --rcfile=.pylintrc koris
 
 flake8: ## check style with flake8
 	flake8 koris tests
