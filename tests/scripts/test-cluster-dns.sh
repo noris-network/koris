@@ -28,11 +28,11 @@ dns_check_fqdn="${dns_check_with_search_domains}.${dns_check_cluster_domain}"
 dig="dig +noall +answer -q"
 label="k8s-app=dnscheck"
 
-echo "$dns_checkpod" | kubectl --kubeconfig=${KUBECONFIG} apply -f -
+echo "$dns_checkpod" | kubectl apply -f -
 
 echo -n "Waiting for dnscheck pod to start"
 
-while [ $(kubectl --kubeconfig=${KUBECONFIG} get pod -l "${label}" -o jsonpath='{.items[0].status.phase}') != "Running" ]; do
+while [ $(kubectl get pod -l "${label}" -o jsonpath='{.items[0].status.phase}') != "Running" ]; do
 	echo -n "."
 	sleep 1
 done
@@ -44,10 +44,10 @@ function check_dns() {
 
 	echo -e $long_desc
 
-	answer=$(kubectl --kubeconfig=${KUBECONFIG} exec dnscheck -- $dig ${hostname} -t A 2>&1)
+	answer=$(kubectl exec dnscheck -- $dig ${hostname} -t A 2>&1)
 	if [[ $? -ne 0 ]]; then
 		echo -e "\nFailed to resolve ${desc} ${hostname} with check "${dig} $hostname".\nAnswer: ${answer}"
-		kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck
+		kubectl delete pod -l k8s-app=dnscheck
 		exit 1
 	else
 		echo -e "Successfully resolved $desc:\n${answer}"
