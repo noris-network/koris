@@ -342,7 +342,10 @@ function main() {
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
         copy_keys $HOST_IP
-        add_master $HOST_NAME $HOST_IP
+        until add_master $HOST_NAME $HOST_IP; do
+            ssh $HOST_NAME sudo kubeadm reset -f
+        done
+
         wait_for_etcd $HOST_NAME
         echo "done bootstrapping master ${MASTERS[$i]}";
     done
