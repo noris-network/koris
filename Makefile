@@ -354,4 +354,10 @@ compliance-checks: \
 	check-sonobuoy \
 	clean-sonobuoy
 
+install-git-hooks:
+	git-pylint-commit-hook
+	echo "#!/usr/bin/env bash" > .git/hooks/pre-commit
+	echo "git-pylint-commit-hook" >> .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+
 # vim: tabstop=4 shiftwidth=4
