@@ -4,8 +4,7 @@ stages:
  - wait-for-resources
  - build-cluster
  - integration-test
- - security-checks-masters
- - security-checks-nodes
+ - security-checks
  - compliance-checks
  - cleanup
  - pages
@@ -76,7 +75,12 @@ add-nodes:
   - "make add-nodes"
   artifacts:
     paths:
-      - "tests/koris_test.yml"
+      - "tests/koris_test.updated.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
 
 integration-test:
   stage: integration-test
@@ -109,7 +113,7 @@ integration-test:
       - $SKIP_E2E
 
 security-checks-masters:
-  stage: security-checks-masters
+  stage: security-checks
   image: oz123/koris-alpine:0.1.2
   variables:
     LC_ALL: "C.UTF-8"
@@ -125,7 +129,7 @@ security-checks-masters:
       - $SKIP_E2E
 
 security-checks-nodes:
-  stage: security-checks-nodes
+  stage: security-checks
   image: oz123/koris-alpine:0.1.2
   variables:
     LC_ALL: "C.UTF-8"

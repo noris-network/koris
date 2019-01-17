@@ -184,14 +184,14 @@ integration-wait:
 
 integration-patch-wait:
 	STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+	echo "Waiting for pod status == Runnig ";\
 	while true; do \
 		if [ "Running" == "$${STATUS}" ]; then \
 			break; \
 		fi; \
-		echo "pod is not running"; \
 		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
-		echo ${STATUS}; \
 		sleep 1; \
+		echo -n "."; \
 	done ; \
 
 
@@ -205,14 +205,14 @@ integration-expose:
 
 
 expose-wait:
+	echo "Waiting for loadBalancer to get an IP\n";\
 	while true; do \
 		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
-			echo "breaking "; \
 			break; \
 		fi; \
+		echo -n "."; \
 		sleep 1; \
-		echo "Waiting for loadBalancer to get an IP\n";\
 	done; \
 	echo "Got an IP!"; \
 	echo "Echo $${IP}"
@@ -235,8 +235,8 @@ curl-run:
 
 check-cluster-dns:
 	dns_check_hostname="kubernetes"; \
-        dns_check_namespace="default"; \
-        dns_check_cluster_domain="svc.cluster.local"; \
+	dns_check_namespace="default"; \
+	dns_check_cluster_domain="svc.cluster.local"; \
 	dns_check_with_search_domains="$${dns_check_hostname}.$${dns_check_namespace}"; \
 	dns_check_fqdn="$${dns_check_with_search_domains}.$${dns_check_cluster_domain}"; \
 	dns_check="dig +noall +answer -q $${dns_check_fqdn} -t A"; \
@@ -244,7 +244,7 @@ check-cluster-dns:
 	echo -n "Waiting for dnscheck pod to start"; \
 	while [ $$(kubectl --kubeconfig=${KUBECONFIG} get pod -l k8s-app=dnscheck -o jsonpath='{.items[0].status.phase}') != "Running" ]; do \
 		echo -n "."; \
-	  sleep 2; \
+		sleep 2; \
 	done; \
 	echo -e "\nDnscheck pod is ready.";\
 	echo "First checking FQDN resolving with $${dns_check}..."; \
@@ -260,15 +260,16 @@ check-cluster-dns:
 	answer=`kubectl --kubeconfig=${KUBECONFIG} exec dnscheck -- $${dns_check}`; \
 	search_domains=`kubectl --kubeconfig=${KUBECONFIG} exec dnscheck -- cat /etc/resolv.conf`; \
 	if [ -z "$${answer}" ]; then \
-	  echo "Failed to resolve short name $${dns_check_with_search_domains} with check $${dns_check}. Answer: $${answer}"; \
+		echo "Failed to resolve short name $${dns_check_with_search_domains} with check $${dns_check}. Answer: $${answer}"; \
 		echo "Content of /etc/resolv.conf was:"; \
-	  echo "$${search_domains}"; \
+		echo "$${search_domains}"; \
 	else \
-	  echo "Successfully resolved short name $${dns_check_with_search_domains}: $${answer}"; \
+		echo "Successfully resolved short name $${dns_check_with_search_domains}: $${answer}"; \
 	fi; \
 	#kubectl --kubeconfig=${KUBECONFIG} delete pod -l k8s-app=dnscheck
 
 clean-lb-after-integration-test:
+	kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG}; \
 	kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	while true; do \
@@ -277,7 +278,7 @@ clean-lb-after-integration-test:
 			break; \
 		fi; \
 	done;
-	sleep 90
+	sleep 60
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
