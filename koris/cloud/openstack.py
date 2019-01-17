@@ -139,7 +139,7 @@ class Instance:  # pylint: disable=too-many-arguments
         bdm_v2 = {
             "boot_index": 0,
             "source_type": "volume",
-            "volume_size": str(self.volume_config.get('size')),
+            "volume_size": str(self.volume_config.get('size', 25)),
             "destination_type": "volume",
             "delete_on_termination": True}
 
