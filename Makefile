@@ -355,7 +355,7 @@ compliance-checks: \
 	clean-sonobuoy
 
 install-git-hooks:
-	git-pylint-commit-hook
+	pip install git-pylint-commit-hook
 	echo "#!/usr/bin/env bash" > .git/hooks/pre-commit
 	echo "git-pylint-commit-hook" >> .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
