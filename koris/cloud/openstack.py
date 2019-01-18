@@ -439,7 +439,7 @@ class LoadBalancer:  # pragma: no coverage
     def _associate_floating_ip(self, client, loadbalancer):
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
-            valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
+            valid_ip = re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # noqa
                                 self.floatingip)
             if not valid_ip:
                 LOGGER.error("Please specify a valid IP address")
