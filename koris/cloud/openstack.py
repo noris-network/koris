@@ -93,13 +93,12 @@ class InstanceExists(Exception):
     """raise a custom error if the machine exists"""
 
 
-class Instance:
+class Instance:  # pylint: disable=too-many-arguments
     """
     Create an Openstack Server with an attached volume
     """
 
-    def __init__(self, cinder, nova, name,  # pylint: disable=too-many-arguments
-                 network, zone, role,
+    def __init__(self, cinder, nova, name, network, zone, role,
                  volume_config, flavor):
         self.cinder = cinder
         self.nova = nova
@@ -144,12 +143,11 @@ class Instance:
             "destination_type": "volume",
             "delete_on_termination": True}
 
-        vol = self.cinder.volumes.create(
-            self.volume_config.get('size', 25),
-            name=self.name,
-            imageRef=self.volume_config.get('image').id,
-            availability_zone=self.zone,
-            volume_type=self.volume_config.get('class'))
+        vol = self.cinder.volumes.create(self.volume_config.get('size', 25),
+                                         name=self.name,
+                                         imageRef=self.volume_config.get('image').id,
+                                         availability_zone=self.zone,
+                                         volume_type=self.volume_config.get('class'))
 
         while vol.status != 'available':
             await asyncio.sleep(1)
@@ -844,6 +842,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
     @property
     def image(self):
+        """find the koris image in OpenStackAPI"""
         try:
             return self._novaclient.glance.find_image(self._image_name)
         except NoUniqueMatch:

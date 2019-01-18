@@ -401,12 +401,16 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # available.
         k8s = K8S(kubeconfig)
 
+        LOGGER.handlers[0].terminator = ""
+        LOGGER.info("Kubernetes API Server is still not ready ...")
         while not k8s.is_ready:
-            LOGGER.info("Kubernetes API Server is still not ready ...")
             time.sleep(2)
+            LOGGER.info(".")
 
-        LOGGER.info("Kubernetes API is ready!")
-        LOGGER.info("Waiting for all masters to become Ready")
+        LOGGER.handlers[0].terminator = "\n"
+
+        LOGGER.info("\nKubernetes API is ready!"
+                    "\nWaiting for all masters to become Ready")
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
 
         LOGGER.info("Configured load balancer to use all API servers")

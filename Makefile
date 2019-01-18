@@ -73,7 +73,7 @@ clean-test: ## remove test and coverage artifacts
 lint: pylint flake8  ## check style with pylint and flake8
 
 pylint: ## check style with pylint
-	pylint --rcfile=.pylintrc koris || pylint-exit $$?
+	pylint --rcfile=.pylintrc koris
 
 flake8: ## check style with flake8
 	flake8 koris tests
@@ -353,5 +353,11 @@ clean-sonobuoy:
 compliance-checks: \
 	check-sonobuoy \
 	clean-sonobuoy
+
+install-git-hooks:
+	git-pylint-commit-hook
+	echo "#!/usr/bin/env bash" > .git/hooks/pre-commit
+	echo "git-pylint-commit-hook" >> .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
 
 # vim: tabstop=4 shiftwidth=4

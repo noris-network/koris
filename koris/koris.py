@@ -101,10 +101,11 @@ class Koris:  # pylint: disable=no-self-use
         with open(config, 'r') as stream:
             config_dict = yaml.safe_load(stream)
 
-        k8s_config_path = os.getenv("KUBECONFIG")
-        k8s = K8S(k8s_config_path)
-        info = OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict)
-        node_builder = NodeBuilder(config_dict, info)
+        k8s = K8S(os.getenv("KUBECONFIG"))
+        node_builder = NodeBuilder(
+            config_dict,
+            OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict))
+
         tasks = node_builder.create_nodes_tasks(k8s.host,
                                                 k8s.get_bootstrap_token(),
                                                 k8s.ca_info,
