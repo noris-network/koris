@@ -19,11 +19,6 @@ spec:
       - "86400"
 EOM
 
-dns_check_hostname="kubernetes"
-dns_check_namespace="default"
-dns_check_cluster_domain="svc.cluster.local"
-dns_check_with_search_domains="${dns_check_hostname}.${dns_check_namespace}"
-dns_check_fqdn="${dns_check_with_search_domains}.${dns_check_cluster_domain}"
 dig="dig +noall +answer -q"
 label="k8s-app=dnscheck"
 
@@ -38,22 +33,22 @@ done
 
 function check_dns() {
 	hostname=$1
-	desc=$2
-	long_desc=$3
+    opts=$2
+	desc=$3
 
 	echo -e $long_desc
 
-	answer=$(kubectl exec dnscheck -- $dig ${hostname} -t A 2>&1)
-	if [[ $? -ne 0 ]]; then
+	answer=$(kubectl exec dnscheck -- $dig ${hostname} $opts -t A 2>&1)
+	if [[ $? -ne 0 || -z ${answer} ]]; then
 		echo -e "\nFailed to resolve ${desc} ${hostname} with check "${dig} $hostname".\nAnswer: ${answer}"
-		kubectl delete pod -l k8s-app=dnscheck
+		#kubectl delete pod -l k8s-app=dnscheck
 		exit 1
 	else
 		echo -e "Successfully resolved $desc:\n${answer}"
-fi
+    fi
 }
-
-check_dns $dns_check_fqdn "FQDN" '\nFirst checking FQDN resolving'
-check_dns $dns_check_with_search_domains 'short name' '\nNow checking short name, using search domains'
+check_dns "kubernetes.default.svc.cluster.local" "" "FQDN"
+check_dns "kubernetes.default" "+search" "namespace"
+check_dns "kubernetes" "+search"  "short name"
 
 # vim: tabstop=4 shiftwidth=4
