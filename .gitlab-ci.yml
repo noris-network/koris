@@ -80,9 +80,6 @@ check-dns:
   - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install -q -e ."
   - "make check-cluster-dns"
-  artifacts:
-    paths:
-      - "tests/koris_test.updated.yml"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
