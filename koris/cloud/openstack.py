@@ -139,7 +139,7 @@ class Instance:  # pylint: disable=too-many-arguments
         bdm_v2 = {
             "boot_index": 0,
             "source_type": "volume",
-            "volume_size": str(self.volume_config.get('size')),
+            "volume_size": str(self.volume_config.get('size', 25)),
             "destination_type": "volume",
             "delete_on_termination": True}
 
@@ -485,7 +485,7 @@ class LoadBalancer:  # pragma: no coverage
                                             }})
         return listener
 
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
     def _add_pool(self, client, listener_id):
         pool = client.create_lbaas_pool(
             {"pool": {"lb_algorithm": "SOURCE_IP",
@@ -498,7 +498,7 @@ class LoadBalancer:  # pragma: no coverage
 
         return pool['pool']
 
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1,
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1,
            logger=LOGGER.debug)
     def _add_health_monitor(self, client, pool_id):
         client.create_lbaas_healthmonitor(
