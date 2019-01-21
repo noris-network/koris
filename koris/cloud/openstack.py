@@ -442,7 +442,7 @@ class LoadBalancer:  # pragma: no coverage
     def _associate_floating_ip(self, client, loadbalancer):
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
-            valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
+            valid_ip = re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # noqa
                                 self.floatingip)
             if not valid_ip:
                 LOGGER.error("Please specify a valid IP address")
@@ -488,7 +488,7 @@ class LoadBalancer:  # pragma: no coverage
                                             }})
         return listener
 
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
     def _add_pool(self, client, listener_id):
         pool = client.create_lbaas_pool(
             {"pool": {"lb_algorithm": "SOURCE_IP",
@@ -501,7 +501,7 @@ class LoadBalancer:  # pragma: no coverage
 
         return pool['pool']
 
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1,
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1,
            logger=LOGGER.debug)
     def _add_health_monitor(self, client, pool_id):
         client.create_lbaas_healthmonitor(

@@ -264,12 +264,12 @@ security-checks-masters: OVERRIDES="{ \"apiVersion\": \"v1\", \
 	\"tolerations\": [ { \"key\": \"node-role.kubernetes.io/master\", \
 	                  \"operator\": \"Exists\", \"effect\": \"NoSchedule\" } ] } }"
 security-checks-masters:
-	echo "Running security checks for K8S master nodes..."
-	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-master \
+	@echo "Running security checks for K8S master nodes..."
+	@kubectl run --kubeconfig=${KUBECONFIG} kube-bench-master \
 		--image=aquasec/kube-bench:latest --restart=Never \
 		--overrides=$(OVERRIDES) -- master --version ${CIS_VERSION}
-	sleep 30
-	kubectl logs kube-bench-master --kubeconfig=${KUBECONFIG}
+	@sleep 30
+	@kubectl logs kube-bench-master --kubeconfig=${KUBECONFIG}
 
 security-checks-nodes:
 	echo "Running security checks for K8S worker nodes..."
