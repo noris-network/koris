@@ -310,6 +310,7 @@ function get_net_plugin(){
             ;;
         "FLANNEL")
             get_flannel
+            sysctl net.bridge.bridge-nf-call-iptables=1
             ;;
     esac
 }
