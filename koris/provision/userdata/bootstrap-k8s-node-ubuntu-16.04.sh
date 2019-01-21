@@ -73,6 +73,19 @@ function version_found() {  return $($1 $2 | grep -qi $3); }
 
 version_found docker $DOCKER_VERSION || fetch_all
 
+# run commands needed for network plugins
+function config_pod_network(){
+    case "${POD_NETWORK}" in
+        "CALICO")
+            ;;
+        "FLANNEL")
+            sysctl net.bridge.bridge-nf-call-iptables=1
+            ;;
+    esac
+}
+
+config_pod_network
+
 # join !
 until kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT
     do sudo kubeadm reset --force

@@ -60,8 +60,11 @@ def clean_resources():
 
     volumes = cinder.volumes.list()
 
-    volumes = [vol for vol in cinder.volumes.list()
-               if not vol.name.endswith(tuple(running_ids))]
+    # Experimental, clean orphand volumes
+    list(map(lambda x: x.delete(), (vol for vol in volumes if vol.status == 'available')))
+
+    volumes = list(filter(lambda x: x.name.endswith(tuple(running_ids)),
+                          filter(lambda x: x.name, cinder.volumes.list())))
 
     # TODO: shall we also look for machines and delete them???
     for vol in volumes:
@@ -84,7 +87,7 @@ while True:
     else:
         print("Woha, another job is running ...", flush=True)
         print("I'm waiting ... ", flush=True)
-        time.sleep(os.getenv("GITLAB_POLL_TIME", 30))
+        time.sleep(int(os.getenv("GITLAB_POLL_TIME", "30")))
 
 
 print("Awesome !!! no jobs and no volume found!")

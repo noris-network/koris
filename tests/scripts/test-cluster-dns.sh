@@ -1,4 +1,3 @@
-#!/bin/bash
 
 export KUBECONFIG=$1
 

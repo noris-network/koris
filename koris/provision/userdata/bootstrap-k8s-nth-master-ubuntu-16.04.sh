@@ -38,12 +38,23 @@ function fetch_all() {
     sudo apt install -y socat conntrack ipset
 }
 
+# run commands needed for network plugins
+function config_pod_network(){
+    case "${POD_NETWORK}" in
+        "CALICO")
+            ;;
+        "FLANNEL")
+            sysctl net.bridge.bridge-nf-call-iptables=1
+            ;;
+    esac
+}
 # the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
 function main() {
     fetch_all
     kubeadm config images pull
+    config_pod_network
 }
 
 

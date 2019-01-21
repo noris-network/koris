@@ -16,7 +16,6 @@ availibility-zones:
  - de-nbg6-1a
 n-masters: 3
 n-nodes: 3
-n-etcds: 3
 keypair: 'kube'
 #security_group: 'default'
 user_data: 'cloud-init-parts/generic'
@@ -35,3 +34,7 @@ certificates:
   expriry: 8760h
 #storage_class: "BSS-Performance-Storage"
 storage_class: "PI-Storage-Class"
+pod_subnet: "10.233.0.0/16"
+pod_network: "CALICO"
+#pod_subnet: "10.244.0.0/16"
+#pod_network: "FLANNEL"
