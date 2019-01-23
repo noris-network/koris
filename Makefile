@@ -203,7 +203,6 @@ integration-patch:
 integration-expose:
 	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
-
 expose-wait:
 	@echo "Waiting for loadBalancer to get an IP"
 	@while true; do \
@@ -214,6 +213,7 @@ expose-wait:
 		echo -n "."; \
 		sleep 1; \
 	done;
+	@echo
 	@echo "Got an IP!"
 
 
@@ -232,13 +232,7 @@ check-cluster-dns:
 clean-lb-after-integration-test:
 	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG};
 	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
-	# fuck yeah, wait for the service to die before deleting the cluster
-	@while true; do \
-		kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG}; \
-		if [ $$? -ne 0 ]; then \
-			break; \
-		fi; \
-	done;
+	# wait for deletion of LB by kubernetes
 	@sleep 60
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
