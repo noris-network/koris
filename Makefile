@@ -173,18 +173,18 @@ integration-run:
 
 
 integration-wait:
-	until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
+	@until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
 		do \
 	        echo "Waiting for container...." ;\
 		sleep 2; \
 		done
 
-	echo "The pod is scheduled"
+	@echo "The pod is scheduled"
 
 
 integration-patch-wait:
-	STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
-	echo "Waiting for pod status == Runnig ";\
+	@echo "Waiting for pod status == Running "
+	@STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`; \
 	while true; do \
 		if [ "Running" == "$${STATUS}" ]; then \
 			break; \
@@ -196,57 +196,50 @@ integration-patch-wait:
 
 
 integration-patch:
-	kubectl patch deployment nginx-deployment -p \
+	@kubectl patch deployment nginx-deployment -p \
 		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
-	kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
+	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
 
 expose-wait:
-	echo "Waiting for loadBalancer to get an IP\n";\
-	while true; do \
+	@echo "Waiting for loadBalancer to get an IP"
+	@while true; do \
 		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
 			break; \
 		fi; \
 		echo -n "."; \
 		sleep 1; \
-	done; \
-	echo "Got an IP!"; \
-	echo "Echo $${IP}"
+	done;
+	@echo "Got an IP!"
 
 
 reset-config:
 	git checkout tests/koris_test.yml
 
-
+curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 curl-run:
-	IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
-	echo $${IP}; \
-	while true; do \
-		curl http://$${IP}:80;\
-		if [ $$? -eq 0 ]; then \
-			break; \
-		fi; \
-		sleep 2; \
-	done
+	@echo "Loadbalancer IP:" $(IP);
+	@echo "Waiting for service to become available:"
+	@until curl -s http://$(IP):80; do echo -n "."; sleep 1; done;
 
 check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
 
 clean-lb-after-integration-test:
-	kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG}; \
-	kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
+	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG};
+	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
-	while true; do \
+	@while true; do \
 		kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG}; \
 		if [ $$? -ne 0 ]; then \
 			break; \
 		fi; \
 	done;
-	sleep 60
+	@sleep 60
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
@@ -272,34 +265,34 @@ security-checks-masters:
 	@kubectl logs kube-bench-master --kubeconfig=${KUBECONFIG}
 
 security-checks-nodes:
-	echo "Running security checks for K8S worker nodes..."
-	kubectl run --kubeconfig=${KUBECONFIG} kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
+	@echo "Running security checks for K8S worker nodes..."
+	@kubectl run --kubeconfig=${KUBECONFIG} kube-bench-node --image=aquasec/kube-bench:latest --restart=Never \
 		--overrides="{ \"apiVersion\": \"v1\", \"spec\": { \"hostPID\": true } }" -- node --version ${CIS_VERSION}
-	sleep 30
-	kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
+	@sleep 30
+	@kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 
 update-config: KEY ?= kube  ## create a test configuration file
 update-config:
-	sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
-	sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
-	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
-	sed -i "s/private_net: .*/private_net: '${NETWORK_NAME}'/g" tests/koris_test.yml
-	cat tests/koris_test.yml
+	@sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
+	@sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
+	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
+	@sed -i "s/private_net: .*/private_net: '${NETWORK_NAME}'/g" tests/koris_test.yml
+	@cat tests/koris_test.yml
 
 
 clean-cluster: update-config
 	koris destroy tests/koris_test.yml --force
 
 clean-all:
-	if [ -r tests/koris_test.updated.yml ]; then \
+	@if [ -r tests/koris_test.updated.yml ]; then \
 		mv -v tests/koris_test.updated.yml tests/koris_test.yml; \
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
-	koris destroy tests/koris_test.yml --force
-	git checkout tests/koris_test.yml
-	rm -fv ${KUBECONFIG}
-	rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
+	@koris destroy tests/koris_test.yml --force
+	@git checkout tests/koris_test.yml
+	@rm -fv ${KUBECONFIG}
+	@rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
