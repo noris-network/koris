@@ -360,4 +360,8 @@ install-git-hooks:
 	echo "git-pylint-commit-hook" >> .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 
+build-exec: ## build a single file executable of koris
+	rm -vRf dist
+	pyinstaller koris.spec
+
 # vim: tabstop=4 shiftwidth=4
