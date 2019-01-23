@@ -230,6 +230,7 @@ curl-run:
 		if [ $$? -eq 0 ]; then \
 			break; \
 		fi; \
+		echo -n "." \
 		sleep 2; \
 	done
 
