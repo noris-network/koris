@@ -237,7 +237,7 @@ check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
 
 clean-lb-after-integration-test:
-	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG}; \
+	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG};
 	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# fuck yeah, wait for the service to die before deleting the cluster
 	@while true; do \
