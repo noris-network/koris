@@ -213,8 +213,8 @@ expose-wait:
 		fi; \
 		echo -n "."; \
 		sleep 1; \
-	done; \
-	@echo "Got an IP!"; \
+	done;
+	@echo "Got an IP!"
 	@echo "Echo $${IP}"
 
 
