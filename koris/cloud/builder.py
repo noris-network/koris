@@ -241,8 +241,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         for index, master in enumerate(masters):
             if master.exists:
-                raise BuilderError("Node {} already exists! Skipping "
-                                   "creation of the cluster.".format(master))
+                raise InstanceExists("Node {} already exists! Skipping "
+                                     "creation of the cluster.".format(master))
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
