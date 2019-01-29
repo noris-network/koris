@@ -183,8 +183,8 @@ integration-wait:
 
 
 integration-patch-wait:
-	@echo "Waiting for pod status == Runnig ";\
-	@STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
+	@echo "Waiting for pod status == Running "
+	@STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`; \
 	while true; do \
 		if [ "Running" == "$${STATUS}" ]; then \
 			break; \
@@ -205,7 +205,7 @@ integration-expose:
 
 
 expose-wait:
-	echo "Waiting for loadBalancer to get an IP"
+	@echo "Waiting for loadBalancer to get an IP"
 	@while true; do \
 		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
@@ -214,25 +214,18 @@ expose-wait:
 		echo -n "."; \
 		sleep 1; \
 	done;
+	@echo
 	@echo "Got an IP!"
-	@echo "Echo $${IP}"
 
 
 reset-config:
 	git checkout tests/koris_test.yml
 
-
+curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 curl-run:
-	@IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
-	echo $${IP}; \
-	while true; do \
-		curl -s http://$${IP}:80;\
-		if [ $$? -eq 0 ]; then \
-			break; \
-		fi; \
-		echo -n "." \
-		sleep 2; \
-	done
+	@echo "Loadbalancer IP:" $(IP);
+	@echo "Waiting for service to become available:"
+	@until curl -s http://$(IP):80; do echo -n "."; sleep 1; done;
 
 check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
@@ -240,13 +233,7 @@ check-cluster-dns:
 clean-lb-after-integration-test:
 	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG};
 	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
-	# fuck yeah, wait for the service to die before deleting the cluster
-	@while true; do \
-		kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG}; \
-		if [ $$? -ne 0 ]; then \
-			break; \
-		fi; \
-	done;
+	# wait for deletion of LB by kubernetes
 	@sleep 60
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
