@@ -49,15 +49,16 @@ class NodeBuilder:
     and network interface. The machines are provisioned with cloud-init.
 
     Args:
-        nova (nova client instance) - to create a volume and a machine
-        neutron (neutron client instance) - to create a network interface
         config (dict) - the parsed configuration file
+        osinfo (OSClusterInfo) - information about the currect cluster
+        cloud_config (OSCloudConfig) - the cloud config generator
     """
-    def __init__(self, config, osinfo):
+    def __init__(self, config, osinfo, cloud_config=None):
         LOGGER.info(info(cyan(
             "gathering node information from openstack ...")))
         self.config = config
         self._info = osinfo
+        self.cloud_config = cloud_config
 
     def create_new_nodes(self,
                          role='node',
@@ -109,7 +110,6 @@ class NodeBuilder:
 
         ca_cert = ca_info['ca_cert']
         discovery_hash = ca_info['discovery_hash']
-
         url = urllib.parse.urlparse(host)
         host_addr = url.netloc.split(":")[0]
         if ":" in url.netloc:
@@ -151,6 +151,7 @@ class NodeBuilder:
         return list(self._info.distribute_nodes())
 
     def create_initial_nodes(self,
+                             cloud_config,
                              ca_bundle,
                              lb_ip,
                              lb_port,
@@ -160,6 +161,8 @@ class NodeBuilder:
         """
         Create all initial nodes when running ``koris apply <config>``
         """
+        self.cloud_config = cloud_config
+
         nodes = self.get_nodes()
         nodes = self._create_nodes_tasks(ca_bundle.cert,
                                          lb_ip, lb_port, bootstrap_token,
@@ -184,7 +187,7 @@ class NodeBuilder:
                 raise InstanceExists("Node {} already exists! Skipping "
                                      "creation of the cluster.".format(node))
 
-            userdata = str(NodeInit(ca_cert, self._info, lb_ip, lb_port,
+            userdata = str(NodeInit(ca_cert, self.cloud_config, lb_ip, lb_port,
                                     bootstrap_token,
                                     discovery_hash))
             tasks.append(loop.create_task(
@@ -377,6 +380,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
         node_tasks = self.nodes_builder.create_initial_nodes(
+            cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
         node_tasks.append(configure_lb_task)

@@ -221,7 +221,7 @@ expose-wait:
 reset-config:
 	git checkout tests/koris_test.yml
 
-curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 curl-run:
 	@echo "Loadbalancer IP:" $(IP);
 	@echo "Waiting for service to become available:"
@@ -235,6 +235,11 @@ clean-lb-after-integration-test:
 	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# wait for deletion of LB by kubernetes
 	@sleep 60
+
+assert-node-labels: NUM ?= 1
+assert-node-labels:  ## checks that the cloud-provider set labels on the nodes
+	kubectl describe nodes --kubeconfig=$(KUBECONFIG) node-$(NUM)-koris-pipe-line-$(CLUSTER_NAME) | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
+
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
