@@ -302,6 +302,8 @@ class NodeInit(BaseInit):
 
         # assemble parts for the node
         self._write_koris_env()
+        self._write_kubelet_default()
+        self._write_cloud_config()
 
     def _write_koris_env(self):
         """
