@@ -143,7 +143,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
         write out flags for kubelet systemd unit
         """
         content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=openstack'''
-                   '''--cloud-config=/etc/kubernetes/cloud.config"''')
+                   ''' --cloud-config=/etc/kubernetes/cloud.config"''')
         self.write_file("/etc/default/kubelet", content, "root",
                         "root", "0600")
 
@@ -302,6 +302,8 @@ class NodeInit(BaseInit):
 
         # assemble parts for the node
         self._write_koris_env()
+        self._write_kubelet_default()
+        self._write_cloud_config()
 
     def _write_koris_env(self):
         """

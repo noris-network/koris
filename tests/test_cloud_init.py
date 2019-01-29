@@ -1,6 +1,7 @@
 """
 tests for koris.provision.cloud_init
 """
+import base64
 from unittest.mock import patch
 
 import pytest
@@ -154,3 +155,10 @@ def test_cloud_init(ci_nth_master):
 
 def test_node_init(ci_node):
     ci_node._write_koris_env()
+
+
+def test_node_has_cloud_init(ci_node):
+    ci_node._write_cloud_config()
+    cloud_config = ci_node._cloud_config_data['write_files'][-1]
+    assert b'username' in base64.b64decode(cloud_config['content'])
+    assert cloud_config['path'] == '/etc/kubernetes/cloud.config'
