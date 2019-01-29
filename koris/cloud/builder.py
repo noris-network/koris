@@ -20,7 +20,7 @@ from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
 from koris.util.util import get_logger
-from .openstack import OSClusterInfo, BuilderError, InstanceExists
+from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer,
                         )
