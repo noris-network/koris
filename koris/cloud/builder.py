@@ -29,7 +29,6 @@ LOGGER = get_logger(__name__)
 
 NOVA, NEUTRON, CINDER = get_clients()
 
-
 def get_server_range(servers, cluster_name, role, amount):
     """
     Given a list of servers find the last server name and add N more
@@ -309,12 +308,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                         "Kubernetes", "CDA-RT",
                         "kubernetes-ca")
         return CertBundle(_key, _ca)
-
-    def run(self, config):  # pylint: disable=too-many-locals
-        """
-        execute the complete cluster build
-        """
+    
+    def create_network(self, config):
         # create a security group for the cluster if not already present
+
+
         if self.info.secgroup.exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
@@ -332,6 +330,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         cloud_config = OSCloudConfig(subnet['id'])
         LOGGER.info("Using subnet %s", subnet['name'])
 
+    def run(self, config):  # pylint: disable=too-many-locals
+        """
+        execute the complete cluster build
+        """
+        self.create_network(config)
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
         ca_bundle = self.create_ca()

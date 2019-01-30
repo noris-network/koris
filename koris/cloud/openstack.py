@@ -738,6 +738,82 @@ def get_clients():
     return nova, neutron, cinder
 
 
+class OSNetwork:
+
+    def __init__(self, neutron_client, config):
+        self.net_client = neutron_client
+        self.config = config
+
+    def get_or_create(self):
+        """
+        neutron: must be a nuetron client instance
+
+        return: dict with network propertires
+        """
+        if not 'private-net' in self.config:
+            net_name = "koris-%s-net" % self.config['cluster-name']
+        else:   
+            net_name = self.config.get('private-net')['name']
+        networks = self.net_client.list_networks()['networks']
+        network = [n for n in networks if n['name'] == net_name]
+        network = network[0] if network else None
+
+        if network:
+            print(info(yellow(
+                "The network [%s] already exists. Skipping" % net_name)))  # noqa
+        else:
+            print(info(red("Creating network [%s]" % net_name)))
+            network = self.net_client.create_network(
+                {'network':
+                    {'name': net_name,
+                    'admin_state_up': True}})
+            network = network['network']
+        
+        return network
+
+
+class OSSubnet:
+    
+    def __init__(self, neutron_client, network_id, config):
+        self.net_client= neutron_client
+        self.net_id = network_id
+        self.config = config
+    
+    def get_or_create(self):
+        """
+        return: dict with network propertires
+        """
+        if not 'private_net' in self.config:
+            subnet_name = "koris-%s-subnet" % self.config['cluster-name']
+        else:
+            subnet_name = self.config.get('private_net')['subnet']
+            
+        subnets = self.net_client.list_subnets()['subnets']
+
+        # using OpenStack we needed more than one subnetwork.
+        # in Kuberentes we delegate networking security to policies.
+        # Thus, all the Pods are in the same subnet, but traffic
+        # is only allowed between matching labels
+        subnet = [s for s in subnets if s['name'] == subnet_name]
+        subnet = subnet[0] if subnet else {}
+
+        if subnet:
+            print(info(yellow("subnetwork [%s] already exists. Skipping..." %
+                            subnet_name)))
+
+        else:
+            print(info(red("creating a subnetwork")))
+            subnet['ip_version'] = 4
+            subnet['network_id'] = self.net_id
+            # TODO
+            subnet['cidr'] = '192.168.2.1/16'
+            subnet['name'] = subnet_name
+            subnet = self.net_client.create_subnet({'subnet': subnet})
+            subnet = subnet['subnet']
+
+        return subnet
+
+
 class OSCloudConfig:
     """
     Data class to hold the configuration file for kubernetes cloud provider
@@ -817,6 +893,8 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
 
+        self.net = OSNetwork(neutron_client, config).get_or_create()
+        
         secgroup = SecurityGroup(neutron_client, config['cluster-name'],
                                  subnet=config.get('subnet'))
 
@@ -824,13 +902,9 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.secgroup = secgroup
         self.secgroups = [secgroup.id]
 
-        self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
-        if 'subnet' in config:
-            self.subnet_id = neutron_client.find_resource('subnet',
-                                                          config['subnet'])['id']  # noqa
-        else:
-            self.subnet_id = neutron_client.list_subnets()['subnets'][-1]['id']
-
+        
+        self.subnet_id = OSSubnet(neutron_client, self.net['id'], config).get_or_create()['id']
+          # noqa
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
