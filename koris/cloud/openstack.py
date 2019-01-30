@@ -750,9 +750,9 @@ class OSNetwork:
 
         return: dict with network propertires
         """
-        if not 'private-net' in self.config:
+        if 'private-net' not in self.config:
             net_name = "koris-%s-net" % self.config['cluster-name']
-        else:   
+        else:
             net_name = self.config.get('private-net')['name']
         networks = self.net_client.list_networks()['networks']
         network = [n for n in networks if n['name'] == net_name]
@@ -766,28 +766,28 @@ class OSNetwork:
             network = self.net_client.create_network(
                 {'network':
                     {'name': net_name,
-                    'admin_state_up': True}})
+                     'admin_state_up': True}})
             network = network['network']
-        
+
         return network
 
 
 class OSSubnet:
-    
+
     def __init__(self, neutron_client, network_id, config):
-        self.net_client= neutron_client
+        self.net_client = neutron_client
         self.net_id = network_id
         self.config = config
-    
+
     def get_or_create(self):
         """
         return: dict with network propertires
         """
-        if not 'private_net' in self.config:
+        if 'private_net' not in self.config:
             subnet_name = "koris-%s-subnet" % self.config['cluster-name']
         else:
             subnet_name = self.config.get('private_net')['subnet']
-            
+
         subnets = self.net_client.list_subnets()['subnets']
 
         # using OpenStack we needed more than one subnetwork.
@@ -799,7 +799,7 @@ class OSSubnet:
 
         if subnet:
             print(info(yellow("subnetwork [%s] already exists. Skipping..." %
-                            subnet_name)))
+                              subnet_name)))
 
         else:
             print(info(red("creating a subnetwork")))
@@ -894,17 +894,18 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             name=config['master_flavor'])
 
         self.net = OSNetwork(neutron_client, config).get_or_create()
+
+        subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
         
+        self.subnet_id = subnet['id']
         secgroup = SecurityGroup(neutron_client, config['cluster-name'],
-                                 subnet=config.get('subnet'))
+                                 subnet=subnet['name'])
 
         secgroup.get_or_create_sec_group(config['cluster-name'])
         self.secgroup = secgroup
         self.secgroups = [secgroup.id]
 
-        
-        self.subnet_id = OSSubnet(neutron_client, self.net['id'], config).get_or_create()['id']
-          # noqa
+
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']

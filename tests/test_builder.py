@@ -62,7 +62,7 @@ CONFIG = {
     "keypair": "otiram",
     "availibility-zones": ['nbg6-1a', 'nbg6-1b'],
     "cluster-name": "test",
-    "private_net": "test-net",
+    "private_net": {"name": "test-net", "subnet": "foobar"},
     "security_group": "test-group",
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.2-4",
@@ -79,10 +79,21 @@ NEUTRON.create_port = mock.MagicMock(
 
 NEUTRON.create_security_group = mock.MagicMock(
     return_value={"security_group": {'id':
-                                     'e5d896d7-b2bc-4b0c-94ba-c542b4b8e49c'}})
+                                     'e5d896d7-b2bc-4b0c-94ba-c542b4b8e49c',
+                                     'name': 'foo-sec'
+                                     }})
 
 NEUTRON.list_subnets = mock.MagicMock(
-    return_value={'subnets': [{'id': 'e6d899d9-b1bc-4b1c-96ba-c541b4b8e49c'}]})
+    return_value={'subnets': [{'id': 'e6d899d9-b1bc-4b1c-96ba-c541b4b8e49c',
+                               'name': 'foosubnet'}]})
+
+NEUTRON.list_networks.return_value = {'networks': [
+    {'id': 'e5d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'foobar'}]}
+
+
+NEUTRON.create_network.return_value = {
+    'network': {'id': 'e5d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'foobar'}}
+
 
 NEUTRON.list_lbaas_loadbalancers = mock.MagicMock(
     return_value={'loadbalancers': [
@@ -112,6 +123,7 @@ def dummy_server():
 def os_info():
     NEUTRON.list_security_groups = mock.MagicMock(
         return_value=iter([{"security_groups": []}]))
+    import pdb; pdb.set_trace()
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
     return osinfo
 
