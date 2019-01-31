@@ -4,12 +4,18 @@ General purpose utilities
 import base64
 import copy
 import logging
+import re
 import time
+
 
 from functools import lru_cache
 from functools import wraps
+from html.parser import HTMLParser
+from pkg_resources import parse_version
 
 import yaml
+
+from koris.util.hue import red  # pylint: disable=no-name-in-module
 
 
 def get_logger(name, level=logging.INFO):
@@ -106,3 +112,48 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
         return f_retry  # true decorator
 
     return deco_retry
+
+
+class TitleParser(HTMLParser):  # pylint: disable=abstract-method
+    """
+    parse <title></title> from a given HTML page.
+    """
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.match = False
+        self.title = ''
+
+    def handle_starttag(self, tag,    # pylint: disable=arguments-differ
+                        attributes):  # pylint: disable=unused-argument
+
+        """handle the attributes of the page"""
+        self.match = tag == 'title'
+
+    def handle_data(self, data):
+        if self.match:
+            self.title = data
+            self.match = False
+
+
+class KorisVersionCheck:  # pylint: disable=too-few-public-methods
+    """check the version published in the koris docs"""
+
+    def __init__(self, html_string):
+
+        parser = TitleParser()
+        parser.feed(html_string)
+        title = parser.title
+
+        match = re.search(r"v\d\.\d{1,2}\.\d{1,2}\w*", title)
+        try:
+            version = match.group().lstrip("v")
+            self.version = version
+        except AttributeError:
+            self.version = "0.0.0"
+
+    def check_is_latest(self, current_version):
+        """compare the published version on the docs to the current_version"""
+        if parse_version(self.version) > parse_version(re.sub(r"\.dev\d*", "",
+                                                              current_version)):
+            print(red("Version {} of Koris was released, you should upgrade!".format(
+                self.version)))

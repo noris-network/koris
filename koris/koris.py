@@ -9,13 +9,19 @@ It automatically creates an executable in your path.
 """
 import argparse
 import os
+import ssl
 import sys
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 import yaml
+
 
 from mach import mach1
 
 from koris.cloud.openstack import get_clients, OSCloudConfig
 from koris.cloud.openstack import BuilderError, InstanceExists
+from koris.util.util import KorisVersionCheck
+
 from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
@@ -26,6 +32,10 @@ from .util.util import (get_logger, )
 from .cloud.builder import ClusterBuilder, NodeBuilder
 from .cloud.openstack import OSClusterInfo
 
+# pylint: disable=protected-access
+ssl._create_default_https_context = ssl._create_unverified_context
+
+KORIS_DOC_URL = "https://pi.docs.noris.net/koris/"
 LOGGER = get_logger(__name__)
 
 
@@ -45,6 +55,13 @@ class Koris:  # pylint: disable=no-self-use
             "--version", action="store_true",
             help="show version and exit",
             default=argparse.SUPPRESS)
+
+        try:
+            html_string = str(urlopen(KORIS_DOC_URL).read())
+        except (HTTPError, URLError):
+            html_string = ""
+
+        KorisVersionCheck(html_string).check_is_latest(__version__)
 
     def _get_version(self):
         print("%s version: %s" % (self.__class__.__name__, __version__))
