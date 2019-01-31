@@ -11,6 +11,7 @@ import time
 from functools import lru_cache
 from functools import wraps
 from html.parser import HTMLParser
+from pkg_resources import parse_version
 
 import yaml
 
@@ -152,6 +153,7 @@ class KorisVersionCheck:  # pylint: disable=too-few-public-methods
 
     def check_is_latest(self, current_version):
         """compare the published version on the docs to the current_version"""
-        if self.version > re.sub(r"\.dev\d*", "", current_version):
+        if parse_version(self.version) > parse_version(re.sub(r"\.dev\d*", "",
+                                                              current_version)):
             print(red("Version {} of Koris was released, you should upgrade!".format(
                 self.version)))
