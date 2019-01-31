@@ -93,7 +93,7 @@ class InstanceExists(Exception):
     """raise a custom error if the machine exists"""
 
 
-class Instance:
+class Instance:  # pylint: disable=too-many-arguments
     """
     Create an Openstack Server with an attached volume
     """
@@ -106,9 +106,7 @@ class Instance:
         self.network = network
         self.zone = zone
         self.flavor = flavor
-        self.volume_size = volume_config.get('size', '25')
-        self.volume_class = volume_config.get('class')
-        self.volume_img = volume_config.get('image')
+        self.volume_config = volume_config
         self.role = role
         self.ports = []
         self._ip_address = None
@@ -141,15 +139,15 @@ class Instance:
         bdm_v2 = {
             "boot_index": 0,
             "source_type": "volume",
-            "volume_size": str(self.volume_size),
+            "volume_size": str(self.volume_config.get('size', 25)),
             "destination_type": "volume",
             "delete_on_termination": True}
 
-        vol = self.cinder.volumes.create(self.volume_size,
+        vol = self.cinder.volumes.create(self.volume_config.get('size', 25),
                                          name=self.name,
-                                         imageRef=self.volume_img.id,
+                                         imageRef=self.volume_config.get('image').id,
                                          availability_zone=self.zone,
-                                         volume_type=self.volume_class)
+                                         volume_type=self.volume_config.get('class'))
 
         while vol.status != 'available':
             await asyncio.sleep(1)
@@ -239,6 +237,7 @@ class LoadBalancer:  # pragma: no coverage
     Thus we create a LoadBalancer, so we have it's IP. The IP
     of the LoadBalancer, is then stored in the SSL certificates.
     During the boot of the machines, we configure the LoadBalancer.
+
     """
 
     def __init__(self, config, client=None):
@@ -328,7 +327,7 @@ class LoadBalancer:  # pragma: no coverage
             self._id = lb['id']
             self._subnet_id = lb['vip_subnet_id']
             self._data = lb
-            self.pool = lb['pools'][0]['id']
+            self.pool = lb['pools'][0]['id'] if lb['pools'] else None
 
         return lb, fip_addr
 
@@ -416,9 +415,11 @@ class LoadBalancer:  # pragma: no coverage
             - if healthmonitor in pool, delete it first
             - remove listener (LB is pending update)
             - remove LB (LB is pending delete)
+
         Args:
             client (neutron client)
             suffix (str) - the suffix of the name, appended to name
+
         """
         if not client:
             client = self.client
@@ -441,7 +442,7 @@ class LoadBalancer:  # pragma: no coverage
     def _associate_floating_ip(self, client, loadbalancer):
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
-            valid_ip = re.match(r"\d{2,3}\.\d{2,3}\.\d{2,3}\.\d{2,3}",  # noqa
+            valid_ip = re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # noqa
                                 self.floatingip)
             if not valid_ip:
                 LOGGER.error("Please specify a valid IP address")
@@ -487,7 +488,7 @@ class LoadBalancer:  # pragma: no coverage
                                             }})
         return listener
 
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1)
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
     def _add_pool(self, client, listener_id):
         pool = client.create_lbaas_pool(
             {"pool": {"lb_algorithm": "SOURCE_IP",
@@ -500,7 +501,7 @@ class LoadBalancer:  # pragma: no coverage
 
         return pool['pool']
 
-    @retry(exceptions=(StateInvalidClient,), tries=10, delay=3, backoff=1,
+    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1,
            logger=LOGGER.debug)
     def _add_health_monitor(self, client, pool_id):
         client.create_lbaas_healthmonitor(
@@ -841,6 +842,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
     @property
     def image(self):
+        """find the koris image in OpenStackAPI"""
         try:
             return self._novaclient.glance.find_image(self._image_name)
         except NoUniqueMatch:

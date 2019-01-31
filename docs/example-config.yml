@@ -14,7 +14,6 @@ availibility-zones:
  - de-nbg6-1a
 n-masters: 3
 n-nodes: 3
-n-etcds: 3
 keypair: 'youruser'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
@@ -30,6 +29,5 @@ image: "ubuntu-16.04-koris-base"
 # domain-name: foo.bar.noris.de
 # reuse an existing floating ip from your pool
 #  floatingip: 213.95.155.145
-
 #storage_class: "BSS-Performance-Storage"
 storage_class: "PI-Storage-Class"

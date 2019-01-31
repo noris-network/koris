@@ -143,7 +143,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
         write out flags for kubelet systemd unit
         """
         content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=openstack'''
-                   '''--cloud-config=/etc/kubernetes/cloud.config"''')
+                   ''' --cloud-config=/etc/kubernetes/cloud.config"''')
         self.write_file("/etc/default/kubelet", content, "root",
                         "root", "0600")
 
@@ -192,20 +192,31 @@ class NthMasterInit(BaseInit):
 # pylint: disable=too-many-arguments
 class FirstMasterInit(NthMasterInit):
     """
-    First node is a special nth node. Therefore we inherit from NthMasterInit.
-    First node needs to execute bootstrap script.
-    """
-    def __init__(self, ssh_key, ca_bundle, cloud_config,
-                 masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
-                 os_type='ubuntu', os_version="16.04"):
-        """
-        ssh_key is a RSA keypair (return value from create_key from koris.ssl module)
+    This node executes the bootstrap strip to create the initial cluster.
+
+    Args:
+        ssh_key (RSAkeypair) - an RSA keypair instance from
+                :func:`~koris.ssl.create_key`
         ca_bundle: The CA bundle for the CA that is used to permit accesses
             to the API server.
         cloud_config: An OSCloudConfig instance describing the information
-            necessary for sending requests to the underlying cloud. Needed e.g.
-            for auto scaling.
-        """
+            necessary for sending requests to the underlying cloud.
+        masters (list): a list of :py:class:`koris.cloud.openstack.Instance`
+        lb_ip (str): the IP address of the loadbalancer
+        lb_port (int): the port which the loadbalancer listens on
+        bootstrap_token (str): the nodes initial bootstrap token
+        lb_dns (str): if specified the nodes will access the loadbalancer via
+            calls to this DNS name instead of the IP address.
+        pod_subnet (str): the POD subnetwork
+        os_type (str): the OS type the bootstrap script runs on
+        os_version (str): OS version the bootstrap script runs on
+
+    """
+    def __init__(self, ssh_key, ca_bundle, cloud_config,
+                 masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
+                 pod_subnet='10.233.0.0/16',
+                 pod_network='CALICO',
+                 os_type='ubuntu', os_version="16.04"):
         super().__init__(cloud_config, ssh_key, os_type, os_version)
         self.ca_bundle = ca_bundle
 
@@ -215,6 +226,8 @@ class FirstMasterInit(NthMasterInit):
         self.lb_port = lb_port
         self.bootstrap_token = bootstrap_token
         self.lb_dns = lb_dns
+        self.pod_network = pod_network
+        self.pod_subnet = pod_subnet
         self.role = 'master'
 
         # assemble the parts for the first master
@@ -254,11 +267,14 @@ class FirstMasterInit(NthMasterInit):
 
             export BOOTSTRAP_TOKEN="{}"
 
-            export POD_SUBNET=10.233.0.0/16
+            export POD_SUBNET="{}"
+            export POD_NETWORK="{}"
 
         """.format(" ".join(self.master_ips), " ".join(self.master_names),
                    self.lb_dns if self.lb_dns else "",
-                   self.lb_ip, self.lb_port, self.bootstrap_token)
+                   self.lb_ip, self.lb_port, self.bootstrap_token,
+                   self.pod_subnet,
+                   self.pod_network)
         content = textwrap.dedent(content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")
@@ -286,6 +302,8 @@ class NodeInit(BaseInit):
 
         # assemble parts for the node
         self._write_koris_env()
+        self._write_kubelet_default()
+        self._write_cloud_config()
 
     def _write_koris_env(self):
         """

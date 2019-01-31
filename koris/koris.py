@@ -14,7 +14,7 @@ import yaml
 
 from mach import mach1
 
-from koris.cloud.openstack import get_clients
+from koris.cloud.openstack import get_clients, OSCloudConfig
 from koris.cloud.openstack import BuilderError, InstanceExists
 from . import __version__
 from .cli import delete_cluster
@@ -46,7 +46,7 @@ class Koris:  # pylint: disable=no-self-use
             help="show version and exit",
             default=argparse.SUPPRESS)
 
-    def _get_version(self):  # pylint: disable=no-self-use
+    def _get_version(self):
         print("%s version: %s" % (self.__class__.__name__, __version__))
 
     def apply(self, config):
@@ -101,13 +101,21 @@ class Koris:  # pylint: disable=no-self-use
         with open(config, 'r') as stream:
             config_dict = yaml.safe_load(stream)
 
-        k8s_config_path = os.getenv("KUBECONFIG")
-        k8s = K8S(k8s_config_path)
-        token = k8s.get_bootstrap_token()
-        info = OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict)
-        node_builder = NodeBuilder(config_dict, info)
+        k8s = K8S(os.getenv("KUBECONFIG"))
+        try:
+            subnet = self.neutron.find_resource('subnet', config_dict['subnet'])
+        except KeyError:
+            subnet = self.neutron.list_subnets()['subnets'][-1]
+
+        cloud_config = OSCloudConfig(subnet['id'])
+
+        node_builder = NodeBuilder(
+            config_dict,
+            OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict),
+            cloud_config=cloud_config)
+
         tasks = node_builder.create_nodes_tasks(k8s.host,
-                                                token,
+                                                k8s.get_bootstrap_token(),
                                                 k8s.ca_info,
                                                 role=role,
                                                 zone=zone,

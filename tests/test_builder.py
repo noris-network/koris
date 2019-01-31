@@ -17,6 +17,10 @@ DUMMYPORT = {"port": {"admin_state_up": True,
                       "fixed_ips": [{"ip_address": "192.168.1.101"}]}}
 
 
+class CloudConfig:
+    pass
+
+
 class Flavor:
 
     def __init__(self, name):
@@ -125,7 +129,7 @@ def test_node_builder(os_info, dummy_server):
                          write=False)
 
     lb_ip = '212.58.134.78'
-    node_tasks = nb.create_initial_nodes(certs['ca'], lb_ip,
+    node_tasks = nb.create_initial_nodes(CloudConfig(), certs['ca'], lb_ip,
                                          "6443",
                                          "123456.abcdefg12345678",
                                          "discovery_hash",

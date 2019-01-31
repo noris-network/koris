@@ -20,7 +20,7 @@ from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
 
 from koris.util.util import get_logger
-from .openstack import OSClusterInfo, BuilderError, InstanceExists
+from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer,
                         )
@@ -49,15 +49,16 @@ class NodeBuilder:
     and network interface. The machines are provisioned with cloud-init.
 
     Args:
-        nova (nova client instance) - to create a volume and a machine
-        neutron (neutron client instance) - to create a network interface
         config (dict) - the parsed configuration file
+        osinfo (OSClusterInfo) - information about the currect cluster
+        cloud_config (OSCloudConfig) - the cloud config generator
     """
-    def __init__(self, config, osinfo):
+    def __init__(self, config, osinfo, cloud_config=None):
         LOGGER.info(info(cyan(
             "gathering node information from openstack ...")))
         self.config = config
         self._info = osinfo
+        self.cloud_config = cloud_config
 
     def create_new_nodes(self,
                          role='node',
@@ -109,7 +110,6 @@ class NodeBuilder:
 
         ca_cert = ca_info['ca_cert']
         discovery_hash = ca_info['discovery_hash']
-
         url = urllib.parse.urlparse(host)
         host_addr = url.netloc.split(":")[0]
         if ":" in url.netloc:
@@ -151,6 +151,7 @@ class NodeBuilder:
         return list(self._info.distribute_nodes())
 
     def create_initial_nodes(self,
+                             cloud_config,
                              ca_bundle,
                              lb_ip,
                              lb_port,
@@ -160,6 +161,8 @@ class NodeBuilder:
         """
         Create all initial nodes when running ``koris apply <config>``
         """
+        self.cloud_config = cloud_config
+
         nodes = self.get_nodes()
         nodes = self._create_nodes_tasks(ca_bundle.cert,
                                          lb_ip, lb_port, bootstrap_token,
@@ -184,7 +187,7 @@ class NodeBuilder:
                 raise InstanceExists("Node {} already exists! Skipping "
                                      "creation of the cluster.".format(node))
 
-            userdata = str(NodeInit(ca_cert, self._info, lb_ip, lb_port,
+            userdata = str(NodeInit(ca_cert, self.cloud_config, lb_ip, lb_port,
                                     bootstrap_token,
                                     discovery_hash))
             tasks.append(loop.create_task(
@@ -195,7 +198,7 @@ class NodeBuilder:
         return tasks
 
 
-class ControlPlaneBuilder:
+class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     """
     Interact with openstack and create a virtual machines with a volume,
     and network interface. The machines are provisioned with cloud-init.
@@ -224,7 +227,9 @@ class ControlPlaneBuilder:
         return list(self._info.distribute_management())
 
     def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
-                             lb_port, bootstrap_token, lb_dns=''):
+                             lb_port, bootstrap_token, lb_dns='',
+                             pod_subnet="10.233.0.0/16",
+                             pod_network="CALICO"):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -239,14 +244,16 @@ class ControlPlaneBuilder:
 
         for index, master in enumerate(masters):
             if master.exists:
-                raise BuilderError("Node {} already exists! Skipping "
-                                   "creation of the cluster.".format(master))
+                raise InstanceExists("Node {} already exists! Skipping "
+                                     "creation of the cluster.".format(master))
             if not index:
                 # create userdata for first master node if not existing
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
                                                cloud_config, masters,
                                                lb_ip, lb_port,
-                                               bootstrap_token, lb_dns))
+                                               bootstrap_token, lb_dns,
+                                               pod_subnet,
+                                               pod_network))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(cloud_config, ssh_key))
@@ -265,8 +272,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     Plan and build a kubernetes cluster in the cloud
     """
     def __init__(self, config):
-        if not (config['n-etcds'] % 2 and config['n-etcds'] > 1):
-            print(red("You must have an odd number (>1) of etcd machines!"))
+        if not (config['n-masters'] % 2 and config['n-masters'] >= 1):
+            print(red("You must have an odd number (>=1) of masters!"))
             sys.exit(2)
 
         self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
@@ -357,7 +364,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Waiting for the master machines to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(
             ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
-            bootstrap_token, lb_dns)
+            bootstrap_token, lb_dns,
+            config.get("pod_subnet", "10.233.0.0/16"),
+            config.get("pod_network", "CALICO"))
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -371,6 +380,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched...")
         node_tasks = self.nodes_builder.create_initial_nodes(
+            cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
         node_tasks.append(configure_lb_task)
@@ -395,12 +405,16 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # available.
         k8s = K8S(kubeconfig)
 
+        LOGGER.handlers[0].terminator = ""
+        LOGGER.info("Kubernetes API Server is still not ready ...")
         while not k8s.is_ready:
-            LOGGER.info("Kubernetes API Server is still not ready ...")
             time.sleep(2)
+            LOGGER.info(".")
 
-        LOGGER.info("Kubernetes API is ready!")
-        LOGGER.info("Waiting for all masters to become Ready")
+        LOGGER.handlers[0].terminator = "\n"
+
+        LOGGER.info("\nKubernetes API is ready!"
+                    "\nWaiting for all masters to become Ready")
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
 
         LOGGER.info("Configured load balancer to use all API servers")
