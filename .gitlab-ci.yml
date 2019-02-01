@@ -124,6 +124,10 @@ check-node-labels:
   script:
   - "pip3 install -q -e ."
   - "make assert-node-labels"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
 
 security-checks-masters:
   stage: security-checks
