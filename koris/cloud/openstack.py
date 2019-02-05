@@ -739,7 +739,9 @@ def get_clients():
 
 
 class OSNetwork:
-
+    """
+    create network if not defined
+    """
     def __init__(self, neutron_client, config):
         self.net_client = neutron_client
         self.config = config
@@ -764,16 +766,20 @@ class OSNetwork:
         else:
             print(info(red("Creating network [%s]" % net_name)))
             network = self.net_client.create_network(
-                {'network':
-                    {'name': net_name,
-                     'admin_state_up': True}})
+                {'network': {
+                    'name': net_name,
+                    'admin_state_up': True
+                    }
+                })
             network = network['network']
 
         return network
 
 
 class OSSubnet:
-
+    """
+    create subnet if not defined
+    """
     def __init__(self, neutron_client, network_id, config):
         self.net_client = neutron_client
         self.net_id = network_id
@@ -781,7 +787,7 @@ class OSSubnet:
 
     def get_or_create(self):
         """
-        return: dict with network propertires
+        return: dict with network properties
         """
         if 'private_net' not in self.config:
             subnet_name = "koris-%s-subnet" % self.config['cluster-name']
@@ -805,8 +811,11 @@ class OSSubnet:
             print(info(red("creating a subnetwork")))
             subnet['ip_version'] = 4
             subnet['network_id'] = self.net_id
-            # TODO
-            subnet['cidr'] = '192.168.2.1/16'
+            # TODO which cidr to apply if not exist in config
+            if 'private_net' not in self.config:
+                subnet['cidr'] = '192.168.2.0/16'
+            else:
+                subnet['cidr'] = self.config.get('private_net')['cidr']
             subnet['name'] = subnet_name
             subnet = self.net_client.create_subnet({'subnet': subnet})
             subnet = subnet['subnet']
@@ -818,7 +827,6 @@ class OSCloudConfig:
     """
     Data class to hold the configuration file for kubernetes cloud provider
     """
-
     def __init__(self, subnet_id=None):
         os_vars = read_os_auth_variables(trim=False)
         self.subnet_id = subnet_id
@@ -896,7 +904,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.net = OSNetwork(neutron_client, config).get_or_create()
 
         subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
-        
         self.subnet_id = subnet['id']
         secgroup = SecurityGroup(neutron_client, config['cluster-name'],
                                  subnet=subnet['name'])

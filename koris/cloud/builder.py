@@ -308,10 +308,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                         "Kubernetes", "CDA-RT",
                         "kubernetes-ca")
         return CertBundle(_key, _ca)
-    
-    def create_network(self, config):
-        # create a security group for the cluster if not already present
 
+    def create_network(self, config):
+        """create network for cluster if not already present"""
 
         if self.info.secgroup.exists:
             LOGGER.info(info(red(
@@ -329,12 +328,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         cloud_config = OSCloudConfig(subnet['id'])
         LOGGER.info("Using subnet %s", subnet['name'])
+        return cloud_config
 
     def run(self, config):  # pylint: disable=too-many-locals
         """
         execute the complete cluster build
         """
-        self.create_network(config)
+        cloud_config = self.create_network(config)
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
         ca_bundle = self.create_ca()

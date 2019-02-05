@@ -1,12 +1,12 @@
 """
 Test koris.cloud.builder
 """
-import pytest
 from unittest import mock
+import pytest
 
 import koris.cloud.openstack
 
-from koris.cloud.openstack import OSClusterInfo
+from koris.cloud.openstack import OSClusterInfo, OSSubnet
 from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
 from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
 
@@ -62,7 +62,20 @@ CONFIG = {
     "keypair": "otiram",
     "availibility-zones": ['nbg6-1a', 'nbg6-1b'],
     "cluster-name": "test",
-    "private_net": {"name": "test-net", "subnet": "foobar"},
+    "private_net": {"name": "test-net", "subnet": "foobar", "cidr": "192.168.2.0/24"},
+    "security_group": "test-group",
+    "image": "ubuntu 16.04",
+    "node_flavor": "ECS.C1.2-4",
+    "master_flavor": "ECS.C1.4-8",
+    'storage_class': "TestStorageClass"
+}
+
+CONFIG2 = {
+    "n-nodes": 3,
+    "n-masters": 3,
+    "keypair": "otiram",
+    "availibility-zones": ['nbg6-1a', 'nbg6-1b'],
+    "cluster-name": "test",
     "security_group": "test-group",
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.2-4",
@@ -111,6 +124,32 @@ NEUTRON.list_lbaas_loadbalancers = mock.MagicMock(
          'vip_port_id': 'ab3c7667-004b-4827-b2dd-a887cdd94199',
          'vip_subnet_id': '01f67963-00eb-4080-a9d9-4cbe936984cd'}]})
 
+SUBNETS = {
+    "service_types": [],
+    "description": "",
+    "updated_at": "2019-01-30T13:47:45Z",
+    "cidr": "192.168.0.0/16",
+    "ip_version": 4,
+    "ipv6_ra_mode": None,
+    "host_routes": [],
+    "id": "163e7002-3f9a-4b80-bf81-ff01d8bbf270",
+    "allocation_pools": [{
+        "start": "192.168.0.2",
+        "end": "192.168.255.254"
+    }],
+    "ipv6_address_mode": None,
+    "network_id": "04536050-0902-4673-acba-ae54cf7810f6",
+    "gateway_ip": "192.168.0.1",
+    "name": "bar-baz",
+    "subnetpool_id": None,
+    "project_id": "f4c0a6de561e487d8ba5d1cc3f1042e8",
+    "revision_number": 2,
+    "tenant_id": "f4c0a6de561e487d8ba5d1cc3f1042e8",
+    "tags": [],
+    "dns_nameservers": [],
+    "enable_dhcp": True,
+    "created_at": "2019-01-30T13:47:45Z"
+}
 
 @pytest.fixture
 def dummy_server():
@@ -121,12 +160,34 @@ def dummy_server():
 
 @pytest.fixture
 def os_info():
+    """test cluster info class"""
     NEUTRON.list_security_groups = mock.MagicMock(
         return_value=iter([{"security_groups": []}]))
-    import pdb; pdb.set_trace()
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
     return osinfo
 
+def test_create_network_settings_from_config():
+    """test create network from config"""
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
+    sub = OSSubnet(NEUTRON, '12', CONFIG)
+    subs = sub.get_or_create()
+    assert 'name' in subs
+    assert 'cidr' in subs
+
+def test_create_network_settings_not_in_config():
+    """test create network no settings in config"""
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
+    sub = OSSubnet(NEUTRON, '12', CONFIG2)
+    subs = sub.get_or_create()
+    assert 'name' in subs
+    assert 'cidr' in subs
 
 def test_node_builder(os_info, dummy_server):
     """ test the node builder class """
