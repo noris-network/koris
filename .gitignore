@@ -107,3 +107,6 @@ ENV/
 # mypy
 .mypy_cache/
 .idea
+
+# VSCode project settings
+.vscode/
