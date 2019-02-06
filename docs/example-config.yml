@@ -3,6 +3,8 @@
 ---
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
+# If your project has multiple networks you MUST specify the subnetwork too
+private_net: 'korispipeline-office-net'
 private_net: 'k8s-network'
 # optionally specify the subnet
 # IF YOU INTENED TO create LoadBalancer with Kubernetes you __MUST__
@@ -20,14 +22,12 @@ user_data: 'cloud-init-parts/generic'
 # you should currently use koris-base
 # this image includes all k8s binaries and a special kernel
 # optimized for KVM (this image is built from
-# ubuntu-16.04-minimal-cloudimg-amd64-disk1.img
-image: "ubuntu-16.04-koris-base"
-#image: "Ubuntu Xenial Server Cloudimg"
+image: "koris-2019-YYYY-MM-DD"
 # loadbalancer:
-# set this to if you want to add this name to SAN certificates
-# this is not yet implemented
-# domain-name: foo.bar.noris.de
+# if want the load balancer to have a floating IP, you can also specify the IP
 # reuse an existing floating ip from your pool
 #  floatingip: 213.95.155.145
+#  floatingip: false
+#  floatingip: true
 #storage_class: "BSS-Performance-Storage"
 storage_class: "PI-Storage-Class"
