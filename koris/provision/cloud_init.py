@@ -189,7 +189,7 @@ class NthMasterInit(BaseInit):
         self.add_ssh_public_key(self.ssh_key)
 
 
-# pylint: disable=too-many-arguments
+# pylint: disable=too-many-arguments,too-many-locals
 class FirstMasterInit(NthMasterInit):
     """
     This node executes the bootstrap strip to create the initial cluster.
@@ -242,18 +242,9 @@ class FirstMasterInit(NthMasterInit):
         def prepare_dex():
             from cryptography import x509
             from cryptography.hazmat.backends import default_backend
-            """
-            Creates an OpenID CA with signed certificate to be used by Dex.
 
-            Return:
-                A tuple containing the OICD CA (ssl certificate object)
-                    and the client certificate to use for communication with Dex
-                    (ssl certificate object)
-            """
-
-            ssl_path = os.path.abspath("/home/aknipping/work/koris/dex/ssl")
+            ssl_path = os.path.abspath("dex/ssl")
             dex_ca, dex_cert = None, None
-            
             # CA
             with open(os.path.join(ssl_path, "ca.pem"), "rb") as rf:
                 data = rf.read()
