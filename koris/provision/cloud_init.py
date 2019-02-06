@@ -242,9 +242,24 @@ class FirstMasterInit(NthMasterInit):
         def prepare_dex():
             from cryptography import x509
             from cryptography.hazmat.backends import default_backend
+<<<<<<< HEAD
 
             ssl_path = os.path.abspath("dex/ssl")
             dex_ca, dex_cert = None, None
+=======
+            """
+            Creates an OpenID CA with signed certificate to be used by Dex.
+
+            Return:
+                A tuple containing the OICD CA (ssl certificate object)
+                    and the client certificate to use for communication with Dex
+                    (ssl certificate object)
+            """
+
+            ssl_path = os.path.abspath("/home/aknipping/work/koris/dex/ssl")
+            dex_ca, dex_cert = None, None
+            
+>>>>>>> Deploy Dex CA to master and start apiserver with OIDC flags
             # CA
             with open(os.path.join(ssl_path, "ca.pem"), "rb") as rf:
                 data = rf.read()
