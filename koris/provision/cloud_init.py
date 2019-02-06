@@ -237,6 +237,38 @@ class FirstMasterInit(NthMasterInit):
                         "root", "root", "0600", lambda x: x)
         self.write_file("/etc/kubernetes/pki/ca.key", b64_key(ca_bundle.key),
                         "root", "root", "0600", lambda x: x)
+
+        # WORK: deploy Dex CA
+        def prepare_dex():
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+            """
+            Creates an OpenID CA with signed certificate to be used by Dex.
+
+            Return:
+                A tuple containing the OICD CA (ssl certificate object)
+                    and the client certificate to use for communication with Dex
+                    (ssl certificate object)
+            """
+
+            ssl_path = os.path.abspath("/home/aknipping/work/koris/dex/ssl")
+            dex_ca, dex_cert = None, None
+            
+            # CA
+            with open(os.path.join(ssl_path, "ca.pem"), "rb") as rf:
+                data = rf.read()
+            dex_ca = x509.load_pem_x509_certificate(data, default_backend())
+
+            # Cert
+            with open(os.path.join(ssl_path, "cert.pem"), "rb") as rf:
+                data = rf.read()
+            dex_cert = x509.load_pem_x509_certificate(data, default_backend())
+
+            return dex_ca, dex_cert
+        dex_ca = prepare_dex()[0]
+        self.write_file("/etc/kubernetes/pki/oidc-ca.pem", b64_cert(dex_ca),
+                        "root", "root", "0600", lambda x: x)
+
         self._write_cloud_config()
         self._write_koris_env()
         self._write_ssh_private_key()
