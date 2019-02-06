@@ -811,9 +811,9 @@ class OSSubnet:
             print(info(red("creating a subnetwork")))
             subnet['ip_version'] = 4
             subnet['network_id'] = self.net_id
-            # TODO which cidr to apply if not exist in config
+            # set cidr if not specified in config
             if 'private_net' not in self.config:
-                subnet['cidr'] = '192.168.2.0/16'
+                subnet['cidr'] = '192.168.1.0/16'
             else:
                 subnet['cidr'] = self.config.get('private_net')['cidr']
             subnet['name'] = subnet_name
