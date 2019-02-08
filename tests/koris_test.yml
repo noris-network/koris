@@ -3,10 +3,7 @@
 ---
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-# TODO: fix this in 2019; in the network korispipeline-office-net we cant
-# access subnets graphically. This would not be a problem if everything else
-# works. However, we cannot create LoadBalacer out of OpenStack in this
-# network. In PI network everything works, so talk to the OpenStack boys!
+# If your project has multiple networks you MUST specify the subnetwork too
 private_net: 'korispipeline-office-net'
 # optionally specify the subnet name
 # subnet: 'subnet name'
@@ -28,7 +25,7 @@ image: "koris-%%date%%"
 #image: "Ubuntu Xenial Server Cloudimg"
 loadbalancer:
 # set this to true if you
-# want the load balancer to have a floating IP
+# want the load balancer to have a floating IP, you can also specify the IP
  floatingip: false
 certificates:
   expriry: 8760h
