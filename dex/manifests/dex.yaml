@@ -27,17 +27,17 @@ spec:
         - name: tls
           mountPath: /etc/dex/tls
 
-        # env:
-        # - name: GITHUB_CLIENT_ID
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: github-client
-        #       key: client-id
-        # - name: GITHUB_CLIENT_SECRET
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: github-client
-        #       key: client-secret
+        env:
+        - name: GITLAB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-client
+              key: client-id
+        - name: GITLAB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-client
+              key: client-secret
       volumes:
       - name: config
         configMap:
@@ -65,14 +65,17 @@ data:
       tlsCert: /etc/dex/tls/tls.crt
       tlsKey: /etc/dex/tls/tls.key
     connectors:
-    - type: github
-      id: github
-      name: GitHub
-      config:
-        clientID: $GITHUB_CLIENT_ID
-        clientSecret: $GITHUB_CLIENT_SECRET
-        redirectURI: https://dex.example.com:32000/callback
-        org: kubernetes
+      - type: gitlab
+        id: gitlab
+        name: Gitlab
+        config:
+          baseURL: https://gitlab.noris.net
+          clientID: 1dd9a4fa5381224abca2b9789dcbe5d721367543db44d3b020be48dcbc4156b5
+          clientSecret: 674364d762431b2a93e57e4bc2f67eb1d159313b32f848028f28ca23d66c0c76
+          redirectURI: http://127.0.0.1:5556/dex/callback
+      - type: mockCallback
+        id: mock
+        name: Example
     oauth2:
       skipApprovalScreen: true
 
@@ -96,7 +99,7 @@ kind: Service
 metadata:
   name: dex
 spec:
-  type: NodePort
+  type: LoadBalancer
   ports:
   - name: dex
     port: 5556
