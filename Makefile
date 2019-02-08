@@ -201,6 +201,7 @@ integration-patch:
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
+	@kubectl kubectl delete svc nginx-deployment 2>/dev/null || echo "No such service"
 	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
 
