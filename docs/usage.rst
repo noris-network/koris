@@ -2,118 +2,86 @@
 Usage
 =====
 
-Install koris
+Installation
 ~~~~~~~~~~~~~
 
-Follow the :doc:`installation` instructions.
+Follow the :doc:`installation` instructions to make sure koris is installed properly.
 
 Prepare OpenStack
 ~~~~~~~~~~~~~~~~~
 
-In your browser, navigate to the OpenStack project where you wish to deploy the cluster into.
-For this tutorial, the project ``koris-project`` will be used as reference. 
+1. In your browser, navigate to the OpenStack project where you wish to deploy the cluster into.
+   For this tutorial, the project ``koris-project`` will be used as reference.
 
-Download a `OpenStack RC File v3` as ``koris-project-rc.sh`` into the project root.
+2. Download a `OpenStack RC File v3` as ``koris-project-rc.sh`` into the project root.
 
-In your project, create or import a key pair via **Compute > Key Pairs** and name it``koris-keys``.
+3. In your project, create or import a key pair via **Compute > Key Pairs** and name it``koris-keys``.
 
-Under **Network > Networks**, create a new network including subnet. Change or enter the
-following values (rest stays empty or default):
+4. Under **Network > Networks**, create a new network including subnet. Change or enter the
+   following values (rest stays empty or default):
 
-================ ==============  
-Parameter        Value 
-================ ==============
-Network Name     koris-network  
-Subnet Name      koris-subnet
-Network Address  192.168.0.0/24   
-Gateway IP       192.168.0.1
-DNS Name Servers 192.168.0.2
-DNS Name Servers 192.168.0.3
-================ ==============  
+   ================ ==============  
+   Parameter        Value 
+   ================ ==============
+   Network Name     koris-network  
+   Subnet Name      koris-subnet
+   Network Address  192.168.0.0/24   
+   Gateway IP       192.168.0.1
+   DNS Name Servers 192.168.0.2
+   DNS Name Servers 192.168.0.3
+   ================ ==============  
 
-Under **Network > Routers** create a new router with the name ``koris-router``. Click on the name and
-add a new interface for ``koris-subnet``. Leave the IP address empty as it will be assigned by OpenStack
-automatically. Check **Network > Network Topology** if ``koris-network`` is connected to an external network,
-such as ``ext02`` for example. It should look similar to this:
+5. Under **Network > Routers** create a new router with the name ``koris-router``. Click on the name and
+   add a new interface for ``koris-subnet``. Leave the IP address empty as it will be assigned by OpenStack
+   automatically. Check **Network > Network Topology** if ``koris-network`` is connected to an external network,
+   such as ``ext02`` for example. It should look similar to this:
 
-.. image:: static/_imgs/os_network.png
-      :scale: 75%
+   .. image:: static/_imgs/os_network.png
+         :scale: 75%
 
-Under **Network > Floating IPs** allocate a new Floating IP to the project, but don't associate it.
+6. (**Optional**) If you want a FLoating IP, go to **Network > Floating IPs**. Allocate a new Floating IP to 
+   the external subnet that is connected with your previously created router.
+
+7. (**Optional**) Koris creates the proper security groups needed for a working cluster. However,
+   if you are a building a cluster for a customer which has cloud-connect and needs
+   BGP communication, add the correct security rules in OpenStack:
+
+   .. code-block:: shell
+
+     $ neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
+     $ neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
 Deploy your cluster
 ~~~~~~~~~~~~~~~~~~~
 
-6. Before you can run ``koris`` you need to source your openstack rc file:
+1. Before you can run ``koris``, source your RC file. Then enter your password:
 
-.. code:: shell
+   .. code-block:: shell
+   
+      $ source ~/path/to/your/koris-project-rc.sh
+      Please enter your OpenStack Password for project <PROJECT> as user <USER>\:
 
-   $ source ~/path/to/your/openstack-openrc.sh
-   Please enter your OpenStack Password for project <PROJECT> as user <USEER>\:
+3. Create a koris configuration file. An example can be found :download:`here <example-config.yml>`.
 
-6. To run ``koris`` issue koris <subcommand>. You can get a list of subcommands
-   with ``--help``
+   .. note::
+       Please check if you have access to the pre-built koris images (e.g. ``koris-2019-02-08``) and the
+       Volume type ``PI-Storage-Class``. If not, please contact the OpenStack team to enable them for you.
 
-   .. code:: shell
-
-      koris -h
-      usage: koris [-h] [--version] {apply,destroy,k8s} ...
-
-      positional arguments:
-      {apply,destroy,k8s}  commands
-      apply              Bootstrap a Kubernetes cluster
-      destroy            Delete the complete cluster stack
-      k8s                Bootstrap a Kubernetes cluster (deprecated)
-
-      optional arguments:
-      -h, --help           show this help message and exit
-      --version            show version and exit
-
-7. To view the help of each subcommand
+4. Pass the your config file to ``koris apply``:
 
    .. code:: shell
+   
+      $ koris apply example-config.yml
 
-      $ koris destroy -h
-      usage: koris destroy [-h] config
+5. A ``kubectl`` configuration file with the name ``<cluster-name>-admin.conf`` is automatically created
+   into your project root. Give you used the default names used in this tutorial it should be 
+   ``koris-test-admin.conf``. To interact with your cluster you can either pass it with each execution 
+   such as ``kubectl --kubeconfig`` or export it as an environment variable:
 
-      positional arguments:
-      config
+   .. code-block:: shell
 
-      optional arguments:
-      -h, --help  show this help message and exit
-
-.. note::
-
-   If the machine you would like to install koris on does not have access to
-   gitlab.noris.net, download the source distribution and copy it over:
-
-   .. code:: shell
-
-      curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
-      scp koris-v<LATEST_TAG>.zip remotehost:~/
-
-   repeat the steps to create and activate a virtual environment, and the install
-   the package with pip directly:
-
-   .. code:: shell
-
-      $ pip install koris-v<LATEST_TAG>.zip
-
-8. Koris creates the proper security groups needed for a working cluster. However,
-   if you are a building a cluster for a customer which has cloud-connect and needs
-   BGP communication add a correct security rule for that.
-
-.. code:: shell
-
-   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
-   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
-
-9. To create a cluster create a cluster configuration file (see [example](https://gitlab.noris.net/PI/koris/blob/dev/docs/k8s-machines-config.yml).
-   Pass this file on the shell to the k8s subcommand
-
-.. code:: shell
-
-   $ koris apply <your-cluster-config.yml>
+      $ export KUBECONFIG=koris-test-admin.conf
+      $ kubectl get nodes
 
 Cleanup
 ~~~~~~~
@@ -127,7 +95,7 @@ In case the cluster fails to boot, you can try and either SSH to the cluster and
 A quick insight can be gained, without SSH, to what happened at boot time to the cluster.
 You can see the output of cloud-init with the following sequence of commands:
 
-.. code:: shell
+.. code-block:: shell
 
    $ openstack server list
    +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+

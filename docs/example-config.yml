@@ -1,11 +1,16 @@
 # Use this file to configure the type of machines you want to create
 # on OpenStack
 ---
+# Noris.cloud instance flavors. For available options see
+# https://www.noris.cloud/services/compute/openstack-nova/?lang=en#details
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-# If your project has multiple networks you MUST specify the subnetwork too
+
+# The project's network where your cluster should be deployed into. If you have just
+# one network and subnet and in your project, koris will automatically assign the first
+# subnet it finds.
 private_net: 'korispipeline-office-net'
-private_net: 'k8s-network'
+subnet: 'k8s-network'
 # optionally specify the subnet
 # IF YOU INTENED TO create LoadBalancer with Kubernetes you __MUST__
 # specify the subnet ID.

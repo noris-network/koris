@@ -63,7 +63,7 @@ Installation
 
      $ source koris-env/bin/activate
 
-   You can leave your virtual environment by typing ``exit``.
+   You can leave your virtual environment by typing ``deactivate``.
 
 4. Grab the latest release with the following command (replace 
    ``<LATEST_TAG>`` with the latest version tag, for example ``0.9.0``.
@@ -100,7 +100,7 @@ Usage
    .. code:: shell
 
       $ source ~/path/to/your/openstack-openrc.sh
-      Please enter your OpenStack Password for project <PROJECT> as user <USEER>\:
+      Please enter your OpenStack Password for project <PROJECT> as user <USER>\:
 
 2. Koris is executed with ``koris <subcommand>``. You can get a list of subcommands
    with ``-h`` or ``--help``.
@@ -123,7 +123,7 @@ Usage
         -h, --help           show this help message and exit
         --version            show version and exit
 
-3. To view the help of each subcommand type:
+3. To get information about each subcommand type:
 
    .. code:: shell
 

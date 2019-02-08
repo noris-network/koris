@@ -7,6 +7,13 @@ Installation
 This page focuses on how to install koris for regular usage. If you want to install
 koris for development, please refer to :ref:`get_started_contributing`.
 
+Prerequisites
+-------------
+
+1. Make sure you are on a machine that has access to `gitlab.noris.net <https://gitlab.noris.net/>`_.
+
+2. Have Python3.6 installed.
+
 From stable release
 -------------------
 
