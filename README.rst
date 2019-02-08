@@ -146,7 +146,8 @@ Usage
      neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
      neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-5. Create a configuration file (see `example <https://gitlab.noris.net/PI/koris/blob/dev/docs/example-config.yml>`_).
+5. Create a configuration file. For more information check the :download:`example-config.yml <../configs/example-config.yml>`)
+   or refer to the section :ref:`usage_deploy_cluster`.
 
 6. Run ``koris apply`` with your configuration file as the argument:
 

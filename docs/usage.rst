@@ -51,6 +51,8 @@ Prepare OpenStack
      $ neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
      $ neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
+.. _usage_deploy_cluster:
+
 Deploy your cluster
 ~~~~~~~~~~~~~~~~~~~
 
@@ -61,7 +63,9 @@ Deploy your cluster
       $ source ~/path/to/your/koris-project-rc.sh
       Please enter your OpenStack Password for project <PROJECT> as user <USER>\:
 
-3. Create a koris configuration file. An example can be found :download:`here <example-config.yml>`.
+3. Create a koris configuration file. An example can be found :download:`here <../configs/example-config.yml>`.
+   If you're developing koris and want to deploy a cluster into the PI project, please refer to the
+   :download:`pi-dev-config <../configs/pi-dev-config.yml>`.
 
    .. note::
        Please check if you have access to the pre-built koris images (e.g. ``koris-2019-02-08``) and the
