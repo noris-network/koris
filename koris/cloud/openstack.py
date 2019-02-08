@@ -243,6 +243,7 @@ class LoadBalancer:  # pragma: no coverage
 
     def __init__(self, config, client=None):
         self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
+        self.config = config
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
@@ -389,7 +390,10 @@ class LoadBalancer:  # pragma: no coverage
         if self.subnet:
             subnet_id = client.find_resource('subnet', self.subnet)['id']
         else:
-            subnet_id = client.list_subnets()['subnets'][-1]['id']
+            # match created subnet id with the corresponding one in subnets
+            network = OSNetwork(client, self.config).get_or_create()
+            subnets = client.list_subnets()['subnets']
+            subnet_id = [sub['id'] for sub in subnets if network['id'] == sub['network_id']][0]
 
         lb = client.create_loadbalancer({'loadbalancer':
                                          {'provider': provider,
@@ -902,7 +906,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             name=config['master_flavor'])
 
         self.net = OSNetwork(neutron_client, config).get_or_create()
-
         subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
         self.subnet_id = subnet['id']
         secgroup = SecurityGroup(neutron_client, config['cluster-name'],
