@@ -92,14 +92,17 @@ Installation
 
     $ pip install koris-v<LATEST_TAG>.zip
 
-5. Source your OpenStack RC file and enter your password:
+Usage
+^^^^^
+
+1. Source your OpenStack RC file and enter your password:
 
    .. code:: shell
 
       $ source ~/path/to/your/openstack-openrc.sh
       Please enter your OpenStack Password for project <PROJECT> as user <USEER>\:
 
-6. Koris is executed with ``koris <subcommand>``. You can get a list of subcommands
+2. Koris is executed with ``koris <subcommand>``. You can get a list of subcommands
    with ``-h`` or ``--help``.
 
    .. code:: shell
@@ -120,7 +123,7 @@ Installation
         -h, --help           show this help message and exit
         --version            show version and exit
 
-7. To view the help of each subcommand type:
+3. To view the help of each subcommand type:
 
    .. code:: shell
 
@@ -134,7 +137,7 @@ Installation
         -h, --help   show this help message and exit
         --force, -f
 
-8. Koris creates the proper security groups needed for a working cluster. However,
+4. Koris creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
    BGP communication, add correct security rules in OpenStack:
 
@@ -143,17 +146,17 @@ Installation
      neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
      neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-9. Create a configuration file (see `example <https://gitlab.noris.net/PI/koris/blob/dev/docs/example-config.yml>`_).
+5. Create a configuration file (see `example <https://gitlab.noris.net/PI/koris/blob/dev/docs/example-config.yml>`_).
 
-10. Run ``koris apply`` with your configuration file as the argument:
+6. Run ``koris apply`` with your configuration file as the argument:
 
    .. code:: shell
 
       $ koris apply your-config.yaml
 
-11. A ``kubectl`` configuration file will be created into your project root with the name of 
-   ``<clustername>-admin.conf``. You can either pass that with each execution via
-   ``kubectl --kubeconfig=/path/to/koris/your-admin.conf`` or by exporting it as an environment variable:
+7. A ``kubectl`` configuration file will be created into your project root with the name of ``<clustername>-admin.conf``. 
+   You can either pass that with each execution via ``kubectl --kubeconfig=/path/to/koris/your-admin.conf`` 
+   or by exporting it as an environment variable:
 
    .. code:: shell
 

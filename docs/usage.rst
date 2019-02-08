@@ -2,41 +2,47 @@
 Usage
 =====
 
-Pre-requisits
+Install koris
 ~~~~~~~~~~~~~
 
-1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
-2. A pre-created network, and security group.
-3. Basic understanding of OpenStack.
+Follow the :doc:`installation` instructions.
 
-Get started
-~~~~~~~~~~~
-1. Create a local virtual environment for koris (using your favorite tool),
-   for example the standard Python has a simple virtual environment tool:
+Prepare OpenStack
+~~~~~~~~~~~~~~~~~
 
-.. code:: shell
+In your browser, navigate to the OpenStack project where you wish to deploy the cluster into.
+For this tutorial, the project ``koris-project`` will be used as reference. 
 
-   $ mkdir FooBar
-   $ cd FooBar && python3 -m venv koris-env
+Download a `OpenStack RC File v3` as ``koris-project-rc.sh`` into the project root.
 
-2. Activate the environment with
+In your project, create or import a key pair via **Compute > Key Pairs** and name it``koris-keys``.
 
-.. code:: shell
+Under **Network > Networks**, create a new network including subnet. Change or enter the
+following values (rest stays empty or default):
 
-   $ source ./koris-env/bin/activate
+================ ==============  
+Parameter        Value 
+================ ==============
+Network Name     koris-network  
+Subnet Name      koris-subnet
+Network Address  192.168.0.0/24   
+Gateway IP       192.168.0.1
+DNS Name Servers 192.168.0.2
+DNS Name Servers 192.168.0.3
+================ ==============  
 
-3. you are now inside a virtual environment to leave it type `exit`
+Under **Network > Routers** create a new router with the name ``koris-router``. Click on the name and
+add a new interface for ``koris-subnet``. Leave the IP address empty as it will be assigned by OpenStack
+automatically. Check **Network > Network Topology** if ``koris-network`` is connected to an external network,
+such as ``ext02`` for example. It should look similar to this:
 
-4. To install koris, use a machine which has access to gitlab.noris.net
-   replace <LATEST_TAG> with latest tag, for example 0.5
+.. image:: static/_imgs/os_network.png
+      :scale: 75%
 
-.. code:: shell
+Under **Network > Floating IPs** allocate a new Floating IP to the project, but don't associate it.
 
-   $ pip3 install https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
-
-5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
-   If you exist the virtual environment, you need to activate it again as described
-   in step 2.
+Deploy your cluster
+~~~~~~~~~~~~~~~~~~~
 
 6. Before you can run ``koris`` you need to source your openstack rc file:
 
@@ -109,6 +115,10 @@ Get started
 
    $ koris apply <your-cluster-config.yml>
 
+Cleanup
+~~~~~~~
+
+TODO
 
 Troubleshooting
 ~~~~~~~~~~~~~~~
