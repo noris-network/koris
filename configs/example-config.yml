@@ -1,0 +1,76 @@
+# This is an example koris config file you can use to deploy a 
+# KUbernetes cluster into your own noris.cloud project.
+---
+# Noris.cloud instance flavors. For available options see
+# https://www.noris.cloud/services/compute/openstack-nova/?lang=en#details
+master_flavor: 'ECS.GP1.2-8'
+node_flavor: 'ECS.C1.4-8'
+
+# The project's network where your cluster should be deployed into. 
+# If you have just one network and subnet and in your project, 
+# Koris will automatically assign the first subnet it finds.
+private_net: 'koris-network'
+
+# Koris will automatically create a security group, however you can
+# specify one manually if you wish
+# security_group: 'default'
+
+# You MUST specify a subnet if you have more than one network in your project.
+# If you want to use a LoadBalancer, you MUST specify the subnet ID instead of the name.
+# subnet: 'koris-subnet'
+
+# The cluster name, will be used for configuration files, node names, etc.
+cluster-name: 'koris-test'
+
+# The availabilty zones where the instances will be created in.
+availibility-zones:
+ - de-nbg6-1b
+ - de-nbg6-1a
+
+# The number of master and worker nodes for the cluster.
+# For HA, choose at least 3 each.
+n-masters: 3
+n-nodes: 3
+
+# The name of the keypair in your project.
+keypair: 'koris-key-pair'
+
+# TODO: add explanation
+user_data: 'cloud-init-parts/generic'
+
+# While technically any generic *ubuntu* image will work,
+# only pre-built koris images should be used at the moment.
+# Those images include all Kubernetes binaries as well as
+# specialized kernel optimized for KVM.
+# Those images are built nightly and have the format
+# koris-YYYY-MM-DD
+# If you don't have access to them, please ask to the OpenStack team.
+image: "koris-2019-02-08"
+
+loadbalancer:
+# Set to true if LoadBalancer should have a Floating IP.
+# This requires an unassigned Floating IP in your Network.
+  floatingip: false
+# Alternatively you can specify the Floating IP you want to assign.
+  # floatingip: 1.2.3.4
+
+# The noris.cloud storage class. For available options check
+# https://www.noris.cloud/services/storage/openstack-cinder/?lang=en#details
+# Right now we need to choose PI-Storage-Class which has no IOPS limitation.
+# If you don't have access to it, please ask to the OpenStack team.
+storage_class: "PI-Storage-Class"
+# storage_class: "BSS-Performance-Storage"
+
+# The CIDR range for your internal cluster
+od_subnet: "10.233.0.0/16"
+
+# The Kubernetes pod network plugin
+pod_network: "CALICO"
+
+# Flannel is supported too
+#pod_subnet: "10.244.0.0/16"
+#pod_network: "FLANNEL"
+
+# Certificate expiry
+certificates:
+  expriry: 8760h

@@ -49,12 +49,14 @@ If you are proposing a feature:
 * Remember that this is a volunteer-driven project, and that contributions
   are welcome :)
 
-Get Started!
-------------
+.. _get_started_contributing:
+
+Start contributing
+------------------
 
 Ready to contribute? Here's how to set up `koris` for local development.
 
-1. Fork the `koris` repo on gitlab.
+1. Fork the `koris` repo on Gitlab.
 2. Clone your fork locally::
 
     $ git clone git@gitlab.noris.net:PI/koris.git
