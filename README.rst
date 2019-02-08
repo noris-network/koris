@@ -18,7 +18,7 @@ Launch kubernetes clusters on OpenStack.
 Features
 --------
 
-* Get you kubernetes cluster on noris.cloud in about 5 minutes.
+* Get your kubernetes cluster on noris.cloud in about 5 minutes.
 
 Demo:
 
@@ -26,70 +26,101 @@ Demo:
    :target: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/kolt-demo.gif
    :scale: 12%
 
-Usage
------
+Quickstart
+----------
 
-Pre-requisits
-~~~~~~~~~~~~~
+If you just want to use koris to create a cluster follow the steps below, for more details refer to
+:doc:`/installation` and :doc:`/usage`.
 
-1. An OS_RC_FILE v3, you should download it from the openstack WebUI.
-2. Basic understanding of OpenStack.
+If you want to develop, please refer to :doc:`/contributing`.
 
-Get started
-~~~~~~~~~~~
-1. Create a local virtual environment for kolt (using your favorite tool),
-   for example the standard Python has a simple virtual environment tool:
+The complete compiled `documentation of koris can be found here <https://pi.docs.noris.net/koris/>`_.
 
-.. code:: shell
+Prerequisites
+^^^^^^^^^^^^^
 
-   $ mkdir FooBar
-   $ cd FooBar && python3 -m venv koris-env
+1. Make sure you are on a machine that has access to `gitlab.noris.net <https://gitlab.noris.net/>`_.
 
-2. Activate the environment with
+2. Have Python3.6 installed.
 
-.. code:: shell
+3. Via the OpenStack web UI, download an ``OS_RC_FILE v3`` file for the project you want to deploy
+   your cluster into.
 
-   $ source ./koris-env/bin/activate
+Installation
+^^^^^^^^^^^^
 
-3. you are now inside a virtual environment to leave it type `exit`
+1. Create a local virtual environment for koris (using your favorite tool).
+   For example the standard Python has a simple virtual environment tool:
 
-4. To install koris, use a machine which has access to gitlab.noris.net
-   replace <LATEST_TAG> with latest tag, for example 0.4.1.
+   .. code:: shell
 
-.. code:: shell
+     $ mkdir koris
+     $ cd koris && python3 -m venv koris-env
 
-   $ pip install  -e git+git@gitlab.noris.net:PI/kolt.git@v<LATEST_TAG>#egg=kolt
+2. Activate the environment with:
 
-5. You can now use koris, it is installed in your path under ``./koris-env/bin``.
-   If you exist the virtual environment, you need to activate it again as described
-   in step 2.
+   .. code:: shell
 
-6. Before you can run ``koris`` you need to source your openstack rc file:
+     $ source koris-env/bin/activate
 
-.. code:: shell
+   You can leave your virtual environment by typing ``exit``.
 
-   $ source ~/path/to/your/openstack-openrc.sh
-   Please enter your OpenStack Password for project <PROJECT> as user <USEER>\:
+4. Grab the latest release with the following command (replace 
+   ``<LATEST_TAG>`` with the latest version tag, for example ``0.9.0``.
 
-6. To run ``koris`` issue koris <subcommand>. You can get a list of subcommands
-   with ``--help``
+   .. code:: shell
+
+     $ pip install -e git+git@gitlab.noris.net:PI/koris.git@v<LATEST_TAG>#egg=koris
+
+  Koris is now installed in ``./koris-env/bin`` and usable with an activated virtual environment.
+
+.. note::
+
+   If the machine you would like to install koris on does not have access to
+   ``gitlab.noris.net``, download the source distribution on a machine that has,
+   and copy it over to your desired machine:
+
+   .. code:: shell
+
+      curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
+      scp koris-v<LATEST_TAG>.zip remotehost:~/
+
+   Repeat the steps to create and activate a virtual environment, then install
+   the package via ``pip``:
+
+   .. code:: shell
+
+    $ pip install koris-v<LATEST_TAG>.zip
+
+5. Source your OpenStack RC file and enter your password:
+
+   .. code:: shell
+
+      $ source ~/path/to/your/openstack-openrc.sh
+      Please enter your OpenStack Password for project <PROJECT> as user <USEER>\:
+
+6. Koris is executed with ``koris <subcommand>``. You can get a list of subcommands
+   with ``-h`` or ``--help``.
 
    .. code:: shell
    
-     $ koris --help
-     usage: koris [-h] [--version] {apply,destroy,k8s} ...
-   
-     positional arguments:
-     {apply,destroy,k8s}  commands
-       apply              Bootstrap a Kubernetes cluster
-       destroy            Delete the complete cluster stack
-       k8s                Bootstrap a Kubernetes cluster (deprecated)
-   
-     optional arguments:
-       -h, --help           show this help message and exit
-       --version            show version and exit
+      $ koris -h
+      usage: koris [-h] [--version] {add,apply,destroy} ...
 
-7. To view the help of each subcommand
+      positional arguments:
+        {add,apply,destroy}  commands
+          add                Add a worker node or master node to the cluster. Add a
+                            node to the current active context in your KUBECONFIG.
+                            You can specify any other configuration file by
+                            overriding the KUBECONFIG environment variable.
+          apply              Bootstrap a Kubernetes cluster
+          destroy            Delete the complete cluster stack
+
+      optional arguments:
+        -h, --help           show this help message and exit
+        --version            show version and exit
+
+7. To view the help of each subcommand type:
 
    .. code:: shell
 
@@ -103,41 +134,31 @@ Get started
         -h, --help   show this help message and exit
         --force, -f
 
-.. note::
-
-   If the machine you would like to install koris on does not have access to
-   gitlab.noris.net, download the source distribution and copy it over:
-
-   .. code:: shell
-
-      curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
-      scp koris-v<LATEST_TAG>.zip remotehost:~/
-
-   repeat the steps to create and activate a virtual environment, and the install
-   the package with pip directly:
-
-   .. code:: shell
-
-      $ pip install koris-v<LATEST_TAG>.zip
-
 8. Koris creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
-   BGP communication add a correct security rule for that.
+   BGP communication, add correct security rules in OpenStack:
 
-.. code:: shell
+   .. code:: shell
 
-   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
-   neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
+     neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
+     neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
-9. To create a cluster create a cluster configuration file (see `example <https://gitlab.noris.net/PI/koris/blob/dev/docs/example-config.yml>`_.
-   Pass this file on the shell to the k8s subcommand
+9. Create a configuration file (see `example <https://gitlab.noris.net/PI/koris/blob/dev/docs/example-config.yml>`_).
 
-.. code:: shell
+10. Run ``koris apply`` with your configuration file as the argument:
 
-   $ koris k8s <your-cluster-config.yml>
+   .. code:: shell
 
+      $ koris apply your-config.yaml
 
-The complete compiled `documentation of koris can be found here <https://pi.docs.noris.net/koris/>`_
+11. A ``kubectl`` configuration file will be created into your project root with the name of 
+   ``<clustername>-admin.conf``. You can either pass that with each execution via
+   ``kubectl --kubeconfig=/path/to/koris/your-admin.conf`` or by exporting it as an environment variable:
+
+   .. code:: shell
+
+       $ export KUBECONFIG=/path/to/koris/your-admin.conf
+       $ kubectl get nodes
 
 Credits
 -------
