@@ -23,6 +23,7 @@ from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import Conflict as NeutronConflict
 from neutronclient.common.exceptions import StateInvalidClient
 from neutronclient.common.exceptions import NotFound
+from neutronclient.common.exceptions import BadRequest
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -405,7 +406,7 @@ class LoadBalancer:  # pragma: no coverage
             fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
 
-    @retry(exceptions=(NeutronConflict, NovaNotFound), backoff=1, tries=10)
+    @retry(exceptions=(NeutronConflict, NovaNotFound, BadRequest), backoff=1, tries=10)
     def delete(self, client=None):
         """
         Delete the cluster API loadbalancer
@@ -476,7 +477,8 @@ class LoadBalancer:  # pragma: no coverage
 
         return fip['floating_ip_address']
 
-    @retry(exceptions=(StateInvalidClient,), tries=12, delay=30, backoff=0.8)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=16, delay=40,
+           backoff=0.8)
     def _add_listener(self, client):
         listener = client.create_listener({'listener':
                                            {"loadbalancer_id":
@@ -488,7 +490,8 @@ class LoadBalancer:  # pragma: no coverage
                                             }})
         return listener
 
-    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=30, delay=5, backoff=1,
+           logger=LOGGER.debug)
     def _add_pool(self, client, listener_id):
         pool = client.create_lbaas_pool(
             {"pool": {"lb_algorithm": "SOURCE_IP",
@@ -501,8 +504,8 @@ class LoadBalancer:  # pragma: no coverage
 
         return pool['pool']
 
-    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1,
-           logger=LOGGER.debug)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=10,
+           backoff=0.8, logger=LOGGER.debug)
     def _add_health_monitor(self, client, pool_id):
         client.create_lbaas_healthmonitor(
             {'healthmonitor':
@@ -510,21 +513,19 @@ class LoadBalancer:  # pragma: no coverage
               "pool_id": pool_id,
               "name": "%s-health" % self.name}})
 
-    @retry(exceptions=(StateInvalidClient,), tries=12, delay=3, backoff=1)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=5,
+           backoff=1, logger=LOGGER.debug)
     def add_member(self, client, pool_id, ip_addr):
         """
         add listener to a loadbalancers pool.
         """
-        try:
-            client.create_lbaas_member(pool_id,
-                                       {'member':
-                                        {'subnet_id': self._subnet_id,
-                                         'protocol_port': 6443,
-                                         'address': ip_addr,
-                                         }})
-            self.members.append(ip_addr)
-        except NeutronConflict:
-            pass
+        client.create_lbaas_member(pool_id,
+                                   {'member':
+                                    {'subnet_id': self._subnet_id,
+                                     'protocol_port': 6443,
+                                     'address': ip_addr,
+                                     }})
+        self.members.append(ip_addr)
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
@@ -548,7 +549,7 @@ class LoadBalancer:  # pragma: no coverage
         pools = pools[0]['pools']
         for pool in pools:
             if lb_id in pool['loadbalancers']:
-                if pool['healthmonitor_id']:
+                if 'healthmonitor_id' in pool:
                     self._del_health_monitor(client, pool['healthmonitor_id'])
                 try:
                     client.delete_lbaas_pool(pool['id'])
@@ -571,8 +572,8 @@ class LoadBalancer:  # pragma: no coverage
                     LOGGER.debug("Listener %s not found", item['id'])
                 LOGGER.info("Deleted listener...")
 
-    @retry(exceptions=(NeutronConflict, StateInvalidClient),
-           tries=12, backoff=1, logger=LOGGER.debug)
+    @retry(exceptions=(NeutronConflict, StateInvalidClient, BadRequest),
+           tries=25, delay=15, backoff=0.8, logger=LOGGER.debug)
     def _del_loadbalancer(self, client):
         try:
             client.delete_loadbalancer(self._id)
