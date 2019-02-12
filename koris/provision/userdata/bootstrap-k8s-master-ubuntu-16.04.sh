@@ -84,7 +84,11 @@ bootstrapTokens:
 apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
+<<<<<<< HEAD
   oidc-issuer-url: "https://213.95.155.178:32000"
+=======
+  oidc-issuer-url: "https://dex.example.com/32000"
+>>>>>>> 7107cf5c2cb087b4a7dd38bd0c7410057dec4cd6
   oidc-client-id: example-app
   oidc-ca-file: /etc/kubernetes/pki/oidc-ca.pem
   oidc-username-claim: email

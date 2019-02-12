@@ -38,6 +38,7 @@ spec:
             secretKeyRef:
               name: gitlab-client
               key: client-secret
+
       volumes:
       - name: config
         configMap:
