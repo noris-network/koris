@@ -37,8 +37,8 @@ BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");prin
 REV_NUMBER = $(shell git rev-parse --short ${REV})
 CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
-NETWORK_NAME ?= test-net-name
-SUBNET_NAME ?= test-subnet-name
+NETWORK_NAME ?= ${CLUSTER_NAME}-net
+SUBNET_NAME ?= ${CLUSTER_NAME}-subnet
 CIDR ?= 192.168.1.0\/16
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
