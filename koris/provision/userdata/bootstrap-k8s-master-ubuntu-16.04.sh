@@ -46,6 +46,7 @@ sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE
 # create a proper kubeadm config file for each master.
 # the configuration files are ordered and contain the correct information
 # of each master and the rest of the etcd cluster
+# WORK: let apiserver know where CA lies
 function create_config_files() {
     cat <<TMPL > init.tmpl
 apiVersion: kubeadm.k8s.io/v1alpha2
@@ -84,11 +85,7 @@ bootstrapTokens:
 apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
-<<<<<<< HEAD
   oidc-issuer-url: "https://213.95.155.178:32000"
-=======
-  oidc-issuer-url: "https://dex.example.com/32000"
->>>>>>> 7107cf5c2cb087b4a7dd38bd0c7410057dec4cd6
   oidc-client-id: example-app
   oidc-ca-file: /etc/kubernetes/pki/oidc-ca.pem
   oidc-username-claim: email
