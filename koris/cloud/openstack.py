@@ -754,7 +754,7 @@ class OSNetwork:
         """
         neutron: must be a nuetron client instance
 
-        return: dict with network propertires
+        return: dict with network properties
         """
         if 'private-net' not in self.config:
             net_name = "koris-%s-net" % self.config['cluster-name']
