@@ -48,44 +48,6 @@ if getattr(sys, 'frozen', False):
     cinderclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
 
 
-def remove_cluster(config, nova, neutron, cinder):
-    """
-    Delete a cluster from OpenStack
-    """
-    cluster_info = OSClusterInfo(nova, neutron, cinder, config)
-    cp_hosts = cluster_info.distribute_management()
-    workers = cluster_info.distribute_nodes()
-
-    tasks = [host.delete(neutron) for host in cp_hosts]
-    tasks += [host.delete(neutron) for host in workers]
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.wait(tasks))
-    LoadBalancer(config, neutron).delete()
-    connection = OpenStackAPI.connect()
-    secg = connection.list_security_groups(
-        {"name": '%s-sec-group' % config['cluster-name']})
-    if secg:
-        for sg in secg:
-            for rule in sg.security_group_rules:
-                connection.delete_security_group_rule(rule['id'])
-
-            for port in connection.list_ports():
-                if sg.id in port.security_groups:
-                    connection.delete_port(port.id)
-    connection.delete_security_group(
-        '%s-sec-group' % config['cluster-name'])
-
-    # delete volumes
-
-    loop.close()
-    for vol in cinder.volumes.list():
-        try:
-            if config['cluster-name'] in vol.name and vol.status != 'in-use':
-                vol.delete()
-        except TypeError:
-            continue
-
-
 class BuilderError(Exception):
     """Raise a custom error if the build fails"""
 
@@ -393,7 +355,8 @@ class LoadBalancer:  # pragma: no coverage
             # match created subnet id with the corresponding one in subnets
             network = OSNetwork(client, self.config).get_or_create()
             subnets = client.list_subnets()['subnets']
-            subnet_id = [sub['id'] for sub in subnets if network['id'] == sub['network_id']][0]
+            subnet_id = [sub['id']
+                         for sub in subnets if network['id'] == sub['network_id']][0]
 
         lb = client.create_loadbalancer({'loadbalancer':
                                          {'provider': provider,
@@ -742,7 +705,7 @@ def get_clients():
     return nova, neutron, cinder
 
 
-class OSNetwork:
+class OSNetwork:  # pylint: disable=too-few-public-methods
     """
     create network if not defined
     """
@@ -770,17 +733,13 @@ class OSNetwork:
         else:
             print(info(red("Creating network [%s]" % net_name)))
             network = self.net_client.create_network(
-                {'network': {
-                    'name': net_name,
-                    'admin_state_up': True
-                    }
-                })
+                {"network": {"name": net_name, "admin_state_up": True}})
             network = network['network']
 
         return network
 
 
-class OSSubnet:
+class OSSubnet:  # pylint: disable=too-few-public-methods
     """
     create subnet if not defined
     """
@@ -810,7 +769,6 @@ class OSSubnet:
         if subnet:
             print(info(yellow("subnetwork [%s] already exists. Skipping..." %
                               subnet_name)))
-
         else:
             print(info(red("creating a subnetwork")))
             subnet['ip_version'] = 4
@@ -914,8 +872,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         secgroup.get_or_create_sec_group(config['cluster-name'])
         self.secgroup = secgroup
         self.secgroups = [secgroup.id]
-
-
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']

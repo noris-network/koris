@@ -151,6 +151,7 @@ SUBNETS = {
     "created_at": "2019-01-30T13:47:45Z"
 }
 
+
 @pytest.fixture
 def dummy_server():
     return DummyServer("node-1-test",
@@ -169,6 +170,7 @@ def os_info():
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
     return osinfo
 
+
 def test_create_network_settings_from_config():
     """test create network from config"""
     NEUTRON.create_subnet = mock.MagicMock(
@@ -179,6 +181,7 @@ def test_create_network_settings_from_config():
     assert 'name' in subs
     assert 'cidr' in subs
 
+
 def test_create_network_settings_not_in_config():
     """test create network no settings in config"""
     NEUTRON.create_subnet = mock.MagicMock(
@@ -188,6 +191,7 @@ def test_create_network_settings_not_in_config():
     subs = sub.get_or_create()
     assert 'name' in subs
     assert 'cidr' in subs
+
 
 def test_node_builder(os_info, dummy_server):
     """ test the node builder class """

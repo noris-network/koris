@@ -29,6 +29,7 @@ LOGGER = get_logger(__name__)
 
 NOVA, NEUTRON, CINDER = get_clients()
 
+
 def get_server_range(servers, cluster_name, role, amount):
     """
     Given a list of servers find the last server name and add N more
