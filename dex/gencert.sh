@@ -15,7 +15,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = dex.example.com
+DNS.1 = 213.95.155.178
 EOF
 
 # Generate CA Private Key 

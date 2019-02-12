@@ -55,7 +55,7 @@ metadata:
   name: dex
 data:
   config.yaml: |
-    issuer: https://dex.example.com:32000
+    issuer: https://213.95.155.178:32000
     storage:
       type: kubernetes
       config:
@@ -82,7 +82,7 @@ data:
     staticClients:
     - id: example-app
       redirectURIs:
-      - 'http://127.0.0.1:5555/callback'
+      - 'http://213.95.155.178:5555/callback'
       name: 'Example App'
       secret: ZXhhbXBsZS1hcHAtc2VjcmV0
 
@@ -99,7 +99,7 @@ kind: Service
 metadata:
   name: dex
 spec:
-  type: LoadBalancer
+  type: NodePort
   ports:
   - name: dex
     port: 5556
