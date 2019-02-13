@@ -1,7 +1,7 @@
 """
 functions and classes to interact with openstack
 """
-
+# pylint: disable=too-many-lines
 import asyncio
 import base64
 import copy
@@ -13,6 +13,7 @@ import textwrap
 
 from functools import lru_cache
 
+from netaddr import IPNetwork
 import novaclient
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound, NoUniqueMatch)  # noqa
@@ -755,7 +756,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         if 'private_net' not in self.config:
             subnet_name = "koris-%s-subnet" % self.config['cluster-name']
         else:
-            subnet_name = self.config.get('private_net')['subnet']
+            subnet_name = self.config.get('private_net')['subnet']['name']
 
         subnets = self.net_client.list_subnets()['subnets']
 
@@ -777,12 +778,68 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
             if 'private_net' not in self.config:
                 subnet['cidr'] = '192.168.1.0/16'
             else:
-                subnet['cidr'] = self.config.get('private_net')['cidr']
-            subnet['name'] = subnet_name
+                subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
+                subnet['name'] = self.config.get('private_net').get('subnet')['name']
             subnet = self.net_client.create_subnet({'subnet': subnet})
             subnet = subnet['subnet']
 
         return subnet
+
+
+class OSRouter:  # pylint: disable=too-few-public-methods
+    """
+    create router if not defined
+    """
+    def __init__(self, neutron_client, network_id, subnet, config):
+        self.net_client = neutron_client
+        self.net_id = network_id
+        self.subnet = subnet
+        self.config = config
+
+    def get_or_create(self):
+        """
+        return: dict with router properties
+        """
+        if 'router' not in self.config['private_net']:
+            router_name = "koris-%s-router" % self.config['cluster-name']
+        else:
+            router_name = self.config.get('private_net')['router']['name']
+
+        router = self.net_client.list_routers(name=router_name)['routers']
+        if router:
+            print(info(yellow(
+                "The router [%s] already exists. Skipping" % router_name)))  # noqa
+        else:
+            print(info(red("Creating router")))
+            payload = {
+                "router": {
+                    "name": router_name,
+                }
+            }
+            router = self.net_client.create_router(payload)['router']
+            router_ip = IPNetwork(self.subnet.get('cidr', "192.168.1.0/16"))[1]
+            port_payload = {'port': {"admin_state_up": True,
+                                     "network_id": self.net_id,
+                                     "fixed_ips": [{
+                                         "ip_address": str(router_ip),  # noqa
+                                         "subnet_id": self.subnet['id']}],
+                                     "name": router_name + "-PORT"}}
+            port = self.net_client.create_port(port_payload)['port']
+            self.net_client.add_interface_router(router['id'], {'port_id': port['id']})
+            # dynamically find network id matching router network in config
+            network_name = self.config['private_net'].get(
+                'router', {"name": "router-%s" % self.config['cluster-name'],
+                           "network": "ext02"})['network']
+            networks = self.net_client.list_networks()['networks']
+            try:
+                network_id = [net['id']
+                              for net in networks if net['name'] == network_name][0]
+            except IndexError:
+                print(red("Wrong router network in config"))
+                sys.exit(1)
+            self.net_client.add_gateway_router(router['id'], {"network_id": network_id})
+
+        return router
 
 
 class OSCloudConfig:
@@ -862,9 +919,9 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-
         self.net = OSNetwork(neutron_client, config).get_or_create()
         subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
+        OSRouter(neutron_client, self.net['id'], subnet, config).get_or_create()
         self.subnet_id = subnet['id']
         secgroup = SecurityGroup(neutron_client, config['cluster-name'],
                                  subnet=subnet['name'])
