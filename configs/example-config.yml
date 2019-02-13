@@ -61,11 +61,10 @@ loadbalancer:
 storage_class: "PI-Storage-Class"
 # storage_class: "BSS-Performance-Storage"
 
-# The CIDR range for your internal cluster
-od_subnet: "10.233.0.0/16"
-
 # The Kubernetes pod network plugin
 pod_network: "CALICO"
+# The CIDR range for your internal cluster
+pod_subnet: "10.233.0.0/16"
 
 # Flannel is supported too
 #pod_subnet: "10.244.0.0/16"
