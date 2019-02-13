@@ -4,9 +4,19 @@
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
 # If your project has multiple networks you MUST specify the subnetwork too
-private_net: 'korispipeline-office-net'
-# optionally specify the subnet name
-# subnet: 'subnet name'
+# don't change this unless you know what you are doing
+# per default koris will create a network for your cluster and route
+# this network to ext02 network in openstack if this is undesired change this
+private_net:
+ name: '%%NETWORK_NAME%%'
+ private_net: '%%SUBNET_NAME%%'
+ subnet: '%%SUBNET_NAME%%'
+ # cidr: '192.168.1.0/24'
+ #router:
+ # This is optional - if no router name is given a new one will be created
+ # - name: 'myrouter'
+ # - network: ext02
+
 cluster-name: '%%CLUSTER_NAME%%'
 availibility-zones:
  - de-nbg6-1b
