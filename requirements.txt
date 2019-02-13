@@ -48,6 +48,8 @@ python-cinderclient==3.6.1
 python-dateutil==2.7.3
 python-neutronclient==6.8.0
 python-novaclient==10.1.0
+python-openstackclient==3.17.0
+python-octaviaclient==1.7.0
 pytz==2018.4
 pyyaml==3.13
 requests==2.18.4
