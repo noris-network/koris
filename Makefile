@@ -105,6 +105,9 @@ docker-push-alpine:
 docker-push-ubuntu:
 	docker push $(ORG)/koris-ubuntu:$(TAG)
 
+docker-build-pyinstaller:
+	docker build -t $(ORG)/koris-builder:$(TAG) -f docker/Docker-pyinstaller-builder .
+
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
