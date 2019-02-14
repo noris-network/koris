@@ -71,19 +71,16 @@ data:
         name: Gitlab
         config:
           baseURL: https://gitlab.noris.net
-          clientID: 1dd9a4fa5381224abca2b9789dcbe5d721367543db44d3b020be48dcbc4156b5
-          clientSecret: 674364d762431b2a93e57e4bc2f67eb1d159313b32f848028f28ca23d66c0c76
-          redirectURI: http://127.0.0.1:5556/dex/callback
-      - type: mockCallback
-        id: mock
-        name: Example
+          clientID: 9594acc6725a0a988c760cbdef5171c581e390e61752641380d2aa682d578fa6
+          clientSecret: 7671ac33872513fc65e9d975c9a55cd53e60ab98ff0b30ec42bba6fdae8a56b9
+          redirectURI: https://213.95.155.178:32000/callback
     oauth2:
       skipApprovalScreen: true
 
     staticClients:
     - id: example-app
       redirectURIs:
-      - 'http://213.95.155.178:5555/callback'
+      - 'http://10.18.6.65:5555/callback'
       name: 'Example App'
       secret: ZXhhbXBsZS1hcHAtc2VjcmV0
 

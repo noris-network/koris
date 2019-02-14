@@ -230,7 +230,6 @@ class Instance:  # pylint: disable=too-many-arguments
 
 
 class LoadBalancer:  # pragma: no coverage
-
     """
     A class to create a LoadBalancer in OpenStack.
 

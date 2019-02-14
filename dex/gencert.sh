@@ -12,10 +12,7 @@ distinguished_name = req_distinguished_name
 [ v3_req ]
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = 213.95.155.178
+subjectAltName = IP:213.95.155.178
 EOF
 
 # Generate CA Private Key 
