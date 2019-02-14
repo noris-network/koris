@@ -193,7 +193,6 @@ class Instance:  # pylint: disable=too-many-arguments
 
 
 class LoadBalancer:  # pragma: no coverage
-
     """
     A class to create a LoadBalancer in OpenStack.
 
@@ -379,10 +378,6 @@ class LoadBalancer:  # pragma: no coverage
         else:
             subnet_id = client.list_subnets()['subnets'][-1]['id']
 
-<<<<<<< HEAD
-        LOGGER.debug("Creating LoadBalancer '%s' ...", self.name)
-=======
->>>>>>> Add better delete checks, output
         lb = client.create_loadbalancer({'loadbalancer':
                                          {'provider': provider,
                                           'vip_subnet_id': subnet_id,
