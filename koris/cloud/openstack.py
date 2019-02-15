@@ -229,16 +229,14 @@ class LoadBalancer:  # pragma: no coverage
         """
 
         if not self._data['listeners']:
-            LOGGER.info("Adding listener ...")
-            listener = self._add_listener(client)
+            listener = self.add_listener(client)
             listener_id = listener["listener"]['id']
         else:
             LOGGER.info("Reusing listener %s", self._data['listeners'][0]['id'])
             listener_id = self._data['listeners'][0]['id']
 
         if not self._data['pools']:
-            LOGGER.info("Adding pool ...")
-            pool = self._add_pool(client, listener_id)
+            pool = self.add_pool(client, listener_id)
         else:
             LOGGER.info("Reusing pool, removing all members ...")
             pool = client.list_lbaas_pools(id=self._data['pools'][0]['id'])
@@ -253,31 +251,7 @@ class LoadBalancer:  # pragma: no coverage
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor")
         else:
-            self._add_health_monitor(client, pool['id'])
-
-        # WORK configure LB for Dex
-        def configure_dex():
-            # Listener
-            listener_name, proto, proto_port = "dex-listener", "HTTPS", 32000
-            listener = self._add_listener(client, name=listener_name, protocol=proto,
-                                          protocol_port=proto_port)
-            listener_id = listener["listener"]["id"]
-
-            # Pool
-            algo, proto, pool_name = "ROUND_ROBIN", "HTTPS", "dex-pool"
-            pool = self._add_pool(client, listener_id, lb_algorithm=algo, protocol=proto,
-                                  name=pool_name)
-            pool_id = pool["id"]
-
-            # Members
-            members = [master_ips[0]]
-            for ip in members:
-                self.add_member(client, pool_id, ip, proto_port)
-
-            # Healthmonitor
-            health_name = "dex-health"
-            self._add_health_monitor(client, pool_id, name=health_name)
-        configure_dex()
+            self.add_health_monitor(client, pool['id'])
 
     def get(self, client=None):
         """
@@ -300,9 +274,8 @@ class LoadBalancer:  # pragma: no coverage
         return lb
 
     def get_or_create(self, client, provider='octavia'):
-        """
-        find if a load balancer exists, if not create it
-        """
+        """Retrieve, else create  a LoadBalancer"""
+
         lb = self.get(client)
 
         if not lb or 'DELETE' in lb['provisioning_status']:
@@ -321,9 +294,8 @@ class LoadBalancer:  # pragma: no coverage
 
     @property
     def ip_address(self):
-        """
-        return the loadbalancer's IP address or it's Floating IP address
-        """
+        """Return the LoadBalancer's IP or Floating IP address"""
+
         if not self._data:
             self.get(self.client)
 
@@ -355,13 +327,12 @@ class LoadBalancer:  # pragma: no coverage
                 'floatingips'][0]['floating_ip_address']
             fip_addr = self._existing_floating_ip
         else:
-            fip_addr = self._associate_floating_ip(
+            fip_addr = self.associate_floating_ip(
                 client, lb)
         return fip_addr
 
     def create(self, client, provider='octavia'):
-        """
-        provision a minimally configured LoadBalancer in OpenStack
+        """Provision a minimally configured LoadBalancer in OpenStack
 
         Args:
             client (neutronclient.v2_0.client.Client)
@@ -390,14 +361,13 @@ class LoadBalancer:  # pragma: no coverage
 
         fip_addr = None
         if self.floatingip:
-            fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
+            fip_addr = self.associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
 
     @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
            tries=10, logger=LOGGER.debug)
     def delete(self, client=None):
-        """
-        Delete the cluster API loadbalancer
+        """Delete the cluster API loadbalancer
 
         Deletion order of LoadBalancer:
             - remove pool (LB is pending update)
@@ -424,7 +394,9 @@ class LoadBalancer:  # pragma: no coverage
             self._del_listener(client, delete_all=True)
             self._del_loadbalancer(client)
 
-    def _associate_floating_ip(self, client, loadbalancer):
+    def associate_floating_ip(self, client, loadbalancer):
+        """Associates a Floating IP with the LoadBalancer"""
+
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
             valid_ip = re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # noqa
@@ -464,8 +436,10 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=16, delay=40,
            backoff=0.8)
-    def _add_listener(self, client, name=None, protocol="HTTPS",
-                      protocol_port=6443):
+    def add_listener(self, client, name=None, protocol="HTTPS",
+                     protocol_port=6443):
+        """Adds a custom listener to the LoadBalancer"""
+
         if name is None:
             name = self.name
         listener = client.create_listener({'listener':
@@ -483,8 +457,10 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=30, delay=5, backoff=1,
            logger=LOGGER.debug)
-    def _add_pool(self, client, listener_id, lb_algorithm="SOURCE_IP", protocol="HTTPS",
-                  name=None):
+    def add_pool(self, client, listener_id, lb_algorithm="SOURCE_IP", protocol="HTTPS",
+                 name=None):
+        """Adds a pool to a listener"""
+
         if name is None:
             name = f"{self.name}-pool"
 
@@ -503,7 +479,9 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=10,
            backoff=0.8, logger=LOGGER.debug)
-    def _add_health_monitor(self, client, pool_id, name=None):
+    def add_health_monitor(self, client, pool_id, name=None):
+        """Adds a Healthmonitor to a Pool"""
+
         if name is None:
             name = f"{self.name}-health"
 

@@ -13,6 +13,7 @@ import urllib
 
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
+from koris.deploy.dex import Dex
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
@@ -310,9 +311,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                         "kubernetes-ca")
         return CertBundle(_key, _ca)
 
-    def create_network(self, config):
-        """create network for cluster if not already present"""
-
+    def run(self, config):  # pylint: disable=too-many-locals,too-many-statements
+        """
+        execute the complete cluster build
+        """
+        # create a security group for the cluster if not already present
         if self.info.secgroup.exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
@@ -389,6 +392,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         node_tasks = self.nodes_builder.create_initial_nodes(
             cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
+
+        # WORK: setting up LB for Dex
+        LOGGER.info("Configuring the LoadBalancer for Dex ...")
+        dex = Dex(lbinst, members=[first_master_ip])
+        dex.listener_name = "test-dex-listener"
+        dex.pool_name = "test-dex-pool"
+        configure_dex_task = loop.create_task(dex.configure_lb(NEUTRON))
+        node_tasks.append(configure_dex_task)
+
         node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug(info("Done creating nodes tasks"))
