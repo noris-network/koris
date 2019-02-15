@@ -7,10 +7,11 @@ metadata:
 spec:
   selector:
     app:  dex-example-app
-  type:  LoadBalancer
+  type:  NodePort
   ports:
   - name: callback
     port:  5555
+    nodePort: 32555
     targetPort:  http
 ---
 apiVersion: extensions/v1beta1
@@ -29,16 +30,17 @@ spec:
       containers:
       - name: dex-example-app
         image: obitech/dex-example-app
-    
-      ports:
-      - name: http
-        containerPort: 5555
-
-      volumeMounts:
+        args: ["--issuer", "https://213.95.155.178:32000",
+          "--issuer-root-ca", "/etc/dex/tls/ca.pem",
+          "--listen", "http://0.0.0.0:5555",
+          "--redirect-uri", "http://213.95.155.178:5555/callback"]
+        ports:
+        - name: http
+          containerPort: 5555
+        volumeMounts:
+        - name: root-ca
+          mountPath: /etc/dex/tls
+      volumes:
       - name: root-ca
-        mountPath: /etc/dex/tls
-
-    volumes:
-    - name: root-ca
-      secret:
-        secretName: dex.example.com.root-ca
+        secret:
+          secretName: dex.example.com.root-ca

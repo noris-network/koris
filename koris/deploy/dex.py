@@ -67,6 +67,12 @@ class Dex:
             except ValueError:
                 raise ValidationError(f"Invalid IP address: {ip}")
 
+    async def create_dex_listener(self, client):
+        """Creates a Listener for Dex"""
+
+    async def create_oauth2_client_listener(self, client):
+        """Create a Listener for the OAuth2 Callback app"""
+
     async def configure_lb(self, client):
         """Configures the LoadBalancer for dex."""
 

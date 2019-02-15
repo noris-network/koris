@@ -1,8 +1,9 @@
 #!/bin/bash
 kubectl create secret tls dex.example.com.tls --cert=ssl/cert.pem --key=ssl/key.pem
-kubectl create secret \
-    generic gitlab-client \
-    --from-literal=client-id=9594acc6725a0a988c760cbdef5171c581e390e61752641380d2aa682d578fa6 \
-    --from-literal=client-secret=7671ac33872513fc65e9d975c9a55cd53e60ab98ff0b30ec42bba6fdae8a56b9 
+kubectl create secret generic gitlab-client \
+    --from-literal=client-id=a920735e852804d31c4eec23b6fe548a79509a5722c72c363eeeeb1283851140 \
+    --from-literal=client-secret=7c06d2c9ebd25eb20595b0e5fc82f2b3a4c9f5b673cbc43da375c6f4af5a5746
+kubectl create secret generic dex.example.com.root-ca \
+    --from-file=/home/aknipping/work/koris/dex/ssl/ca.pem
 
-kubectl create -f manifests/dex.yaml
+kubectl create -f manifests/
