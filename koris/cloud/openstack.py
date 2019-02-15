@@ -210,7 +210,7 @@ class LoadBalancer:  # pragma: no coverage
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
-        self.subnet = config.get('subnet')
+        self.subnet = config.get('private_net')['subnet'].get('name')
         # these attributes are set after creation
         self.pool = None
         self._id = None
@@ -374,7 +374,7 @@ class LoadBalancer:  # pragma: no coverage
             fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
 
-    @retry(exceptions=(NeutronConflict, NovaNotFound, BadRequest), backoff=1, tries=10)
+    @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1, tries=10)
     def delete(self, client=None):
         """
         Delete the cluster API loadbalancer
@@ -720,10 +720,10 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
 
         return: dict with network properties
         """
-        if 'private-net' not in self.config:
+        if 'private_net' not in self.config:
             net_name = "koris-%s-net" % self.config['cluster-name']
         else:
-            net_name = self.config.get('private-net')['name']
+            net_name = self.config.get('private_net')['name']
         networks = self.net_client.list_networks()['networks']
         network = [n for n in networks if n['name'] == net_name]
         network = network[0] if network else None
@@ -800,10 +800,11 @@ class OSRouter:  # pylint: disable=too-few-public-methods
         """
         return: dict with router properties
         """
-        if 'router' not in self.config['private_net']:
+        if 'router' not in self.config['private_net'].get('subnet'):
             router_name = "koris-%s-router" % self.config['cluster-name']
         else:
-            router_name = self.config.get('private_net')['router']['name']
+            router_name = self.config.get(
+                'private_net')['subnet']['router']['name']
 
         router = self.net_client.list_routers(name=router_name)['routers']
         if router:

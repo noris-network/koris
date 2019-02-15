@@ -323,9 +323,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.info.secgroup.configure()
 
         try:
-            subnet = NEUTRON.find_resource('subnet', config['subnet'])
+            subnet = NEUTRON.find_resource(
+                'subnet', config['private_net']['subnet']['name'])
         except KeyError:
             subnet = NEUTRON.list_subnets()['subnets'][-1]
+            config['private_net']['subnet'] = subnet
 
         cloud_config = OSCloudConfig(subnet['id'])
         LOGGER.info("Using subnet %s", subnet['name'])

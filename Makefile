@@ -37,8 +37,6 @@ BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");prin
 REV_NUMBER = $(shell git rev-parse --short ${REV})
 CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
-NETWORK_NAME ?= ${CLUSTER_NAME}-net
-SUBNET_NAME ?= ${CLUSTER_NAME}-subnet
 CIDR ?= 192.168.1.0\/16
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
@@ -279,10 +277,6 @@ update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	@sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
 	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
-	@sed -i "s/private_net: .*/private_net: \n  name: \n  subnet: \n  cidr: /g" tests/koris_test.yml
-	@sed -i "s/name: .*/name: '${NETWORK_NAME}'/g" tests/koris_test.yml
-	@sed -i "s/subnet: .*/subnet: '${SUBNET_NAME}'/g" tests/koris_test.yml
-	@sed -i "s/cidr: .*/cidr: '${CIDR}'/g" tests/koris_test.yml
 	@cat tests/koris_test.yml
 
 clean-cluster: update-config

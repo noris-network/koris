@@ -8,15 +8,14 @@ node_flavor: 'ECS.C1.4-8'
 # per default koris will create a network for your cluster and route
 # this network to ext02 network in openstack if this is undesired change this
 private_net:
- name: '%%NETWORK_NAME%%'
- subnet: 
-  name: '%%SUBNET_NAME%%'
-  # cidr: '192.168.1.0/24'
+ name: 'k8s-nude'
+ subnet:
+  name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
+  cidr: '10.32.192.0/24'
 #  This is optional - if no router name is given a new one will be created
   router:
-   name: 'myrouter'
-   network: ext02
-
+   name: 'NORIS-K8S-NUDE-OS-MGMT-ROUTER'
+   network: 'bgp-noris'
 cluster-name: '%%CLUSTER_NAME%%'
 availibility-zones:
  - de-nbg6-1b
