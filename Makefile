@@ -1,7 +1,6 @@
 SHELL := /bin/bash
 .PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
-	clean-lb-after-integration-test \
-	clean-lb
+	clean-lb-after-integration-test clean-lb k8s/dex/create k8s/dex/delete
 
 .DEFAULT_GOAL := help
 
@@ -45,6 +44,13 @@ SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sono
 SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
 CIS_VERSION=1.11
+
+# Dex variables
+GITLAB_CLIENT_ID=a920735e852804d31c4eec23b6fe548a79509a5722c72c363eeeeb1283851140
+GITLAB_CLIENT_SECRET=7c06d2c9ebd25eb20595b0e5fc82f2b3a4c9f5b673cbc43da375c6f4af5a5746
+DEX_CLIENT_CERT_PATH=dex/ssl/cert.pem
+DEX_CLIENT_CERT_KEY_PATH=dex/ssl/key.pem
+DEX_ROOT_CA_PATH=dex/ssl/ca.pem
 
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -356,7 +362,6 @@ install-git-hooks:
 
 build-exec: ## build a single file executable of koris
 	pyinstaller koris.spec
-
 
 build-exec-in-docker:
 	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
