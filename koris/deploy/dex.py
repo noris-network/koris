@@ -2,6 +2,8 @@
 The dex module manages a dex installation
 """
 
+from ipaddress import ip_address
+
 
 class ValidationError(Exception):
     """Raise a custom error if dex is configured inproperly"""
@@ -11,22 +13,19 @@ class Dex:
     """The Dex class manages a dex deployment into a Kubernetes cluster via koris.
     """
 
-    def __init__(self, lb, name="dex", members=None):
+    def __init__(self, lb, members, name="dex"):
         self.loadbalancer = lb
         self.name = name
+        self.protocol = "HTTPS"
 
         self.listener = None
-        self.listener_proto = "HTTPS"
         self.listener_port = 32000
 
         self.pool = None
-        self.pool_proto = "HTTPS"
         self.pool_algo = "ROUND_ROBIN"
+        self.pool_members = members
 
-        if not members:
-            self.pool_members = []
-        else:
-            self.pool_members = members
+        self.verify()
 
     def verify(self):
         """Verifies if dex can be deployed correctly.
@@ -38,20 +37,35 @@ class Dex:
 
         allowed_algos = ["ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP"]
 
-        if self.listener_proto != "HTTPS":
-            raise ValidationError("Listener protocol needs to be HTTPS")
+        if not self.loadbalancer:
+            raise ValidationError("Need LoadBalancer")
 
-        if not 0 < self.listener_port < 65535:
+        if isinstance(self.listener_port, float):
             raise ValidationError(f"Invalid listener port {self.listener_port}")
 
-        if self.pool_proto != "HTTPS":
+        try:
+            if not 0 <= self.listener_port <= 65535:
+                raise ValidationError(f"Invalid listener port {self.listener_port}")
+        except TypeError:
+            raise ValidationError(f"Invalid listener port {self.listener_port}")
+
+        if self.protocol != "HTTPS":
             raise ValidationError("Pool protocol needs to be HTTPS")
 
         if self.pool_algo not in allowed_algos:
             raise ValidationError(f"Pool protocol needs to be part of {allowed_algos}")
 
+        if not isinstance(self.pool_members, list):
+            raise ValidationError("Members need to be a list")
+
         if not self.pool_members:
             raise ValidationError("Pool needs members")
+
+        for ip in self.pool_members:
+            try:
+                ip_address(ip)
+            except ValueError:
+                raise ValidationError(f"Invalid IP address: {ip}")
 
     async def configure_lb(self, client):
         """Configures the LoadBalancer for dex."""
@@ -62,14 +76,14 @@ class Dex:
 
         # Adding Listener to LB
         listener = lb.add_listener(client, name=f"{self.name}-listener",
-                                   protocol=self.listener_proto,
+                                   protocol=self.protocol,
                                    protocol_port=self.listener_port)
         listener_id = listener["listener"]["id"]
         self.listener = listener
 
         # Adding Pool to Listener
         pool = lb.add_pool(client, listener_id, lb_algorithm=self.pool_algo,
-                           protocol=self.pool_proto, name=f"{self.name}-pool")
+                           protocol=self.protocol, name=f"{self.name}-pool")
         pool_id = pool["id"]
         self.pool = pool
 

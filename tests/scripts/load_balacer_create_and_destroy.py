@@ -1,9 +1,8 @@
-# pylint: disable=invalid-name, unused-variable
 """
 mini integration test for creation and deletion of load balancer
 in OpenStack
 """
-
+# pylint: disable=invalid-name
 import asyncio
 import os
 
@@ -27,7 +26,7 @@ def create_and_configure():
     we postpone the configuration to a later stage.
     """
     loop = asyncio.get_event_loop()
-    lb, _ = LB.create(CLIENT)
+    LB.create(CLIENT)
 
     master_ips = ['192.168.0.103', '192.168.0.104', '192.168.0.105']
     node_ips = ['192.168.0.120', '192.168.0.121']
