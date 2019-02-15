@@ -396,8 +396,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # WORK: setting up LB for Dex
         LOGGER.info("Configuring the LoadBalancer for Dex ...")
         dex = Dex(lbinst, members=[first_master_ip])
-        dex.listener_name = "test-dex-listener"
-        dex.pool_name = "test-dex-pool"
         configure_dex_task = loop.create_task(dex.configure_lb(NEUTRON))
         node_tasks.append(configure_dex_task)
 
