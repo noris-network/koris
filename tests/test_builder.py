@@ -86,6 +86,7 @@ CONFIG = {
 }
 
 CONFIG2 = {
+    "private_net": {},
     "n-nodes": 3,
     "n-masters": 3,
     "keypair": "otiram",

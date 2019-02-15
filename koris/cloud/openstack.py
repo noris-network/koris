@@ -756,7 +756,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         """
         return: dict with network properties
         """
-        if 'subnet' not in self.config['private_net']:
+        if 'subnet' not in self.config.get('private_net', {}):
             subnet_name = "koris-%s-subnet" % self.config['cluster-name']
         else:
             subnet_name = self.config.get('private_net')['subnet']['name']
@@ -778,7 +778,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
             subnet['network_id'] = self.net_id
             subnet['name'] = subnet_name
             # set cidr if not specified in config
-            if 'subnet' not in self.config['private_net']:
+            if 'subnet' not in self.config.get('private_net', {}):
                 subnet['cidr'] = '192.168.1.0/16'
             else:
                 subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
