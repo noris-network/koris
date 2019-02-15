@@ -757,7 +757,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         return: dict with network properties
         """
         if 'subnet' not in self.config.get('private_net', {}):
-            subnet_name = "koris-%s-subnet" % self.config['cluster-name']
+            subnet_name = "%s-subnet" % self.config['cluster-name']
         else:
             subnet_name = self.config.get('private_net')['subnet']['name']
 
@@ -805,7 +805,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
         """
         if 'router' not in self.config.get('private_net',
                                            {}).get('subnet', {}):
-            router_name = "koris-%s-router" % self.config['cluster-name']
+            router_name = "%s-router" % self.config['cluster-name']
         else:
             router_name = self.config.get(
                 'private_net')['subnet']['router']['name']
@@ -918,7 +918,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     def __init__(self, nova_client, neutron_client,
                  cinder_client,
                  config):
-
         self.keypair = nova_client.keypairs.get(config['keypair'])
 
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
