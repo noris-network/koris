@@ -738,7 +738,10 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
                 {"network": {"name": net_name, "admin_state_up": True}})
             network = network['network']
 
-        self.config['private_net'] = network
+        if 'private_net' in self.config:
+            self.config['private_net'].update(network)
+        else:
+            self.config['private_net'] = network
 
         return network
 
@@ -756,10 +759,16 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         """
         return: dict with network properties
         """
-        if 'subnet' not in self.config.get('private_net', {}):
+        subnet_name = None
+        for key in ['subnet', 'subnets']:
+            if key in self.config['private_net']:
+                try:
+                    subnet_name = self.config.get('private_net')['subnet']['name']
+                except KeyError:
+                    continue
+
+        if not subnet_name:
             subnet_name = "%s-subnet" % self.config['cluster-name']
-        else:
-            subnet_name = self.config.get('private_net')['subnet']['name']
 
         subnets = self.net_client.list_subnets()['subnets']
 
@@ -784,8 +793,8 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
                 subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
             subnet = self.net_client.create_subnet({'subnet': subnet})
             subnet = subnet['subnet']
+            self.config['private_net']['subnet'] = subnet
 
-        self.config['private_net']['subnet'] = subnet
         return subnet
 
 
