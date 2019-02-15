@@ -1,0 +1,46 @@
+# Use this file to configure the type of machines you want to create
+# on OpenStack
+---
+master_flavor: 'ECS.GP1.2-8'
+node_flavor: 'ECS.C1.4-8'
+# If your project has multiple networks you MUST specify the subnetwork too
+# don't change this unless you know what you are doing
+# per default koris will create a network for your cluster and route
+# this network to ext02 network in openstack if this is undesired change this
+#private_net:
+# name: 'k8s-nude'
+# subnet:
+#  name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
+#  cidr: '10.32.192.0/24'
+##  This is optional - if no router name is given a new one will be created
+#  router:
+#   name: 'NORIS-K8S-NUDE-OS-MGMT-ROUTER'
+#   network: 'bgp-noris'
+cluster-name: 'test'
+availibility-zones:
+ - de-nbg6-1b
+ - de-nbg6-1a
+n-masters: 3
+n-nodes: 3
+keypair: otiram
+#security_group: 'default'
+user_data: 'cloud-init-parts/generic'
+# while any generic *ubuntu* image will work
+# you should currently use koris-base
+# this image includes all k8s binaries and a special kernel
+# optimized for KVM (this image is built from
+# ubuntu-16.04-minimal-cloudimg-amd64-disk1.img
+image: "koris-2019-02-15"
+#image: "Ubuntu Xenial Server Cloudimg"
+loadbalancer:
+# set this to true if you
+# want the load balancer to have a floating IP, you can also specify the IP
+ floatingip: "213.95.155.110"
+certificates:
+  expriry: 8760h
+#storage_class: "BSS-Performance-Storage"
+storage_class: "PI-Storage-Class"
+pod_subnet: '10.233.0.0/16'
+pod_network: "CALICO"
+#pod_subnet: 'ad550c1-subnet'
+#pod_network: "FLANNEL"

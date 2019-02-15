@@ -430,7 +430,8 @@ class LoadBalancer:  # pragma: no coverage
             if not fips:
                 raise ValueError(
                     "Please create a floating ip and specify it in the configuration file")  # noqa
-
+            # this is a total BS in a project like PI because this project
+            # has multiple floating IP pools. We need to fix this
             fnet_id = fips[0]['floating_network_id']
             fip = client.create_floatingip(
                 {'floatingip': {'project_id': loadbalancer['tenant_id'],
@@ -737,6 +738,8 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
                 {"network": {"name": net_name, "admin_state_up": True}})
             network = network['network']
 
+        self.config['private_net'] = network
+
         return network
 
 
@@ -753,7 +756,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         """
         return: dict with network properties
         """
-        if 'private_net' not in self.config:
+        if 'subnet' not in self.config['private_net']:
             subnet_name = "koris-%s-subnet" % self.config['cluster-name']
         else:
             subnet_name = self.config.get('private_net')['subnet']['name']
@@ -766,23 +769,23 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         # is only allowed between matching labels
         subnet = [s for s in subnets if s['name'] == subnet_name]
         subnet = subnet[0] if subnet else {}
-
         if subnet:
             print(info(yellow("subnetwork [%s] already exists. Skipping..." %
                               subnet_name)))
         else:
-            print(info(red("creating a subnetwork")))
+            print(info(red("creating a subnetwork %s" % subnet_name)))
             subnet['ip_version'] = 4
             subnet['network_id'] = self.net_id
+            subnet['name'] = subnet_name
             # set cidr if not specified in config
-            if 'private_net' not in self.config:
+            if 'subnet' not in self.config['private_net']:
                 subnet['cidr'] = '192.168.1.0/16'
             else:
                 subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
-                subnet['name'] = self.config.get('private_net').get('subnet')['name']
             subnet = self.net_client.create_subnet({'subnet': subnet})
             subnet = subnet['subnet']
 
+        self.config['private_net']['subnet'] = subnet
         return subnet
 
 
@@ -800,7 +803,8 @@ class OSRouter:  # pylint: disable=too-few-public-methods
         """
         return: dict with router properties
         """
-        if 'router' not in self.config['private_net'].get('subnet'):
+        if 'router' not in self.config.get('private_net',
+                                           {}).get('subnet', {}):
             router_name = "koris-%s-router" % self.config['cluster-name']
         else:
             router_name = self.config.get(
