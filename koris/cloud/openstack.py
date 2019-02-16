@@ -1,7 +1,7 @@
 """
 functions and classes to interact with openstack
 """
-
+# pylint: disable=too-many-lines
 import asyncio
 import base64
 import copy
@@ -13,6 +13,7 @@ import textwrap
 
 from functools import lru_cache
 
+from netaddr import IPNetwork
 import novaclient
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound, NoUniqueMatch)  # noqa
@@ -46,44 +47,6 @@ if getattr(sys, 'frozen', False):
         """the same spiel for cinder"""
         return ['3']
     cinderclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
-
-
-def remove_cluster(config, nova, neutron, cinder):
-    """
-    Delete a cluster from OpenStack
-    """
-    cluster_info = OSClusterInfo(nova, neutron, cinder, config)
-    cp_hosts = cluster_info.distribute_management()
-    workers = cluster_info.distribute_nodes()
-
-    tasks = [host.delete(neutron) for host in cp_hosts]
-    tasks += [host.delete(neutron) for host in workers]
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.wait(tasks))
-    LoadBalancer(config, neutron).delete()
-    connection = OpenStackAPI.connect()
-    secg = connection.list_security_groups(
-        {"name": '%s-sec-group' % config['cluster-name']})
-    if secg:
-        for sg in secg:
-            for rule in sg.security_group_rules:
-                connection.delete_security_group_rule(rule['id'])
-
-            for port in connection.list_ports():
-                if sg.id in port.security_groups:
-                    connection.delete_port(port.id)
-    connection.delete_security_group(
-        '%s-sec-group' % config['cluster-name'])
-
-    # delete volumes
-
-    loop.close()
-    for vol in cinder.volumes.list():
-        try:
-            if config['cluster-name'] in vol.name and vol.status != 'in-use':
-                vol.delete()
-        except TypeError:
-            continue
 
 
 class BuilderError(Exception):
@@ -243,10 +206,11 @@ class LoadBalancer:  # pragma: no coverage
 
     def __init__(self, config, client=None):
         self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
+        self.config = config
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
-        self.subnet = config.get('subnet')
+        self.subnet = config.get('private_net')['subnet'].get('name')
         # these attributes are set after creation
         self.pool = None
         self._id = None
@@ -389,7 +353,11 @@ class LoadBalancer:  # pragma: no coverage
         if self.subnet:
             subnet_id = client.find_resource('subnet', self.subnet)['id']
         else:
-            subnet_id = client.list_subnets()['subnets'][-1]['id']
+            # match created subnet id with the corresponding one in subnets
+            network = OSNetwork(client, self.config).get_or_create()
+            subnets = client.list_subnets()['subnets']
+            subnet_id = [sub['id']
+                         for sub in subnets if network['id'] == sub['network_id']][0]
 
         lb = client.create_loadbalancer({'loadbalancer':
                                          {'provider': provider,
@@ -406,7 +374,7 @@ class LoadBalancer:  # pragma: no coverage
             fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
 
-    @retry(exceptions=(NeutronConflict, NovaNotFound, BadRequest), backoff=1, tries=10)
+    @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1, tries=10)
     def delete(self, client=None):
         """
         Delete the cluster API loadbalancer
@@ -462,7 +430,8 @@ class LoadBalancer:  # pragma: no coverage
             if not fips:
                 raise ValueError(
                     "Please create a floating ip and specify it in the configuration file")  # noqa
-
+            # this is a total BS in a project like PI because this project
+            # has multiple floating IP pools. We need to fix this
             fnet_id = fips[0]['floating_network_id']
             fip = client.create_floatingip(
                 {'floatingip': {'project_id': loadbalancer['tenant_id'],
@@ -738,11 +707,159 @@ def get_clients():
     return nova, neutron, cinder
 
 
+class OSNetwork:  # pylint: disable=too-few-public-methods
+    """
+    create network if not defined
+    """
+    def __init__(self, neutron_client, config):
+        self.net_client = neutron_client
+        self.config = config
+
+    def get_or_create(self):
+        """
+        neutron: must be a nuetron client instance
+
+        return: dict with network properties
+        """
+        if 'private_net' not in self.config:
+            net_name = "koris-%s-net" % self.config['cluster-name']
+        else:
+            net_name = self.config.get('private_net')['name']
+        networks = self.net_client.list_networks()['networks']
+        network = [n for n in networks if n['name'] == net_name]
+        network = network[0] if network else None
+
+        if network:
+            print(info(yellow(
+                "The network [%s] already exists. Skipping" % net_name)))  # noqa
+        else:
+            print(info(red("Creating network [%s]" % net_name)))
+            network = self.net_client.create_network(
+                {"network": {"name": net_name, "admin_state_up": True}})
+            network = network['network']
+
+        if 'private_net' in self.config:
+            self.config['private_net'].update(network)
+        else:
+            self.config['private_net'] = network
+
+        return network
+
+
+class OSSubnet:  # pylint: disable=too-few-public-methods
+    """
+    create subnet if not defined
+    """
+    def __init__(self, neutron_client, network_id, config):
+        self.net_client = neutron_client
+        self.net_id = network_id
+        self.config = config
+
+    def get_or_create(self):
+        """
+        return: dict with network properties
+        """
+        subnet_name = None
+        for key in ['subnet', 'subnets']:
+            if key in self.config['private_net']:
+                try:
+                    subnet_name = self.config.get('private_net')['subnet']['name']
+                except KeyError:
+                    continue
+
+        if not subnet_name:
+            subnet_name = "%s-subnet" % self.config['cluster-name']
+
+        subnets = self.net_client.list_subnets()['subnets']
+
+        # using OpenStack we needed more than one subnetwork.
+        # in Kuberentes we delegate networking security to policies.
+        # Thus, all the Pods are in the same subnet, but traffic
+        # is only allowed between matching labels
+        subnet = [s for s in subnets if s['name'] == subnet_name]
+        subnet = subnet[0] if subnet else {}
+        if subnet:
+            print(info(yellow("subnetwork [%s] already exists. Skipping..." %
+                              subnet_name)))
+        else:
+            print(info(red("creating a subnetwork %s" % subnet_name)))
+            subnet['ip_version'] = 4
+            subnet['network_id'] = self.net_id
+            subnet['name'] = subnet_name
+            # set cidr if not specified in config
+            if 'subnet' not in self.config.get('private_net', {}):
+                subnet['cidr'] = '192.168.1.0/16'
+            else:
+                subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
+            subnet = self.net_client.create_subnet({'subnet': subnet})
+            subnet = subnet['subnet']
+            self.config['private_net']['subnet'] = subnet
+
+        return subnet
+
+
+class OSRouter:  # pylint: disable=too-few-public-methods
+    """
+    create router if not defined
+    """
+    def __init__(self, neutron_client, network_id, subnet, config):
+        self.net_client = neutron_client
+        self.net_id = network_id
+        self.subnet = subnet
+        self.config = config
+
+    def get_or_create(self):
+        """
+        return: dict with router properties
+        """
+        if 'router' not in self.config.get('private_net',
+                                           {}).get('subnet', {}):
+            router_name = "%s-router" % self.config['cluster-name']
+        else:
+            router_name = self.config.get(
+                'private_net')['subnet']['router']['name']
+
+        router = self.net_client.list_routers(name=router_name)['routers']
+        if router:
+            print(info(yellow(
+                "The router [%s] already exists. Skipping" % router_name)))  # noqa
+        else:
+            print(info(red("Creating router")))
+            payload = {
+                "router": {
+                    "name": router_name,
+                }
+            }
+            router = self.net_client.create_router(payload)['router']
+            router_ip = IPNetwork(self.subnet.get('cidr', "192.168.1.0/16"))[1]
+            port_payload = {'port': {"admin_state_up": True,
+                                     "network_id": self.net_id,
+                                     "fixed_ips": [{
+                                         "ip_address": str(router_ip),  # noqa
+                                         "subnet_id": self.subnet['id']}],
+                                     "name": router_name + "-PORT"}}
+            port = self.net_client.create_port(port_payload)['port']
+            self.net_client.add_interface_router(router['id'], {'port_id': port['id']})
+            # dynamically find network id matching router network in config
+            network_name = self.config['private_net'].get(
+                'router', {"name": "router-%s" % self.config['cluster-name'],
+                           "network": "ext02"})['network']
+            networks = self.net_client.list_networks()['networks']
+            try:
+                network_id = [net['id']
+                              for net in networks if net['name'] == network_name][0]
+            except IndexError:
+                print(red("Wrong router network in config"))
+                sys.exit(1)
+            self.net_client.add_gateway_router(router['id'], {"network_id": network_id})
+
+        return router
+
+
 class OSCloudConfig:
     """
     Data class to hold the configuration file for kubernetes cloud provider
     """
-
     def __init__(self, subnet_id=None):
         os_vars = read_os_auth_variables(trim=False)
         self.subnet_id = subnet_id
@@ -810,27 +927,21 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     def __init__(self, nova_client, neutron_client,
                  cinder_client,
                  config):
-
         self.keypair = nova_client.keypairs.get(config['keypair'])
 
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-
+        self.net = OSNetwork(neutron_client, config).get_or_create()
+        subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
+        OSRouter(neutron_client, self.net['id'], subnet, config).get_or_create()
+        self.subnet_id = subnet['id']
         secgroup = SecurityGroup(neutron_client, config['cluster-name'],
-                                 subnet=config.get('subnet'))
+                                 subnet=subnet['name'])
 
         secgroup.get_or_create_sec_group(config['cluster-name'])
         self.secgroup = secgroup
         self.secgroups = [secgroup.id]
-
-        self.net = neutron_client.find_resource("network", config["private_net"])  # noqa
-        if 'subnet' in config:
-            self.subnet_id = neutron_client.find_resource('subnet',
-                                                          config['subnet'])['id']  # noqa
-        else:
-            self.subnet_id = neutron_client.list_subnets()['subnets'][-1]['id']
-
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']

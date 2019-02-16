@@ -310,11 +310,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                         "kubernetes-ca")
         return CertBundle(_key, _ca)
 
-    def run(self, config):  # pylint: disable=too-many-locals
-        """
-        execute the complete cluster build
-        """
-        # create a security group for the cluster if not already present
+    def create_network(self, config):
+        """create network for cluster if not already present"""
+
         if self.info.secgroup.exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
@@ -325,13 +323,21 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.info.secgroup.configure()
 
         try:
-            subnet = NEUTRON.find_resource('subnet', config['subnet'])
+            subnet = NEUTRON.find_resource(
+                'subnet', config['private_net']['subnet']['name'])
         except KeyError:
             subnet = NEUTRON.list_subnets()['subnets'][-1]
+            config['private_net']['subnet'] = subnet
 
         cloud_config = OSCloudConfig(subnet['id'])
         LOGGER.info("Using subnet %s", subnet['name'])
+        return cloud_config
 
+    def run(self, config):  # pylint: disable=too-many-locals
+        """
+        execute the complete cluster build
+        """
+        cloud_config = self.create_network(config)
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
         ca_bundle = self.create_ca()
