@@ -8,13 +8,13 @@ node_flavor: 'ECS.C1.4-8'
 # per default koris will create a network for your cluster and route
 # this network to ext02 network in openstack if this is undesired change this
 private_net:
- name: 'k8s-nude'
+ name: 'korispipeline-office-net'
  subnet:
-  name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
-  cidr: '10.32.192.0/24'
+  name: 'sub-korispipeline-office-net'
+  cidr: '10.36.18.0/27'
 #  This is optional - if no router name is given a new one will be created
   router:
-   name: 'NORIS-K8S-NUDE-OS-MGMT-ROUTER'
+   name: 'kubepipeline-office-rt'
    network: 'bgp-noris'
 cluster-name: '%%CLUSTER_NAME%%'
 availibility-zones:
