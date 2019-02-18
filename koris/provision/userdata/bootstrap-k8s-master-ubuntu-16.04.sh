@@ -11,6 +11,19 @@
 # create a single etcd host, and then add N hosts one after another.
 #
 # The addition of hosts is done via SSH!
+#
+# This should be the content of /etc/kubernetes/koris.env
+#
+#  export B64_CA_CONTENT=""
+#  export LOAD_BALANCER_DNS=""
+#  export LOAD_BALANCER_IP=""
+#  export LOAD_BALANCER_PORT=""
+#  export BOOTSTRAP_TOKEN=""
+#  export DISCOVERY_HASH=""
+#  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
+#  export MASTERS_IP=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
+#
+###
 ###
 
 set -e
