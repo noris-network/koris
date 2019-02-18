@@ -361,4 +361,7 @@ build-exec: ## build a single file executable of koris
 	rm -vRf dist
 	pyinstaller koris.spec
 
+
+build-exec-in-docker:
+	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
 # vim: tabstop=4 shiftwidth=4
