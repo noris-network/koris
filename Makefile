@@ -115,10 +115,9 @@ servedocs: docs ## compile the docs watching for changes
 release: dist ## package and upload a release
 	twine upload dist/*
 
-dist: clean ## builds source and wheel package
+dist: ## builds source and wheel package
 	$(PY) setup.py sdist
 	$(PY) setup.py bdist_wheel
-	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
@@ -356,7 +355,6 @@ install-git-hooks:
 	chmod +x .git/hooks/pre-commit
 
 build-exec: ## build a single file executable of koris
-	rm -vRf dist
 	pyinstaller koris.spec
 
 

@@ -14,6 +14,11 @@ ADD requirements.txt .
 ADD requirements_ci.txt .
 
 RUN pip3.6 install -r requirements.txt -r requirements_ci.txt
+RUN cp /usr/bin/python3.6 /usr/bin/python3
 
-WORKDIR /usr/src
-ENTRYPOINT ["make", "install", "build-exec", "PY=python3.6"]
+# uncomment these two lines for local builds - never push an image
+# with these line uncommented, because this breaks the build in gitlab
+
+#WORKDIR /usr/src
+#ENTRYPOINT ["make", "install", "build-exec", "PY=python3.6"]
+

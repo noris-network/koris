@@ -232,9 +232,9 @@ pages:
 
 build:
   stage: build
-  image: oz123/koris-builder:0.1
+  image: oz123/koris-builder:0.2
   script:
-   - python3 setup.py sdist
+   - python3 setup.py sdist PY=python3.6
    - make install build-exec PY=python3.6
   artifacts:
     paths:
