@@ -105,6 +105,9 @@ docker-push-alpine:
 docker-push-ubuntu:
 	docker push $(ORG)/koris-ubuntu:$(TAG)
 
+docker-build-pyinstaller:
+	docker build -t $(ORG)/koris-builder:$(TAG) -f docker/Docker-pyinstaller-builder .
+
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
@@ -356,4 +359,7 @@ build-exec: ## build a single file executable of koris
 	rm -vRf dist
 	pyinstaller koris.spec
 
+
+build-exec-in-docker:
+	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
 # vim: tabstop=4 shiftwidth=4

@@ -1,0 +1,19 @@
+FROM centos:centos7
+MAINTAINER Oz Tiram <oz.tiram@gmail.com>
+
+RUN yum -y update && \
+    yum -y install yum-utils && \
+    yum -y groupinstall development && \
+    yum -y install https://centos7.iuscommunity.org/ius-release.rpm && \
+    yum -y install python36u && \
+    yum -y install python36u-pip python36u-devel && \
+    pip3.6 install pyinstaller
+
+
+ADD requirements.txt .
+ADD requirements_ci.txt .
+
+RUN pip3.6 install -r requirements.txt -r requirements_ci.txt
+
+WORKDIR /usr/src
+ENTRYPOINT ["make", "install", "build-exec", "PY=python3.6"]
