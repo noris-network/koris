@@ -172,6 +172,7 @@ compliance-checks:
   - "make compliance-checks"
   only:
   - master
+  - tags
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
