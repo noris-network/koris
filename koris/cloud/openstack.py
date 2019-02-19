@@ -493,8 +493,8 @@ class LoadBalancer:  # pragma: no coverage
         LOGGER.info("Added health monitor '%s' (%s) to pool %s", name,
                     hm['healthmonitor']['id'], pool_id)
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=5,
-           backoff=1, logger=LOGGER.debug)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict, BadRequest), tries=24,
+           delay=5, backoff=1, logger=LOGGER.debug)
     def add_member(self, client, pool_id, ip_addr, protocol_port=6443):
         """
         add listener to a loadbalancers pool.
