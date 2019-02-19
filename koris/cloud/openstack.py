@@ -875,12 +875,12 @@ class OSCloudConfig:
     def __str__(self):
         global_ = textwrap.dedent("""
         [Global]
-        username=%s
-        password=%s
-        auth-url=%s
-        tenant-id=%s
-        domain-name=%s
-        region=%s
+        username="%s"
+        password="%s"
+        auth-url="%s"
+        tenant-id="%s"
+        domain-name="%s"
+        region="%s"
         """ % (self.username,
                self.password,
                self.auth_url,  # pylint: disable=no-member
