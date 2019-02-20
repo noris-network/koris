@@ -384,11 +384,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             lbinst.configure(NEUTRON, [first_master_ip]))
 
         # create the worker nodes
-        LOGGER.info("Waiting for the worker machines to be launched...")
+        LOGGER.info("Waiting for the worker machines to be launched and the "
+                    "loadbalancer to be configured...")
         node_tasks = self.nodes_builder.create_initial_nodes(
             cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
-
         node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug(info("Done creating nodes tasks"))
