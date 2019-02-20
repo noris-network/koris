@@ -124,6 +124,11 @@ check-node-labels:
   script:
   - "pip3 install -q -e ."
   - "make assert-node-labels"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
 
 security-checks-masters:
   stage: security-checks
@@ -167,6 +172,7 @@ compliance-checks:
   - "make compliance-checks"
   only:
   - master
+  - tags
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -226,12 +232,14 @@ pages:
 
 build:
   stage: build
-  image: oz123/koris-alpine:0.1.3
+  image: oz123/koris-builder:0.2
   script:
-   - python3 setup.py sdist
+   - python3 setup.py sdist PY=python3.6
+   - make install build-exec PY=python3.6
   artifacts:
     paths:
      - dist/koris-*.tar.gz
+     - dist/koris
   only:
     - tags
     - master

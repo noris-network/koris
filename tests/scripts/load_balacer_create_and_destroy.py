@@ -15,7 +15,7 @@ _, CLIENT, _ = get_clients()
 lb_name = os.getenv('LOADBALANCER_NAME', 'test')
 lb_name = lb_name.split('-lb')[0]
 
-config = {'cluster-name': lb_name}
+config = {'cluster-name': lb_name, "private_net": {'subnet': {}}}
 
 LB = LoadBalancer(config)
 

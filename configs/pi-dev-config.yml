@@ -4,14 +4,19 @@
 ---
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-
-# Please make sure to NOT create any other networks or subnets
-# into the OpenStack project by hand. It might break this setup.
-# The network below is routed to office workstations so you can easily 
-# SSH into them.
-private_net: 'k8s-nude'
-# Specifying this is only required if there are other networks present.
-# subnet: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
+# If your project has multiple networks you MUST specify the subnetwork too
+# don't change this unless you know what you are doing
+# per default koris will create a network for your cluster and route
+# this network to ext02 network in openstack if this is undesired change this
+private_net:
+ name: 'korispipeline-office-net'
+ subnet:
+  name: 'sub-korispipeline-office-net'
+  cidr: '10.36.18.0/27'
+#  This is optional - if no router name is given a new one will be created
+  router:
+   name: 'kubepipeline-office-rt'
+   network: 'bgp-noris'
 cluster-name: 'change-me'
 availibility-zones:
  - de-nbg6-1b

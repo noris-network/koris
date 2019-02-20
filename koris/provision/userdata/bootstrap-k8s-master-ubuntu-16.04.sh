@@ -85,7 +85,7 @@ bootstrapTokens:
 apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
-  oidc-issuer-url: "https://213.95.155.178:32000"
+  oidc-issuer-url: "https://10.36.60.232:32000"
   oidc-client-id: example-app
   oidc-ca-file: /etc/kubernetes/pki/oidc-ca.pem
   oidc-username-claim: email
@@ -93,6 +93,8 @@ apiServerExtraArgs:
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
+  allocate-node-cidrs: "true"
+  cluster-cidr: ${POD_SUBNET}
 apiServerExtraVolumes:
 - name: "cloud-config"
   hostPath: "/etc/kubernetes/cloud.config"

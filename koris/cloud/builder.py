@@ -310,11 +310,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                         "kubernetes-ca")
         return CertBundle(_key, _ca)
 
-    def run(self, config):  # pylint: disable=too-many-locals,too-many-statements
-        """
-        execute the complete cluster build
-        """
-        # create a security group for the cluster if not already present
+    def create_network(self, config):
+        """create network for cluster if not already present"""
+
         if self.info.secgroup.exists:
             LOGGER.info(info(red(
                 "A Security group named %s-sec-group already exists" % config[
@@ -325,13 +323,21 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.info.secgroup.configure()
 
         try:
-            subnet = NEUTRON.find_resource('subnet', config['subnet'])
+            subnet = NEUTRON.find_resource(
+                'subnet', config['private_net']['subnet']['name'])
         except KeyError:
             subnet = NEUTRON.list_subnets()['subnets'][-1]
+            config['private_net']['subnet'] = subnet
 
         cloud_config = OSCloudConfig(subnet['id'])
         LOGGER.info("Using subnet %s", subnet['name'])
+        return cloud_config
 
+    def run(self, config):  # pylint: disable=too-many-locals
+        """
+        execute the complete cluster build
+        """
+        cloud_config = self.create_network(config)
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
         ca_bundle = self.create_ca()
@@ -370,6 +376,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
+        master_ips = [x.ip_address for x in results if isinstance(x, Instance)]
+
         # add a listener for the first master node, since this is the node we
         # call kubeadm init on
         LOGGER.info("Configuring the LoadBalancer...")
@@ -383,17 +391,18 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
-        # # WORK: setting up LB for Dex
-        # LOGGER.info("Configuring the LoadBalancer for Dex ...")
-        # nodes = NodeBuilder.get_nodes()
-        # dex_task = loop.create_task(create_dex(NEUTRON), lbinst, members= )
-        # dex = Dex(lbinst, members=[first_master_ip])
-        # configure_dex_task = loop.create_task(dex.configure_lb(NEUTRON))
-        # node_tasks.append(configure_dex_task)
-
         node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug(info("Done creating nodes tasks"))
+
+        node_ips = [x.ip_address for x in results if isinstance(x, Instance)]
+
+        # WORK: setting up LB for Dex
+        LOGGER.info("Configuring the LoadBalancer for Dex ...")
+        dex_task = loop.create_task(create_dex(NEUTRON, lbinst, members=master_ips))
+        oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst, members=node_ips))
+        tasks = [dex_task, oauth_task]
+        loop.run_until_complete(asyncio.gather(*tasks))
 
         # We should no be able to query the API server for available nodes
         # with a valid certificate from the generated CA. Hence, generate
@@ -422,11 +431,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.handlers[0].terminator = "\n"
 
         LOGGER.info("\nKubernetes API is ready!")
-        
-        master_ips = k8s.get_ips(role="master")
-        node_ips = k8s.get_ips(role="node")
-        print(f"Master IPs: {master_ips}\nNode IPs: {node_ips}")
-
         LOGGER.info("\nWaiting for all masters to become Ready")
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
 

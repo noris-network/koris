@@ -30,10 +30,10 @@ spec:
       containers:
       - name: dex-example-app
         image: obitech/dex-example-app
-        args: ["--issuer", "https://213.95.155.178:32000",
+        args: ["--issuer", "https://10.36.60.232:32000",
           "--issuer-root-ca", "/etc/dex/tls/ca.pem",
           "--listen", "http://0.0.0.0:5555",
-          "--redirect-uri", "http://213.95.155.178:5555/callback"]
+          "--redirect-uri", "http://10.36.60.232:5555/callback"]
         ports:
         - name: http
           containerPort: 5555

@@ -133,7 +133,7 @@ class K8S:
     def get_ips(self, role="master"):
         """Returns the IP address of all nodes with a certain value in its name"""
         ips = []
-        for item in self.api.list_node(pretty=True).items:
+        for item in self.api.list_node(pretty=True, include_uninitialized=True).items:
             if role in item.metadata.name:
                 address = item.status.addresses[0].address
                 print(f"Found '{role}' in '{item.metadata.name}', IP: {address}")

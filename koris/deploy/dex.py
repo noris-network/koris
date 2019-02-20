@@ -54,7 +54,7 @@ class Pool:
         if self.algorithm not in self.allowed_algorithms:
             err = f"algorithm needs to be part of {self.allowed_algorithms}"
             raise ValidationError(err)
-        
+
         if not self.members:
             raise ValidationError("pool needs members")
 
@@ -151,7 +151,7 @@ class Listener:
 
     def create_pool(self, client):
         """Creates a new Pool with members and healthmon and adds it to the Listener"""
-        self.verify()        
+        self.verify()
         if not self.listener:
             raise ValidationError("need listener to create pool")
 
@@ -175,7 +175,7 @@ async def create_dex(client, lb: LoadBalancer, name="dex",
 
 
 async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
-                        listener_port=5556, pool_port=32555, protocol="HTTP",
+                        listener_port=5555, pool_port=32555, protocol="HTTP",
                         algo="ROUND_ROBIN", members=None):
     """Convenience function to create OAuth2 Client App Listener and Pool"""
 

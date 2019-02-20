@@ -7,10 +7,12 @@ misc functions to interact with the cluster, usually called from
 
 Don't use directly
 """
+import asyncio
 import sys
 
 from koris.util.hue import red, yellow  # pylint: disable=no-name-in-module
-from koris.cloud.openstack import remove_cluster
+from koris.cloud.openstack import OSClusterInfo, LoadBalancer
+from koris.cloud import OpenStackAPI
 from .util.util import get_kubeconfig_yaml, get_logger
 
 LOGGER = get_logger(__name__)
@@ -57,3 +59,41 @@ def write_kubeconfig(cluster_name, lb_ip, lb_port, cert_dir, ca_cert_name,
         fh.write(kubeconfig)
 
     return path
+
+
+def remove_cluster(config, nova, neutron, cinder):
+    """
+    Delete a cluster from OpenStack
+    """
+    cluster_info = OSClusterInfo(nova, neutron, cinder, config)
+    cp_hosts = cluster_info.distribute_management()
+    workers = cluster_info.distribute_nodes()
+
+    tasks = [host.delete(neutron) for host in cp_hosts]
+    tasks += [host.delete(neutron) for host in workers]
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(asyncio.wait(tasks))
+    LoadBalancer(config, neutron).delete()
+    connection = OpenStackAPI.connect()
+    secg = connection.list_security_groups(
+        {"name": '%s-sec-group' % config['cluster-name']})
+    if secg:
+        for sg in secg:
+            for rule in sg.security_group_rules:
+                connection.delete_security_group_rule(rule['id'])
+
+            for port in connection.list_ports():
+                if sg.id in port.security_groups:
+                    connection.delete_port(port.id)
+    connection.delete_security_group(
+        '%s-sec-group' % config['cluster-name'])
+
+    # delete volumes
+
+    loop.close()
+    for vol in cinder.volumes.list():
+        try:
+            if config['cluster-name'] in vol.name and vol.status != 'in-use':
+                vol.delete()
+        except TypeError:
+            continue

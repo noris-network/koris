@@ -1,12 +1,13 @@
 """
 Test koris.cloud.builder
 """
-import pytest
+#  pylint: disable=redefined-outer-name
 from unittest import mock
+import pytest
 
 import koris.cloud.openstack
 
-from koris.cloud.openstack import OSClusterInfo
+from koris.cloud.openstack import OSClusterInfo, OSSubnet
 from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
 from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
 
@@ -17,11 +18,13 @@ DUMMYPORT = {"port": {"admin_state_up": True,
                       "fixed_ips": [{"ip_address": "192.168.1.101"}]}}
 
 
-class CloudConfig:
+class CloudConfig:  # pylint: disable=too-few-public-methods, unnecessary-pass
+    """ class CloudConfig """
     pass
 
 
-class Flavor:
+class Flavor:  # pylint:  disable=too-few-public-methods
+    """ class Flavor """
 
     def __init__(self, name):
 
@@ -30,6 +33,7 @@ class Flavor:
 
 
 def get_ca():
+    """ get ca """
     _key = create_key(size=2048)
     _ca = create_ca(_key, _key.public_key(),
                     "DE", "BY", "NUE",
@@ -49,7 +53,8 @@ class DummyServer:  # pylint: disable=too-few-public-methods
         self.flavor = Flavor(flavor)
         self.exists = False
 
-    def interface_list(self):
+    def interface_list(self):  # pylint: disable=no-self-use
+        """ list interfaces"""
         return [DUMMYPORT, ]
 
 
@@ -62,7 +67,31 @@ CONFIG = {
     "keypair": "otiram",
     "availibility-zones": ['nbg6-1a', 'nbg6-1b'],
     "cluster-name": "test",
-    "private_net": "test-net",
+    'private_net': {
+        'name': 'test-net',
+        'router': {
+            'name': 'myrouter1',
+            'network': 'ext02'
+        },
+        'subnet': {
+            'name': 'foobar',
+            'cidr': '192.168.0.0/24'
+        }
+    },
+    "security_group": "test-group",
+    "image": "ubuntu 16.04",
+    "node_flavor": "ECS.C1.2-4",
+    "master_flavor": "ECS.C1.4-8",
+    'storage_class': "TestStorageClass"
+}
+
+CONFIG2 = {
+    "private_net": {},
+    "n-nodes": 3,
+    "n-masters": 3,
+    "keypair": "otiram",
+    "availibility-zones": ['nbg6-1a', 'nbg6-1b'],
+    "cluster-name": "test",
     "security_group": "test-group",
     "image": "ubuntu 16.04",
     "node_flavor": "ECS.C1.2-4",
@@ -79,10 +108,23 @@ NEUTRON.create_port = mock.MagicMock(
 
 NEUTRON.create_security_group = mock.MagicMock(
     return_value={"security_group": {'id':
-                                     'e5d896d7-b2bc-4b0c-94ba-c542b4b8e49c'}})
+                                     'e5d896d7-b2bc-4b0c-94ba-c542b4b8e49c',
+                                     'name': 'foo-sec'
+                                     }})
 
 NEUTRON.list_subnets = mock.MagicMock(
-    return_value={'subnets': [{'id': 'e6d899d9-b1bc-4b1c-96ba-c541b4b8e49c'}]})
+    return_value={'subnets': [{'id': 'e6d899d9-b1bc-4b1c-96ba-c541b4b8e49c',
+                               'name': 'foosubnet'}]})
+
+NEUTRON.list_routers.return_value = {
+    'routers': [{'id': 'e6d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'koris-router'}]}
+
+NEUTRON.list_networks.return_value = {
+    'networks': [{'id': 'e7d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'koris-network'}]}
+
+NEUTRON.create_network.return_value = {
+    'network': {'id': 'e5d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'foobar'}}
+
 
 NEUTRON.list_lbaas_loadbalancers = mock.MagicMock(
     return_value={'loadbalancers': [
@@ -100,23 +142,77 @@ NEUTRON.list_lbaas_loadbalancers = mock.MagicMock(
          'vip_port_id': 'ab3c7667-004b-4827-b2dd-a887cdd94199',
          'vip_subnet_id': '01f67963-00eb-4080-a9d9-4cbe936984cd'}]})
 
+SUBNETS = {
+    "service_types": [],
+    "description": "",
+    "updated_at": "2019-01-30T13:47:45Z",
+    "cidr": "192.168.0.0/16",
+    "ip_version": 4,
+    "ipv6_ra_mode": None,
+    "host_routes": [],
+    "id": "163e7002-3f9a-4b80-bf81-ff01d8bbf270",
+    "allocation_pools": [{
+        "start": "192.168.0.2",
+        "end": "192.168.255.254"
+    }],
+    "ipv6_address_mode": None,
+    "network_id": "04536050-0902-4673-acba-ae54cf7810f6",
+    "gateway_ip": "192.168.0.1",
+    "name": "bar-baz",
+    "subnetpool_id": None,
+    "project_id": "f4c0a6de561e487d8ba5d1cc3f1042e8",
+    "revision_number": 2,
+    "tenant_id": "f4c0a6de561e487d8ba5d1cc3f1042e8",
+    "tags": [],
+    "dns_nameservers": [],
+    "enable_dhcp": True,
+    "created_at": "2019-01-30T13:47:45Z"
+}
+
 
 @pytest.fixture
-def dummy_server():
+def dummy_server():  # pylint: disable=redefined-outer-name
+    """ dummy server"""
     return DummyServer("node-1-test",
                        "10.32.192.101",
                        Flavor('ECS.C1.4-8'))
 
 
 @pytest.fixture
-def os_info():
+def os_info():  # pylint disable=redefined-outer-name
+    """test cluster info class"""
     NEUTRON.list_security_groups = mock.MagicMock(
         return_value=iter([{"security_groups": []}]))
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
     return osinfo
 
 
-def test_node_builder(os_info, dummy_server):
+def test_create_network_settings_from_config():
+    """test create network from config"""
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
+    sub = OSSubnet(NEUTRON, '12', CONFIG)
+    subs = sub.get_or_create()
+    assert 'name' in subs
+    assert 'cidr' in subs
+
+
+def test_create_network_settings_not_in_config():
+    """test create network no settings in config"""
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
+    sub = OSSubnet(NEUTRON, '12', CONFIG2)
+    subs = sub.get_or_create()
+    assert 'name' in subs
+    assert 'cidr' in subs
+
+
+def test_node_builder(os_info, dummy_server):  # pylint disable=redefined-outer-name
     """ test the node builder class """
     NOVA.servers.find = mock.MagicMock(return_value=dummy_server)
     nb = NodeBuilder(CONFIG, os_info)
@@ -145,7 +241,7 @@ def test_node_builder(os_info, dummy_server):
     assert isinstance(call_args['flavor'], Flavor)
 
 
-def test_controlplane_builder(os_info):
+def test_controlplane_builder(os_info):  # pylint disable=redefined-outer-name
     """ test the control plane builder class """
     NOVA.servers.find = mock.MagicMock(
         return_value=DummyServer("master-1-test",
@@ -157,7 +253,8 @@ def test_controlplane_builder(os_info):
     assert masters[0].name == 'master-1-test'
 
 
-def test_create_nodes(os_info):
+def test_create_nodes(os_info):  # pylint disable=redefined-outer-name
+    """ test create nodes"""
     NOVA.servers.list = mock.MagicMock(
         return_value=[DummyServer("node-%d-test" % i,
                                   "10.32.192.10%d" % i,

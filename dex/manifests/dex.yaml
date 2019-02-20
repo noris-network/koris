@@ -56,7 +56,7 @@ metadata:
   name: dex
 data:
   config.yaml: |
-    issuer: https://213.95.155.178:32000
+    issuer: https://10.36.60.232:32000
     storage:
       type: kubernetes
       config:
@@ -73,14 +73,14 @@ data:
           baseURL: https://gitlab.noris.net
           clientID: a920735e852804d31c4eec23b6fe548a79509a5722c72c363eeeeb1283851140
           clientSecret: 7c06d2c9ebd25eb20595b0e5fc82f2b3a4c9f5b673cbc43da375c6f4af5a5746
-          redirectURI: https://213.95.155.178:32000/callback
+          redirectURI: https://10.36.60.232:32000/callback
     oauth2:
       skipApprovalScreen: true
 
     staticClients:
     - id: example-app
       redirectURIs:
-      - 'http://213.95.155.178:5555/callback'
+      - 'http://10.36.60.232:5555/callback'
       name: 'Example App'
       secret: ZXhhbXBsZS1hcHAtc2VjcmV0
 

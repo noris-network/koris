@@ -1,28 +1,24 @@
-# This is an example koris config file you can use to deploy a 
+# This is an example koris config file you can use to deploy a
 # KUbernetes cluster into your own noris.cloud project.
 ---
 # Noris.cloud instance flavors. For available options see
 # https://www.noris.cloud/services/compute/openstack-nova/?lang=en#details
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-
-# The project's network where your cluster should be deployed into. 
-# If you have just one network and subnet and in your project, 
-# Koris will automatically assign the first subnet it finds.
-private_net: 'koris-network'
-
-# Koris will automatically create a security group, however you can
-# specify one manually if you wish
-# security_group: 'default'
-
-# You MUST specify a subnet if you have more than one network in your project.
-# If you want to use a LoadBalancer, you MUST specify the subnet ID instead of the name.
-# subnet: 'koris-subnet'
-
-# The cluster name, will be used for configuration files, node names, etc.
-cluster-name: 'koris-test'
-
-# The availabilty zones where the instances will be created in.
+# If your project has multiple networks you MUST specify the subnetwork
+# don't change this unless you know what you are doing.
+# per default koris will create a network for your cluster and route
+# this network to ext02 network in openstack if this is undesired change this
+#private_net:
+# name: 'korispipeline-office-net'
+# subnet:
+#  name: 'sub-korispipeline-office-net'
+#  cidr: '10.36.18.0/27'
+#  This is optional - if no router name is given a new one will be created
+#  router:
+#   name: 'router-name'
+#   network: 'ext02'
+cluster-name: 'change-me'
 availibility-zones:
  - de-nbg6-1b
  - de-nbg6-1a
@@ -61,11 +57,10 @@ loadbalancer:
 storage_class: "PI-Storage-Class"
 # storage_class: "BSS-Performance-Storage"
 
-# The CIDR range for your internal cluster
-od_subnet: "10.233.0.0/16"
-
 # The Kubernetes pod network plugin
 pod_network: "CALICO"
+# The CIDR range for your internal cluster
+pod_subnet: "10.233.0.0/16"
 
 # Flannel is supported too
 #pod_subnet: "10.244.0.0/16"

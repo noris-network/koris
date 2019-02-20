@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 .PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
-	clean-lb-after-integration-test clean-lb k8s/dex/create k8s/dex/delete
+	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
 
@@ -36,7 +36,7 @@ BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");prin
 REV_NUMBER = $(shell git rev-parse --short ${REV})
 CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
-NETWORK_NAME ?= korispipeline-office-net
+CIDR ?= 192.168.1.0\/16
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
@@ -44,13 +44,6 @@ SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sono
 SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
 CIS_VERSION=1.11
-
-# Dex variables
-GITLAB_CLIENT_ID=a920735e852804d31c4eec23b6fe548a79509a5722c72c363eeeeb1283851140
-GITLAB_CLIENT_SECRET=7c06d2c9ebd25eb20595b0e5fc82f2b3a4c9f5b673cbc43da375c6f4af5a5746
-DEX_CLIENT_CERT_PATH=dex/ssl/cert.pem
-DEX_CLIENT_CERT_KEY_PATH=dex/ssl/key.pem
-DEX_ROOT_CA_PATH=dex/ssl/ca.pem
 
 help:
 	@$(PY) -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -111,6 +104,9 @@ docker-push-alpine:
 docker-push-ubuntu:
 	docker push $(ORG)/koris-ubuntu:$(TAG)
 
+docker-build-pyinstaller:
+	docker build -t $(ORG)/koris-builder:$(TAG) -f docker/Docker-pyinstaller-builder .
+
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
@@ -118,10 +114,9 @@ servedocs: docs ## compile the docs watching for changes
 release: dist ## package and upload a release
 	twine upload dist/*
 
-dist: clean ## builds source and wheel package
+dist: ## builds source and wheel package
 	$(PY) setup.py sdist
 	$(PY) setup.py bdist_wheel
-	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
@@ -283,9 +278,7 @@ update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	@sed -i "s/%%date%%/$$(date '+%Y-%m-%d')/g" tests/koris_test.yml
 	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
-	@sed -i "s/private_net: .*/private_net: '${NETWORK_NAME}'/g" tests/koris_test.yml
 	@cat tests/koris_test.yml
-
 
 clean-cluster: update-config
 	koris destroy tests/koris_test.yml --force
@@ -361,48 +354,9 @@ install-git-hooks:
 	chmod +x .git/hooks/pre-commit
 
 build-exec: ## build a single file executable of koris
-	rm -vRf dist
 	pyinstaller koris.spec
 
-create-dex: \
-	k8s/dex/create/secrets \
-	k8s/dex/create/manifests
 
-k8s/dex/create/secrets: \
-	k8s/dex/create/secrets/ssl \
-	k8s/dex/create/secrets/gitlab 
-
-k8s/dex/create/secrets/ssl: 
-	kubectl create secret tls dex.example.com.tls \
-		--cert=${DEX_CLIENT_CERT_PATH} \
-		--key=${DEX_CLIENT_CERT_KEY_PATH}
-	kubectl create secret generic dex.example.com.root-ca \
-		--from-file=${DEX_ROOT_CA_PATH}
-
-k8s/dex/create/secrets/gitlab:
-	kubectl create secret generic gitlab-client \
-		--from-literal=client-id=${GITLAB_CLIENT_ID} \
-		--from-literal=client-secret=${GITLAB_CLIENT_SECRET}
-
-k8s/dex/create/manifests:
-	kubectl create -f dex/manifests
-
-delete-dex: \
-	k8s/dex/delete/secrets \
-	k8s/dex/delete/manifests
-
-k8s/dex/delete/secrets: \
-	k8s/dex/delete/secrets/ssl \
-	k8s/dex/delete/secrets/gitlab 
-
-k8s/dex/delete/secrets/ssl:
-	kubectl delete secret dex.example.com.tls
-	kubectl delete secret dex.example.com.root-ca
-
-k8s/dex/delete/secrets/gitlab:
-	kubectl delete secret gitlab-client
-
-k8s/dex/delete/manifests:
-	kubectl delete -f dex/manifests/
-
+build-exec-in-docker:
+	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
 # vim: tabstop=4 shiftwidth=4
