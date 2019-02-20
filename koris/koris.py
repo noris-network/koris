@@ -57,7 +57,7 @@ class Koris:  # pylint: disable=no-self-use
             default=argparse.SUPPRESS)
 
         try:
-            html_string = str(urlopen(KORIS_DOC_URL).read())
+            html_string = str(urlopen(KORIS_DOC_URL, timeout=1.5).read())
         except (HTTPError, URLError):
             html_string = ""
 
