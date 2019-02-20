@@ -87,6 +87,8 @@ apiServerExtraArgs:
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
+  allocate-node-cidrs: "true"
+  cluster-cidr: ${POD_SUBNET}
 apiServerExtraVolumes:
 - name: "cloud-config"
   hostPath: "/etc/kubernetes/cloud.config"
