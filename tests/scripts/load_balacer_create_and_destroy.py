@@ -8,7 +8,7 @@ import os
 
 from koris.cloud.builder import get_clients
 from koris.cloud.openstack import LoadBalancer
-from koris.deploy.dex import Dex
+from koris.deploy.dex import create_dex, create_oauth2
 
 _, CLIENT, _ = get_clients()
 
@@ -35,12 +35,10 @@ def create_and_configure():
 
     #  WORK: Dex testing
     print("Configuring the LoadBalancer for Dex ...")
-    dex = Dex(LB, members=node_ips)
-    dex.listener_name = "test-dex-listener"
-    dex.pool_name = "test-dex-pool"
-    configure_dex_task = loop.create_task(dex.configure_lb(CLIENT))
+    dex_task = loop.create_task(create_dex(CLIENT, LB, members=master_ips))
+    oauth_task = loop.create_task(create_oauth2(CLIENT, LB, members=node_ips))
 
-    tasks = [configure_lb_task, configure_dex_task]
+    tasks = [configure_lb_task, dex_task, oauth_task]
 
     loop.run_until_complete(asyncio.gather(*tasks))
 

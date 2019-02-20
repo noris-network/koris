@@ -68,22 +68,39 @@ class Pool:
                 raise ValidationError(f"invalid IP address: {ip}")
 
     def create(self, client, lb: LoadBalancer, listener_id):
-        """Adds the Pool to a Listener"""
+        """Creates a Pool and adds it to a Listener"""
 
+        self.verify()
         pool = lb.add_pool(client, listener_id=listener_id, lb_algorithm=self.algorithm,
                            protocol=self.protocol,
-                           name=self.name,
-                           protocol_port=self.port)
+                           name=self.name)
         self.id = pool["id"]
         self.pool = pool
+
+    def add_member(self, client, lb: LoadBalancer):
+        """Adds Members to a Pool"""
+
+        if not self.id:
+            raise ValidationError("need pool id to add members")
+        self.verify()
+
+        for ip in self.members:
+            lb.add_member(client, self.id, ip, self.port)
 
     def add_health_monitor(self, client, lb: LoadBalancer):
         """Adds a Health monitor to a Pool with default settings"""
 
         if not self.id:
             raise ValidationError("need pool id to create health monitor")
-
+        self.verify()
         lb.add_health_monitor(client, self.id, f"{self.name}-health")
+
+    def all(self, client, lb: LoadBalancer, listener_id):
+        """Convenience function to create a Pool with Members and Health Monitor"""
+
+        self.create(client, lb, listener_id)
+        self.add_member(client, lb)
+        self.add_health_monitor(client, lb)
 
 
 class Listener:
@@ -125,8 +142,8 @@ class Listener:
 
     def create_listener(self, client):
         """Create a new Listener and add it to the LoadBalancer"""
-
-        listener = self.loadbalancer.add_listener(client, name=f"{self.name}-listener",
+        self.verify()
+        listener = self.loadbalancer.add_listener(client, name=self.name,
                                                   protocol=self.protocol,
                                                   protocol_port=self.port)
         self.listener = listener
@@ -134,14 +151,13 @@ class Listener:
 
     def create_pool(self, client):
         """Creates a new Pool with members and healthmon and adds it to the Listener"""
-
+        self.verify()        
         if not self.listener:
             raise ValidationError("need listener to create pool")
 
-        self.pool.create(client, self.loadbalancer, self.id)
-        self.pool.add_health_monitor(client, self.loadbalancer)
+        self.pool.all(client, self.loadbalancer, self.id)
 
-    def create_all(self, client):
+    def all(self, client):
         """Creates a Listener and then adds a Pool to it"""
 
         self.create_listener(client)
@@ -155,7 +171,7 @@ async def create_dex(client, lb: LoadBalancer, name="dex",
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
-    listener.create_all(client)
+    listener.all(client)
 
 
 async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
@@ -165,4 +181,4 @@ async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
-    listener.create_all(client)
+    listener.all(client)

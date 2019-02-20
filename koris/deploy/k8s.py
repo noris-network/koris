@@ -130,6 +130,17 @@ class K8S:
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
+    def get_ips(self, role="master"):
+        """Returns the IP address of all nodes with a certain value in its name"""
+        ips = []
+        for item in self.api.list_node(pretty=True).items:
+            if role in item.metadata.name:
+                address = item.status.addresses[0].address
+                print(f"Found '{role}' in '{item.metadata.name}', IP: {address}")
+                ips.append(address)
+
+        return ips
+
     def add_all_masters_to_loadbalancer(self,
                                         n_masters,
                                         lb_inst,
