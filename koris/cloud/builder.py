@@ -13,13 +13,12 @@ import urllib
 
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
-from koris.deploy.dex import Dex
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
-
+from koris.deploy.dex import create_dex, create_oauth2
 from koris.util.util import get_logger
 from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
@@ -384,11 +383,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
-        # WORK: setting up LB for Dex
-        LOGGER.info("Configuring the LoadBalancer for Dex ...")
-        dex = Dex(lbinst, members=[first_master_ip])
-        configure_dex_task = loop.create_task(dex.configure_lb(NEUTRON))
-        node_tasks.append(configure_dex_task)
+        # # WORK: setting up LB for Dex
+        # LOGGER.info("Configuring the LoadBalancer for Dex ...")
+        # nodes = NodeBuilder.get_nodes()
+        # dex_task = loop.create_task(create_dex(NEUTRON), lbinst, members= )
+        # dex = Dex(lbinst, members=[first_master_ip])
+        # configure_dex_task = loop.create_task(dex.configure_lb(NEUTRON))
+        # node_tasks.append(configure_dex_task)
 
         node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
@@ -420,8 +421,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         LOGGER.handlers[0].terminator = "\n"
 
-        LOGGER.info("\nKubernetes API is ready!"
-                    "\nWaiting for all masters to become Ready")
+        LOGGER.info("\nKubernetes API is ready!")
+        
+        master_ips = k8s.get_ips(role="master")
+        node_ips = k8s.get_ips(role="node")
+        print(f"Master IPs: {master_ips}\nNode IPs: {node_ips}")
+
+        LOGGER.info("\nWaiting for all masters to become Ready")
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
 
         LOGGER.info("Configured load balancer to use all API servers")
