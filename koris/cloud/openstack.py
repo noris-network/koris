@@ -229,6 +229,7 @@ class LoadBalancer:  # pragma: no coverage
 
         """
         if not self._data['listeners']:
+            LOGGER.info("Adding listener ...")
             listener = self._add_listener(client)
             listener_id = listener["listener"]['id']
             LOGGER.info("Added listener ...")
@@ -237,6 +238,7 @@ class LoadBalancer:  # pragma: no coverage
             listener_id = self._data['listeners'][0]['id']
 
         if not self._data['pools']:
+            LOGGER.info("Adding pool ...")
             pool = self._add_pool(client, listener_id)
             LOGGER.info("Added pool ...")
         else:
@@ -249,6 +251,7 @@ class LoadBalancer:  # pragma: no coverage
 
         self.pool = pool['id']
 
+        LOGGER.info("Adding member ...")
         self.add_member(client, pool['id'], master_ips[0])
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor ...")
@@ -374,7 +377,8 @@ class LoadBalancer:  # pragma: no coverage
             fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
 
-    @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1, tries=10)
+    @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
+           tries=10, logger=LOGGER.debug)
     def delete(self, client=None):
         """
         Delete the cluster API loadbalancer
@@ -446,8 +450,8 @@ class LoadBalancer:  # pragma: no coverage
 
         return fip['floating_ip_address']
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=16, delay=40,
-           backoff=0.8)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=20, delay=30,
+           backoff=1, logger=LOGGER.debug)
     def _add_listener(self, client):
         listener = client.create_listener({'listener':
                                            {"loadbalancer_id":
@@ -550,7 +554,8 @@ class LoadBalancer:  # pragma: no coverage
             LOGGER.debug("Could not find loadbalancer %s", self._id)
         LOGGER.info("Deleted loadbalancer...")
 
-    @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10)
+    @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10,
+           logger=LOGGER.debug)
     def _del_member(self, client, member_id, pool_id):  # pylint: disable=no-self-use
         try:
             client.delete_lbaas_member(member_id, pool_id)
