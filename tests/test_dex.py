@@ -1,3 +1,4 @@
+# pylint: disable=redefined-outer-name, invalid-name
 """
 Test koris.deploy.dex
 """
@@ -7,116 +8,155 @@ from unittest import mock
 
 import pytest
 
-from koris.deploy.dex import Dex, ValidationError
+from koris.deploy.dex import Pool, Listener, create_dex, create_oauth2, ValidationError
 
 NEUTRON = mock.Mock()
 LB = mock.MagicMock()
+
+VALID_NAMES = ["test", "", None, "-42"]
 VALID_MEMBERS = ["1.2.3.4", "192.168.0.1"]
-INVALID_MEMBERS = ["", 0, "-1", "hello world"]
+VALID_PORTS = [0, 65535, 80, 443, 32000]
+VALID_ALGOS = ["ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP"]
+VALID_PROTOS = ["HTTPS", "HTTP", "TCP", "TERMINATED_HTTPS"]
+
+INVALID_MEMBERS = ["", "-1", "hello world", []]
+INVALID_PORTS = ["test", 1.32, None, "", [], {}, (), -25]
+INVALID_ALGOS = ["", None, 1, 2.3, [], {}, (), "test"]
+INVALID_PROTOS = ["UDP"]
+INVALID_PROTOS.extend(INVALID_ALGOS)
 
 
-def test_valid_creation():
-    Dex(LB, members=VALID_MEMBERS)
+@pytest.fixture
+def default_pool():
+    return Pool(VALID_NAMES[0], VALID_PROTOS[0], VALID_PORTS[0], VALID_ALGOS[0],
+                VALID_MEMBERS)
 
 
-def test_invalid_creation():
-    with pytest.raises(ValidationError):
-        Dex(LB, members=INVALID_MEMBERS)
-    with pytest.raises(ValidationError):
-        Dex(None, [])
-    with pytest.raises(ValidationError):
-        Dex(LB, [])
-    with pytest.raises(ValidationError):
-        Dex("", "test")
-    with pytest.raises(ValidationError):
-        Dex(LB, None)
-    with pytest.raises(ValidationError):
-        Dex(None, None)
+@pytest.fixture()
+def default_listener(default_pool):
+    pool = default_pool
+    return Listener(LB, VALID_NAMES[0], VALID_PORTS[0], pool)
 
 
-def test_valid_parameters():
-    dex = Dex(LB, members=VALID_MEMBERS)
+# Valid tests
+def test_create_valid(default_pool):
+    # Pool
+    for name in VALID_NAMES:
+        for proto in VALID_PROTOS:
+            for algo in VALID_ALGOS:
+                for port in VALID_PORTS:
+                    Pool(name, proto, port, algo, VALID_MEMBERS)
 
-    # Test protocol
-    dex.protocol = "HTTPS"
-    dex.verify()
+                    for ip in VALID_MEMBERS:
+                        Pool(name, proto, port, algo, [ip])
 
-    # Test port
-    dex.listener_port = 32000
-    dex.verify()
-    dex.listener_port = 0
-    dex.verify()
-    dex.listener_port = 65535
-    dex.verify()
-    dex.listener_port = 80
-    dex.verify()
-    dex.listener_port = 443
-    dex.verify()
-
-    # Test algo
-    dex.pool_algo = "ROUND_ROBIN"
-    dex.verify()
-    dex.pool_algo = "LEAST_CONNECTIONS"
-    dex.verify()
-    dex.pool_algo = "SOURCE_IP"
-    dex.verify()
+    # Listener
+    for name in VALID_NAMES:
+        for port in VALID_PORTS:
+            for proto in VALID_PROTOS:
+                Listener(LB, name, port, default_pool, proto)
 
 
-def test_invalid_parameters():
-    dex = Dex(LB, members=VALID_MEMBERS)
+def test_change_valid(default_pool, default_listener):
+    name = VALID_NAMES[0]
+    port = VALID_PORTS[0]
+    algo = VALID_ALGOS[0]
+    proto = VALID_PROTOS[0]
 
-    # Test protocol
-    with pytest.raises(ValidationError):
-        dex.protocol = "HTTP"
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.protocol = "TCP"
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.protocol = "FTP"
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.protocol = None
-        dex.verify()
+    # Pool
+    pool = default_pool
+    for name in VALID_NAMES:
+        pool.name = name
+        pool.verify()
 
-    # Test port
-    dex = Dex(LB, members=VALID_MEMBERS)
-    with pytest.raises(ValidationError):
-        dex.listener_port = -1
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.listener_port = "hello world"
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.listener_port = 1.5
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.listener_port = None
-        dex.verify()
+    for proto in VALID_PROTOS:
+        pool.proto = proto
+        pool.verify()
 
-    # Test algo
-    dex = Dex(LB, members=VALID_MEMBERS)
-    with pytest.raises(ValidationError):
-        dex.pool_algo = "hello world"
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.pool_algo = "TEST"
-        dex.verify()
-    with pytest.raises(ValidationError):
-        dex.pool_algo = None
-        dex.verify()
+    for algo in VALID_ALGOS:
+        pool.algorithm = algo
+        pool.verify()
+
+    for port in VALID_PORTS:
+        pool.port = port
+        pool.verify()
+
+    # Listener
+    listener = default_listener
+    for name in VALID_NAMES:
+        listener.name = name
+        listener.verify()
+
+    for port in VALID_PORTS:
+        listener.port = port
+        listener.verify()
 
 
-def test_valid_configure():
-    dex = Dex(LB, members=VALID_MEMBERS)
+def test_functions_valid(default_pool, default_listener):
+    name = VALID_NAMES[0]
+    port = VALID_PORTS[0]
+
+    # Pool
+    pool = default_pool
+    listener = default_listener
+
+    # Create a Listener first so it has an ID
+    listener.create(NEUTRON)
+
+    pool.create(NEUTRON, LB, listener.id)
+    pool.add_members(NEUTRON, LB)
+    pool.add_health_monitor(NEUTRON, LB)
+
+    pool = default_pool
+    pool.all(NEUTRON, LB, listener.id)
+
+    # Listener
+    pool = default_pool
+    listener = Listener(LB, name, port, pool)
+    listener.create(NEUTRON)
+    listener.create_pool(NEUTRON)
+    listener.all(NEUTRON)
+
+
+def test_async_valid():
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(dex.configure_lb(NEUTRON))
+    dex_task = loop.create_task(create_dex(NEUTRON, LB, members=VALID_MEMBERS))
+    oauth_task = loop.create_task(create_oauth2(NEUTRON, LB, members=VALID_MEMBERS))
+    tasks = [dex_task, oauth_task]
+    loop.run_until_complete(asyncio.gather(*tasks))
 
 
-def test_invalid_configure():
-    dex = Dex(LB, members=VALID_MEMBERS)
-    dex.protocol = None
+# Invalid tests
+def test_create_invalid(default_pool):
+    NAME = VALID_NAMES[0]
+    PROTO = VALID_PROTOS[0]
+    PORT = VALID_PORTS[0]
+    ALGO = VALID_ALGOS[0]
 
-    loop = asyncio.get_event_loop()
+    # Pool
+    for proto in INVALID_PROTOS:
+        with pytest.raises(ValidationError):
+            Pool(NAME, proto, PORT, ALGO, VALID_MEMBERS)
+
+    for port in INVALID_PORTS:
+        with pytest.raises(ValidationError):
+            Pool(NAME, PROTO, port, ALGO, VALID_MEMBERS)
+
+    for algo in INVALID_ALGOS:
+        with pytest.raises(ValidationError):
+            Pool(NAME, PROTO, PORT, algo, VALID_MEMBERS)
+
+    for ip in INVALID_MEMBERS:
+        with pytest.raises(ValidationError):
+            Pool(NAME, PROTO, PORT, ALGO, [ip])
+
     with pytest.raises(ValidationError):
-        loop.run_until_complete(dex.configure_lb(NEUTRON))
+        Pool(NAME, PROTO, PORT, ALGO, None)
+
+    with pytest.raises(ValidationError):
+        Pool(NAME, PROTO, PORT, ALGO, [])
+
+    # Listener
+    for port in INVALID_PORTS:
+        with pytest.raises(ValidationError):
+            Listener(LB, NAME, port, default_pool)
