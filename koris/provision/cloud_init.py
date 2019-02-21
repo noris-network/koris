@@ -216,7 +216,7 @@ class FirstMasterInit(NthMasterInit):
                  masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
                  pod_subnet='10.233.0.0/16',
                  pod_network='CALICO',
-                 os_type='ubuntu', os_version="16.04"):
+                 os_type='ubuntu', os_version="16.04", dex=None):
         super().__init__(cloud_config, ssh_key, os_type, os_version)
         self.ca_bundle = ca_bundle
 
@@ -229,6 +229,7 @@ class FirstMasterInit(NthMasterInit):
         self.pod_network = pod_network
         self.pod_subnet = pod_subnet
         self.role = 'master'
+        self.dex = dex
 
         # assemble the parts for the first master
         # use an encoder that just returns x, since b64_cert encodes already
@@ -239,30 +240,31 @@ class FirstMasterInit(NthMasterInit):
                         "root", "root", "0600", lambda x: x)
 
         # WORK: deploy Dex CA
-        def prepare_dex():
-            from cryptography import x509
-            from cryptography.hazmat.backends import default_backend
+        # def prepare_dex():
+        #     from cryptography import x509
+        #     from cryptography.hazmat.backends import default_backend
 
-            ssl_path = os.path.abspath("dex/ssl")
-            dex_ca, dex_cert = None, None
+        #     ssl_path = os.path.abspath("dex/ssl")
+        #     dex_ca, dex_cert = None, None
+        #     # CA
+        #     with open(os.path.join(ssl_path, "ca.pem"), "rb") as rf:
+        #         data = rf.read()
+        #     dex_ca = x509.load_pem_x509_certificate(data, default_backend())
 
-            # CA
-            with open(os.path.join(ssl_path, "ca.pem"), "rb") as rf:
-                data = rf.read()
-            dex_ca = x509.load_pem_x509_certificate(data, default_backend())
+        #     # Cert
+        #     with open(os.path.join(ssl_path, "cert.pem"), "rb") as rf:
+        #         data = rf.read()
+        #     dex_cert = x509.load_pem_x509_certificate(data, default_backend())
 
-            # Cert
-            with open(os.path.join(ssl_path, "cert.pem"), "rb") as rf:
-                data = rf.read()
-            dex_cert = x509.load_pem_x509_certificate(data, default_backend())
-
-            return dex_ca, dex_cert
-        dex_ca = prepare_dex()[0]
-        self.write_file("/etc/kubernetes/pki/oidc-ca.pem", b64_cert(dex_ca),
-                        "root", "root", "0600", lambda x: x)
+        #     return dex_ca, dex_cert
+        if dex is not None:
+            path = dex['dex']['ca_file']
+            cert = dex['dex']['cert']
+            self.write_file(path, b64_cert(cert),
+                            "root", "root", "0600", lambda x: x)
 
         self._write_cloud_config()
-        self._write_koris_env()
+        self._write_koris_env(dex)
         self._write_ssh_private_key()
 
     def _write_ssh_private_key(self):
@@ -275,7 +277,7 @@ class FirstMasterInit(NthMasterInit):
         self._cloud_config_data["ssh_keys"] = {}
         self._cloud_config_data["ssh_keys"]["rsa_private"] = key
 
-    def _write_koris_env(self):
+    def _write_koris_env(self, dex=None):
         """
         writes the necessary koris information for the node to the file
         /etc/kubernetes/koris.env
@@ -300,6 +302,22 @@ class FirstMasterInit(NthMasterInit):
                    self.pod_subnet,
                    self.pod_network)
         content = textwrap.dedent(content)
+
+        if dex is not None:
+            dex_content = """
+                export OIDC_ISSUER_URL="https://{}:{}"
+                export OIDC_CLIENT_ID="{}"
+                export OIDC_CA_FILE="{}"
+                export OIDC_USERNAME_CLAIM="{}"
+                export OIDC_GROUPS_CLAIM="{}"
+            """.format(dex['dex']['issuer'], dex['dex']['ports']['listener'],
+                       dex['client']['client_id'],
+                       dex['dex']['ca_file'],
+                       dex['dex']['username_claim'],
+                       dex['dex']['groups_claim'])
+            dex_content = textwrap.dedent(dex_content)
+            content += dex_content
+
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")
 
