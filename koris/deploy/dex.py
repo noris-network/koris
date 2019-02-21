@@ -9,6 +9,10 @@ from koris.cloud.openstack import LoadBalancer
 
 def port_ok(port):
     """Checks if a port is valid"""
+
+    if not isinstance(port, int):
+        return False
+
     try:
         if not 0 <= port <= 65535:
             return False
@@ -77,7 +81,7 @@ class Pool:
         self.id = pool["id"]
         self.pool = pool
 
-    def add_member(self, client, lb: LoadBalancer):
+    def add_members(self, client, lb: LoadBalancer):
         """Adds Members to a Pool"""
 
         if not self.id:
@@ -99,7 +103,7 @@ class Pool:
         """Convenience function to create a Pool with Members and Health Monitor"""
 
         self.create(client, lb, listener_id)
-        self.add_member(client, lb)
+        self.add_members(client, lb)
         self.add_health_monitor(client, lb)
 
 
@@ -140,7 +144,7 @@ class Listener:
         if not port_ok(self.port):
             raise ValidationError(f"invalid listener port {self.port}")
 
-    def create_listener(self, client):
+    def create(self, client):
         """Create a new Listener and add it to the LoadBalancer"""
         self.verify()
         listener = self.loadbalancer.add_listener(client, name=self.name,
@@ -160,7 +164,7 @@ class Listener:
     def all(self, client):
         """Creates a Listener and then adds a Pool to it"""
 
-        self.create_listener(client)
+        self.create(client)
         self.create_pool(client)
 
 
