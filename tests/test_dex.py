@@ -8,7 +8,8 @@ from unittest import mock
 
 import pytest
 
-from koris.deploy.dex import Pool, Listener, create_dex, create_oauth2, ValidationError
+from koris.deploy.dex import (Pool, Listener, create_dex, create_oauth2, 
+                              ValidationError, create_dex_certs)
 
 NEUTRON = mock.Mock()
 LB = mock.MagicMock()
@@ -160,3 +161,29 @@ def test_create_invalid(default_pool):
     for port in INVALID_PORTS:
         with pytest.raises(ValidationError):
             Listener(LB, NAME, port, default_pool)
+
+
+def test_creat_dex_certs():
+    HOSTS = ["example.org", "dex.example.com"]
+
+    ca, client = create_dex_certs(ips=VALID_MEMBERS)
+    assert ca is not None
+    assert client is not None
+
+    for ip in VALID_MEMBERS:
+        ca, client = create_dex_certs(ips=[ip])
+        assert ca is not None
+        assert client is not None
+
+    ca, client = create_dex_certs(hosts=HOSTS)
+    assert ca is not None
+    assert client is not None
+
+    for host in HOSTS:
+        ca, client = create_dex_certs(hosts=[host])
+        assert ca is not None
+        assert client is not None
+
+    ca, client = create_dex_certs(hosts=HOSTS, ips=VALID_MEMBERS)
+    assert ca is not None
+    assert client is not None

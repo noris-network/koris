@@ -114,7 +114,8 @@ def create_ca(private_key, public_key, country,
 
 
 def create_certificate(ca_bundle, public_key, country,
-                       state_province, locality, orga, unit, name, hosts, ips):
+                       state_province, locality, orga, unit, name,
+                       hosts=None, ips=None):
     """
     create a certificate signed with CA private_key
 

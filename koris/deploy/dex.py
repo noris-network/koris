@@ -2,24 +2,9 @@
 The dex module manages a dex installation
 """
 
-from ipaddress import ip_address
-
 from koris.cloud.openstack import LoadBalancer
-
-
-def port_ok(port):
-    """Checks if a port is valid"""
-
-    if not isinstance(port, int):
-        return False
-
-    try:
-        if not 0 <= port <= 65535:
-            return False
-    except TypeError:
-        return False
-
-    return True
+from koris.util.net import is_port, is_ip
+from koris.ssl import create_key, create_ca, CertBundle
 
 
 class ValidationError(Exception):
@@ -52,7 +37,7 @@ class Pool:
             err = f"protocol needs to be part of {self.allowed_protocols}"
             raise ValidationError(err)
 
-        if not port_ok(self.port):
+        if not is_port(self.port):
             raise ValidationError(f"invalid pool port {self.port}")
 
         if self.algorithm not in self.allowed_algorithms:
@@ -66,9 +51,7 @@ class Pool:
             raise ValidationError("members need to be a list")
 
         for ip in self.members:
-            try:
-                ip_address(ip)
-            except ValueError:
+            if not is_ip(ip):
                 raise ValidationError(f"invalid IP address: {ip}")
 
     def create(self, client, lb: LoadBalancer, listener_id):
@@ -141,7 +124,7 @@ class Listener:
         if not self.loadbalancer:
             raise ValidationError("listener needs LoadBalancer")
 
-        if not port_ok(self.port):
+        if not is_port(self.port):
             raise ValidationError(f"invalid listener port {self.port}")
 
     def create(self, client):
@@ -166,6 +149,63 @@ class Listener:
 
         self.create(client)
         self.create_pool(client)
+
+
+class DexSSL:
+    """Class managing the dex TLS infrastrucutre"""
+
+    def __init__(self, 
+                 cert_dir,
+                 issuer: str,
+                 k8s_ca_path="/etc/kubernetes/pki/oidc-ca.pem"):
+
+        self.cert_dir = cert_dir
+        self.k8s_ca_path = k8s_ca_path
+        self.issuer = issuer
+
+        self.ca_bundle = None
+        self.client_bundle = None
+
+        self.create_certs()
+
+    def create_certs(self):
+        """Create a CA and client cert for Dex
+
+        Returns:
+            Tuple consisting of root CA bundle and cert bundle
+        """
+
+        if not self.issuer:
+            raise ValidationError("dex certificates needs an issuer")
+
+        dex_ca_key = create_key()
+        dex_ca = create_ca(dex_ca_key, dex_ca_key.public_key(),
+                           "DE", "BY", "NUE", "Kubernetes", "dex", "kube-ca")
+        dex_ca_bundle = CertBundle(dex_ca_key, dex_ca)
+
+        if is_ip(self.issuer):
+            hosts, ips = "", [self.issuer]
+        else:
+            hosts, ips = [self.issuer], ""
+
+        dex_client_bundle = CertBundle.create_signed(dex_ca_bundle,
+                                                     "DE", "BY", "NUE", "Kubernetes",
+                                                     "dex-client", "kube-ca",
+                                                     hosts=hosts, ips=ips)
+                        
+        self.ca_bundle = dex_ca_bundle
+        self.client_bundle = dex_client_bundle
+
+        return dex_ca_bundle, dex_client_bundle
+
+    def save_certs(self, client_prefix="dex-client", ca_prefix="dex-ca"):
+        """Saves dex client cert to disc"""
+
+        if not self.client_bundle or not self.ca_bundle:
+            raise ValidationError("create certificates before saving them")
+
+        self.client_bundle.save(client_prefix, self.cert_dir)
+        self.ca_bundle.save(ca_prefix, self.cert_dir)
 
 
 async def create_dex(client, lb: LoadBalancer, name="dex",

@@ -82,14 +82,6 @@ bootstrapTokens:
   usages:
   - signing
   - authentication
-apiServerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
-  oidc-issuer-url: "https://10.36.60.232:32000"
-  oidc-client-id: example-app
-  oidc-ca-file: /etc/kubernetes/pki/oidc-ca.pem
-  oidc-username-claim: email
-  oidc-groups-claim: groups
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
@@ -107,22 +99,38 @@ controllerManagerExtraVolumes:
   mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
+apiServerExtraArgs:
+  cloud-provider: openstack
+  cloud-config: /etc/kubernetes/cloud.config
 TMPL
 
-for i in ${!MASTERS[@]}; do
-	echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
-	export HOST_IP="${MASTERS_IPS[$i]}"
-	export HOST_NAME="${MASTERS[$i]}"
-  if [ -z "$CURRENT_CLUSTER" ]; then
-    CLUSTER_STATE="new"
-    CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
-  else
-    CLUSTER_STATE="existing"
-    CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
-  fi
+if [[ -n ${OIDC_CLIENT_ID+x} ]]; then
+cat <<TMPL > dex.tmpl
+  oidc-issuer-url: "${OIDC_ISSUER_URL}"
+  oidc-client-id: ${OIDC_CLIENT_ID}
+  oidc-ca-file: ${OIDC_CA_FILE}
+  oidc-username-claim: ${OIDC_USERNAME_CLAIM}
+  oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
+TMPL
 
-	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
-done
+cat dex.tmpl >> init.tmpl
+
+fi
+
+    for i in ${!MASTERS[@]}; do
+        echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
+        export HOST_IP="${MASTERS_IPS[$i]}"
+        export HOST_NAME="${MASTERS[$i]}"
+    if [ -z "$CURRENT_CLUSTER" ]; then
+        CLUSTER_STATE="new"
+        CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
+    else
+        CLUSTER_STATE="existing"
+        CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
+    fi
+
+        envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
+    done
 
 }
 

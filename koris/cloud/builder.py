@@ -18,7 +18,7 @@ from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
     red, info, lightcyan as cyan)
-from koris.deploy.dex import create_dex, create_oauth2
+from koris.deploy.dex import create_dex, create_oauth2, DexSSL
 from koris.util.util import get_logger
 from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
@@ -229,7 +229,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
                              lb_port, bootstrap_token, lb_dns='',
                              pod_subnet="10.233.0.0/16",
-                             pod_network="CALICO"):
+                             pod_network="CALICO", dex=None):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -253,7 +253,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                                lb_ip, lb_port,
                                                bootstrap_token, lb_dns,
                                                pod_subnet,
-                                               pod_network))
+                                               pod_network,
+                                               dex=dex))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(cloud_config, ssh_key))
@@ -365,6 +366,37 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # calculate discovery hash
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
+        LOGGER.info("Setting up Dex SSL infrastructure ...")
+        print(f"LB DNS: {lb_dns}\nLB IP: {lb_ip}")
+        if lb_dns == lb_ip:
+            issuer = lb_ip
+        else:
+            issuer = lb_dns
+        dex_ssl = DexSSL(cert_dir, issuer)
+        dex_ssl.create_certs()
+        dex_ssl.save_certs()
+
+        dex_conf = {
+            "dex": {
+                "issuer": f"{dex_ssl.issuer}",
+                "cert": dex_ssl.ca_bundle.cert,
+                "ca_file": dex_ssl.k8s_ca_path,
+                "username_claim": "email",
+                "groups_claim": "groups",
+                "ports": {
+                    "listener": 32000,
+                    "service": 32000,
+                }
+            },
+            "client": {
+                "client_id": "example-app",
+                "ports": {
+                    "listener": 5555,
+                    "service": 32555,
+                }
+            }
+        }
+
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for the master machines to be launched...")
@@ -372,7 +404,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
             bootstrap_token, lb_dns,
             config.get("pod_subnet", "10.233.0.0/16"),
-            config.get("pod_network", "CALICO"))
+            config.get("pod_network", "CALICO"),
+            dex=dex_conf)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -399,8 +432,21 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # WORK: setting up LB for Dex
         LOGGER.info("Configuring the LoadBalancer for Dex ...")
-        dex_task = loop.create_task(create_dex(NEUTRON, lbinst, members=master_ips))
-        oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst, members=node_ips))
+        dex_listener = dex_conf['dex']['ports']['listener']
+        dex_service = dex_conf['dex']['ports']['service']
+        dex_members = master_ips
+        dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
+                                               listener_port=dex_listener,
+                                               pool_port=dex_service,
+                                               members=dex_members))
+
+        client_listener = dex_conf['client']['ports']['listener']
+        client_service = dex_conf['client']['ports']['service']
+        client_members = node_ips
+        oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
+                                      listener_port=client_listener,
+                                      pool_port=client_service,
+                                      members=client_members))
         tasks = [dex_task, oauth_task]
         loop.run_until_complete(asyncio.gather(*tasks))
 
