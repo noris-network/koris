@@ -17,8 +17,9 @@ from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
-    red, info, lightcyan as cyan)
-from koris.deploy.dex import create_dex, create_oauth2, DexSSL
+    red, info, yellow, lightcyan as cyan, bad)
+from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
+                              create_dex_conf, ValidationError)
 from koris.util.util import get_logger
 from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
@@ -55,7 +56,7 @@ class NodeBuilder:
     """
     def __init__(self, config, osinfo, cloud_config=None):
         LOGGER.info(info(cyan(
-            "gathering node information from openstack ...")))
+            "Gathering node information from OpenStack ...")))
         self.config = config
         self._info = osinfo
         self.cloud_config = cloud_config
@@ -213,7 +214,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     """
 
     def __init__(self, config, osinfo):
-        LOGGER.info("gathering control plane information from openstack ...")
+        LOGGER.info(info(cyan(
+            "Gathering control plane information from OpenStack ...")))
         self._config = config
         self._info = osinfo
 
@@ -283,6 +285,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.nodes_builder = NodeBuilder(config, self.info)
         self.masters_builder = ControlPlaneBuilder(config, self.info)
 
+        self.deploy_dex = False
+        self.dex_conf = None
+
     @staticmethod
     def create_bootstrap_token():
         """create a new random bootstrap token like f62bcr.fedcba9876543210,
@@ -317,11 +322,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         """
         # create a security group for the cluster if not already present
         if self.info.secgroup.exists:
-            LOGGER.info(info(red(
+            LOGGER.info(info(yellow(
                 "A Security group named %s-sec-group already exists" % config[
                     'cluster-name'])))
             LOGGER.info(
-                info(red("I will add my own rules, please manually review all others")))  # noqa
+                info(yellow("I will add my own rules, please manually review all others")))  # noqa
 
         self.info.secgroup.configure()
 
@@ -347,6 +352,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         cert_dir = "-".join(("certs", config["cluster-name"]))
         ca_bundle.save("k8s", cert_dir)
 
+        # Check if dex has to be deployed
+        if 'addons' in config and 'dex' in config['addons']:
+            self.deploy_dex = True
+
         # generate ssh key pair for first master node. It is used to connect
         # to the other nodes so that they can join the cluster
         ssh_key = create_key()
@@ -368,36 +377,27 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # calculate discovery hash
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
-        LOGGER.info("Setting up Dex SSL infrastructure ...")
-        print(f"LB DNS: {lb_dns}\nLB IP: {lb_ip}")
-        if lb_dns == lb_ip:
-            issuer = lb_ip
-        else:
-            issuer = lb_dns
-        dex_ssl = DexSSL(cert_dir, issuer)
-        dex_ssl.create_certs()
-        dex_ssl.save_certs()
+        if not floatingip or floatingip == "" or not lb_dns or lb_dns == "":
+            LOGGER.error(bad(red("No Floating IP or DNS Name configured")))
+            LOGGER.error(bad(red("Skipping Dex deployment")))
+            self.deploy_dex = False
 
-        dex_conf = {
-            "dex": {
-                "issuer": f"{dex_ssl.issuer}",
-                "cert": dex_ssl.ca_bundle.cert,
-                "ca_file": dex_ssl.k8s_ca_path,
-                "username_claim": "email",
-                "groups_claim": "groups",
-                "ports": {
-                    "listener": 32000,
-                    "service": 32000,
-                }
-            },
-            "client": {
-                "client_id": "example-app",
-                "ports": {
-                    "listener": 5555,
-                    "service": 32555,
-                }
-            }
-        }
+        if self.deploy_dex:
+            LOGGER.info("Setting up Dex SSL infrastructure ...")
+            if lb_dns == lb_ip:
+                issuer = lb_ip
+            else:
+                issuer = lb_dns
+            dex_ssl = DexSSL(cert_dir, issuer)
+            dex_ssl.save_certs()
+
+            try:
+                self.dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
+            except (ValidationError, TypeError, KeyError) as exc:
+                LOGGER.error(bad(red(f"Unable to parse dex config: {exc}")))
+                LOGGER.error(bad(red("Skipping Dex deployment")))
+                self.deploy_dex = False
+                self.dex_conf = None
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
@@ -407,7 +407,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             bootstrap_token, lb_dns,
             config.get("pod_subnet", "10.233.0.0/16"),
             config.get("pod_network", "CALICO"),
-            dex=dex_conf)
+            dex=self.dex_conf)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -439,25 +439,25 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         node_ips = [x.ip_address for x in results if isinstance(x, Instance)]
 
-        # WORK: setting up LB for Dex
-        LOGGER.info("Configuring the LoadBalancer for Dex ...")
-        dex_listener = dex_conf['dex']['ports']['listener']
-        dex_service = dex_conf['dex']['ports']['service']
-        dex_members = master_ips
-        dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
-                                               listener_port=dex_listener,
-                                               pool_port=dex_service,
-                                               members=dex_members))
+        if self.deploy_dex:
+            LOGGER.info("Configuring the LoadBalancer for Dex ...")
+            dex_listener = self.dex_conf['ports']['listener']
+            dex_service = self.dex_conf['ports']['service']
+            dex_members = master_ips
+            dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
+                                                   listener_port=dex_listener,
+                                                   pool_port=dex_service,
+                                                   members=dex_members))
 
-        client_listener = dex_conf['client']['ports']['listener']
-        client_service = dex_conf['client']['ports']['service']
-        client_members = node_ips
-        oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
-                                      listener_port=client_listener,
-                                      pool_port=client_service,
-                                      members=client_members))
-        tasks = [dex_task, oauth_task]
-        loop.run_until_complete(asyncio.gather(*tasks))
+            client_listener = self.dex_conf['client']['ports']['listener']
+            client_service = self.dex_conf['client']['ports']['service']
+            client_members = node_ips
+            oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
+                                                        listener_port=client_listener,
+                                                        pool_port=client_service,
+                                                        members=client_members))
+            tasks = [dex_task, oauth_task]
+            loop.run_until_complete(asyncio.gather(*tasks))
 
         # We should no be able to query the API server for available nodes
         # with a valid certificate from the generated CA. Hence, generate

@@ -23,7 +23,7 @@ def is_ip(ip):
 
     try:
         ip_address(ip)
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
     return True

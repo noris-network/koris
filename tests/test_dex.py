@@ -4,12 +4,15 @@ Test koris.deploy.dex
 """
 # pylint: disable=missing-docstring
 import asyncio
+import copy
+import pytest
+import tempfile
+
 from unittest import mock
 
-import pytest
-
-from koris.deploy.dex import (Pool, Listener, create_dex, create_oauth2, 
-                              ValidationError, create_dex_certs)
+from koris.deploy.dex import (Pool, Listener, create_dex, create_oauth2,
+                              ValidationError, DexSSL, create_dex_conf)
+from koris.ssl import read_cert
 
 NEUTRON = mock.Mock()
 LB = mock.MagicMock()
@@ -37,6 +40,30 @@ def default_pool():
 def default_listener(default_pool):
     pool = default_pool
     return Listener(LB, VALID_NAMES[0], VALID_PORTS[0], pool)
+
+
+@pytest.fixture()
+def default_dex_ssl():
+    return DexSSL("/tmp", "noris.de")
+
+
+@pytest.fixture(scope="function")
+def default_conf():
+    return {
+        "username_claim": "email",
+        "groups_claim": "groups",
+        "ports": {
+            "listener": 32000,
+            "service": 32000
+        },
+        "client": {
+            "id": "example-app",
+            "ports": {
+                "listener": 5555,
+                "service": 32555
+            }
+        }
+    }
 
 
 # Valid tests
@@ -163,27 +190,158 @@ def test_create_invalid(default_pool):
             Listener(LB, NAME, port, default_pool)
 
 
-def test_creat_dex_certs():
-    HOSTS = ["example.org", "dex.example.com"]
+def test_functions_invalid(default_pool, default_listener):
+    # A pool needs to be created first before adding members or HM
+    pool = default_pool
+    with pytest.raises(ValidationError):
+        pool.add_members(NEUTRON, LB)
+    with pytest.raises(ValidationError):
+        pool.add_health_monitor(NEUTRON, LB)
 
-    ca, client = create_dex_certs(ips=VALID_MEMBERS)
-    assert ca is not None
-    assert client is not None
+    # A listener needs a LB to be created
+    listener = default_listener
+    listener.loadbalancer = None
+    with pytest.raises(ValidationError):
+        listener.create(NEUTRON)
 
-    for ip in VALID_MEMBERS:
-        ca, client = create_dex_certs(ips=[ip])
-        assert ca is not None
-        assert client is not None
+    # A listener needs to be created first before creating a pool
+    listener = default_listener
+    listener.listener = None
+    with pytest.raises(ValidationError):
+        listener.create_pool(NEUTRON)
 
-    ca, client = create_dex_certs(hosts=HOSTS)
-    assert ca is not None
-    assert client is not None
 
-    for host in HOSTS:
-        ca, client = create_dex_certs(hosts=[host])
-        assert ca is not None
-        assert client is not None
+def test_DexSSL(default_dex_ssl):
+    issuers = ["example.org", "1.2.3.4"]
+    for i in issuers:
+        dex_ssl = DexSSL("/tmp", i, "/test.pem")
+        assert dex_ssl is not None
+        assert dex_ssl.ca_bundle is not None
+        assert dex_ssl.client_bundle is not None
 
-    ca, client = create_dex_certs(hosts=HOSTS, ips=VALID_MEMBERS)
-    assert ca is not None
-    assert client is not None
+    dex_ssl = default_dex_ssl
+    assert dex_ssl is not None
+    assert dex_ssl.ca_bundle is not None
+    assert dex_ssl.client_bundle is not None
+
+    # Test create_certs
+    dex_ssl.issuer = "google.com"
+    dex_ssl.create_certs()
+    assert dex_ssl.ca_bundle is not None
+    assert dex_ssl.client_bundle is not None
+
+    dex_ssl.issuer = None
+    with pytest.raises(ValidationError):
+        dex_ssl.create_certs()
+
+    # Test save_certs
+    with tempfile.TemporaryDirectory() as temp_cert_dir:
+        dex_ssl = DexSSL(temp_cert_dir, "noris.de")
+        assert dex_ssl is not None
+        assert dex_ssl.ca_bundle is not None
+        assert dex_ssl.client_bundle is not None
+
+        dex_ssl.save_certs()
+        read_cert(f"{temp_cert_dir}/dex-ca.pem")
+        read_cert(f"{temp_cert_dir}/dex-client.pem")
+
+
+def test_DexSSL_invalid():
+    # Need certificates before saving them
+    with tempfile.TemporaryDirectory() as temp_cert_dir:
+        dex_ssl = DexSSL(temp_cert_dir, "noris.de")
+        dex_ssl.ca_bundle, dex_ssl.client_bundle = None, None
+        with pytest.raises(ValidationError):
+            dex_ssl.save_certs()
+
+
+def test_dex_conf_valid(default_dex_ssl, default_conf):
+    config = default_conf
+    assert config is not None and isinstance(config, dict)
+
+    dex_ssl = default_dex_ssl
+    dex_conf = create_dex_conf(config, dex_ssl)
+    assert dex_conf is not None and isinstance(config, dict)
+
+
+def test_dex_conf_remove_required(default_dex_ssl, default_conf):
+    config = default_conf
+    dex_ssl = default_dex_ssl
+
+    config = None
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    # Removing required values
+    config = copy.deepcopy(default_conf)
+    del config["ports"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    config = copy.deepcopy(default_conf)
+    del config["client"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    config = copy.deepcopy(default_conf)
+    del config["client"]["id"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    config = copy.deepcopy(default_conf)
+    del config["ports"]["listener"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    config = copy.deepcopy(default_conf)
+    del config["ports"]["service"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    config = copy.deepcopy(default_conf)
+    del config["client"]["ports"]["service"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+    config = copy.deepcopy(default_conf)
+    del config["client"]["ports"]["listener"]
+    with pytest.raises(ValidationError):
+        create_dex_conf(config, dex_ssl)
+
+
+def test_dex_conf_invalid_ports(default_dex_ssl, default_conf):
+    config = default_conf
+    dex_ssl = default_dex_ssl
+
+    # Invalid ports
+    for port in INVALID_PORTS:
+        config['ports']['listener'] = port
+        with pytest.raises(ValidationError):
+            create_dex_conf(config, dex_ssl)
+
+        config = copy.deepcopy(default_conf)
+        config['ports']['service'] = port
+        with pytest.raises(ValidationError):
+            create_dex_conf(config, dex_ssl)
+
+        config = copy.deepcopy(default_conf)
+        config['client']['ports']['listener'] = port
+        with pytest.raises(ValidationError):
+            create_dex_conf(config, dex_ssl)
+
+        config = copy.deepcopy(default_conf)
+        config['client']['ports']['service'] = port
+        with pytest.raises(ValidationError):
+            create_dex_conf(config, dex_ssl)
+
+
+def test_dex_conf_remove_optional(default_dex_ssl, default_conf):
+    config = default_conf
+    dex_ssl = default_dex_ssl
+
+    del config["username_claim"]
+    del config["groups_claim"]
+
+    dex_conf = create_dex_conf(config, dex_ssl)
+    assert dex_conf["username_claim"] == "email"
+    assert dex_conf["groups_claim"] == "groups"
