@@ -154,8 +154,8 @@ class Listener:
 class DexSSL:
     """Class managing the dex TLS infrastrucutre"""
 
-    def __init__(self, 
-                 cert_dir,
+    def __init__(self,
+                 cert_dir: str,
                  issuer: str,
                  k8s_ca_path="/etc/kubernetes/pki/oidc-ca.pem"):
 
@@ -231,3 +231,83 @@ async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
     listener.all(client)
+
+
+# pylint: disable=too-many-branches
+def create_dex_conf(config, dex_ssl: DexSSL) -> dict:
+    """Parse the koris config for dex parameters.
+
+    The user needs to validate first if dex is wished to be installed.
+    The following config arguments are optional:
+        - username_claim (default: email)
+        - groups_claim (default: group)
+
+    Args:
+        config (dict): The config['addons']['dex'] part of the config dict.
+        dex_ssl (DexSSL): a DexSSL instance.
+
+    Raises:
+        ValidationError if mandatory parts are missing or incorrect information
+            has been provided.
+
+    Returns:
+        A dictionary with the correct config parameters set.
+    """
+
+    # Validation
+    if not config:
+        raise ValidationError("missing config paramaters")
+
+    if "ports" not in config:
+        raise ValidationError("requires ports to be set")
+
+    for arg in ["listener", "service"]:
+        if arg not in config["ports"]:
+            raise ValidationError(f"under 'ports', need '{arg}'")
+        for port in config["ports"].values():
+            if not is_port(port):
+                raise ValidationError(f"invalid port '{port}'")
+
+    if "client" not in config:
+        raise ValidationError("requires client app information")
+
+    for arg in ["id", "ports"]:
+        if arg not in config["client"]:
+            raise ValidationError(f"under 'client', need '{arg}'")
+
+    for arg in ["listener", "service"]:
+        if arg not in config["client"]["ports"]:
+            raise ValidationError(f"under 'client:ports', need '{arg}'")
+        for port in config["client"]["ports"].values():
+            if not is_port(port):
+                raise ValidationError(f"invalid port '{port}'")
+
+    username_claim, groups_claim = "", ""
+    if 'username_claim' not in config:
+        username_claim = "email"
+    else:
+        username_claim = config["username_claim"]
+
+    if 'groups_claim' not in config:
+        groups_claim = "groups"
+    else:
+        groups_claim = config["username_claim"]
+
+    return {
+        "issuer": f"{dex_ssl.issuer}",
+        "cert": dex_ssl.ca_bundle.cert,
+        "ca_file": dex_ssl.k8s_ca_path,
+        "username_claim": username_claim,
+        "groups_claim": groups_claim,
+        "ports": {
+            "listener": config['ports']['listener'],
+            "service": config['ports']['service'],
+        },
+        "client": {
+            "id": "example-app",
+            "ports": {
+                "listener": config['client']['ports']['listener'],
+                "service": config['client']['ports']['service'],
+            }
+        }
+    }

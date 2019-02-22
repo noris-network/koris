@@ -30,7 +30,8 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from koris.cloud import OpenStackAPI
-from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
+from koris.util.hue import (red, info, yellow,  # pylint: disable=no-name-in-module
+                            lightcyan as cyan)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
 
@@ -696,7 +697,7 @@ class SecurityGroup:
         else:
             cidr = self.client.list_subnets()['subnets'][-1]['cidr']
 
-        LOGGER.debug("Configuring security group ...")
+        LOGGER.debug(info(cyan("Configuring security group ...")))
         # allow communication to the API server from within the cluster
         # on port 80
         self.add_sec_rule(direction='ingress', protocol='TCP',

@@ -258,8 +258,8 @@ class FirstMasterInit(NthMasterInit):
 
         #     return dex_ca, dex_cert
         if dex is not None:
-            path = dex['dex']['ca_file']
-            cert = dex['dex']['cert']
+            path = dex['ca_file']
+            cert = dex['cert']
             self.write_file(path, b64_cert(cert),
                             "root", "root", "0600", lambda x: x)
 
@@ -310,11 +310,11 @@ class FirstMasterInit(NthMasterInit):
                 export OIDC_CA_FILE="{}"
                 export OIDC_USERNAME_CLAIM="{}"
                 export OIDC_GROUPS_CLAIM="{}"
-            """.format(dex['dex']['issuer'], dex['dex']['ports']['listener'],
-                       dex['client']['client_id'],
-                       dex['dex']['ca_file'],
-                       dex['dex']['username_claim'],
-                       dex['dex']['groups_claim'])
+            """.format(dex['issuer'], dex['ports']['listener'],
+                       dex['client']['id'],
+                       dex['ca_file'],
+                       dex['username_claim'],
+                       dex['groups_claim'])
             dex_content = textwrap.dedent(dex_content)
             content += dex_content
 
