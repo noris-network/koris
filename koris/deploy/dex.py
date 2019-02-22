@@ -1,5 +1,5 @@
 """
-The dex module manages a dex installation
+The dex module manages a dex (https://github.com/dexidp/dex) installation.
 """
 
 from koris.cloud.openstack import LoadBalancer
@@ -8,11 +8,47 @@ from koris.ssl import create_key, create_ca, CertBundle
 
 
 class ValidationError(Exception):
-    """Raise a custom error if dex is configured inproperly"""
+    """A custom error if dex is configured inproperly"""
 
 
 class Pool:
-    """A Pool with Members, Algorithm and Port"""
+    """A Pool with Members, Algorithm and Port
+
+    In future, this should be of the OpenStack scope instead of Dex's.
+
+    When a Pool class gets instantiated, its parameters will be checked for validity.
+    The same is true when functions get executed. Additionally, an instantiated class
+    does not mean the pool is created with OpenStack.
+    Use the ``create`` function for that.
+
+    Members are loadbalanced IP Adresses or DNS Names that belong to a Pool. This Pool
+    is then attached to a Listener.
+
+    Example:
+        >>> # Create a Pool with members
+        >>> members = ["10.0.0.1", 10.0.0.2"]
+        >>> pool = Pool("test-pool", "HTTPS", 32443, "ROUND_ROBIN", members)
+        >>> # Assuming we have a created Listener
+        >>> pool.all(NEUTRON, LB, listener.id)
+
+    Args:
+        name (str): The name of the Pool.
+        protocol (str): The protocol for the Pool. Must be part of ``allowed_protocols``.
+        port (int): The port for the members.
+        algorithm (str): The loadbalancing algorithm. Must be part of
+            ``allowed_algorithms``.
+        members (list): A list of members that the Pool contains.
+
+    Attributes:
+        allowed_algirthms (list): A list of strings for the LoadBalancer algorithms that
+            can be used.
+        allowed_protocols (list): A list of string for the LoadBalancer protocols that
+            can be used.
+        id (int): The pool ID. Will be assigned after ``create`` gets called.
+        pool (dict): A LoadBalancer dictionary as received from the OpenStack API.
+            Will be assigned after ``create`` gets called.
+
+    """
 
     def __init__(self, name, protocol, port, algorithm, members):
         self.allowed_algorithms = ["ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP"]
@@ -55,7 +91,15 @@ class Pool:
                 raise ValidationError(f"invalid IP address: {ip}")
 
     def create(self, client, lb: LoadBalancer, listener_id):
-        """Creates a Pool and adds it to a Listener"""
+        """Creates a Pool and adds it to a Listener.
+
+        This function will assing the attributes ``pool`` and ``id``.
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+            lb (LoadBalancer): An OSLoadBalancer instance.
+            listener_id (str): The Listener ID this pool should be added to.
+        """
 
         self.verify()
         pool = lb.add_pool(client, listener_id=listener_id, lb_algorithm=self.algorithm,
@@ -65,7 +109,12 @@ class Pool:
         self.pool = pool
 
     def add_members(self, client, lb: LoadBalancer):
-        """Adds Members to a Pool"""
+        """Adds Members to a Pool.
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+            lb (LoadBalancer): An OSLoadBalancer instance.
+        """
 
         if not self.id:
             raise ValidationError("need pool id to add members")
@@ -75,7 +124,12 @@ class Pool:
             lb.add_member(client, self.id, ip, self.port)
 
     def add_health_monitor(self, client, lb: LoadBalancer):
-        """Adds a Health monitor to a Pool with default settings"""
+        """Adds a Health monitor to a Pool with default settings
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+            lb (LoadBalancer): An OSLoadBalancer instance.
+        """
 
         if not self.id:
             raise ValidationError("need pool id to create health monitor")
@@ -83,7 +137,15 @@ class Pool:
         lb.add_health_monitor(client, self.id, f"{self.name}-health")
 
     def all(self, client, lb: LoadBalancer, listener_id):
-        """Convenience function to create a Pool with Members and Health Monitor"""
+        """Convenience function to create a Pool with Members and Health Monitor.
+
+        Will call ``create``, ``add_members`` and ``add_health_monitor``.
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+            lb (LoadBalancer): An OSLoadBalancer instance.
+            listener_id (str): The Listener ID this pool should be added to.
+        """
 
         self.create(client, lb, listener_id)
         self.add_members(client, lb)
@@ -91,17 +153,44 @@ class Pool:
 
 
 class Listener:
-    """The Listener class holds all information for a LB listener.
+    """A Listener containing a LoadBalancer and Pool.
 
-    A listener is attached to a LoadBalancer and consits of a Pool.
-    A Pool consists of 1+ members, which are checked by a Healthmonitor
+    In future, this should be of the OpenStack scope instead of Dex's.
 
-    In the future, this should be refactored to an OpenStack class OSListener.
+    When a Listener class gets instantiated, its parameters will be checked for validity.
+    The same is true when functions get executed. Additionally, an instantiated class
+    does not mean the pool is created with OpenStack.
+    Use the ``create`` function for that.
+
+    A Pool (see above) is attached to a Listener. This Listener listens on a specific port
+    and forwards traffic to the Pool, on a specific port. A Listener is attached to a
+    LoadBalancer which will forward traffic to a specific Listener, depending on the port.
+
+    Example:
+        >>> # Create a Pool with Menbers
+        >>> members = ["10.0.0.1", 10.0.0.2"]
+        >>> pool = Pool("test-pool", "HTTPS", 32443, "ROUND_ROBIN", members)
+        >>> listener = Listener(LB, "test-listener", 443, pool)
+        >>> # This will create the Pool, add it to the Listener and add it all to a LB
+        >>> listener.all(NEUTRON)
 
     Args:
-        lb (openstack.LoadBalancer): an OpenStack LoadBalancer Object
-        name (str): the name for the Listener
+        lb (LoadBalancer): An OpenStack LoadBalancer Object.
+        name (str): The name of the Listener.
+        port (int): The port which will be listened on.
+        protocol (str): The protocol that should be used for listening. Must be part of
+            ``allowed_protocols``.
+        pool (Pool): A Pool object.
 
+    Attributes:
+        allowed_algirthms (list): A list of strings for the LoadBalancer algorithms that
+            can be used.
+        allowed_protocols (list): A list of string for the LoadBalancer protocols that
+            can be used.
+        loadbalancer (LoadBalancer): An OpenStack LoadBalancer Object
+        id (int): The Listener ID. Will be assigned after ``create`` gets called.
+        listener (dict): A LoadBalancer dictionary as received from the OpenStack API.
+            Will be assigned after ``create`` gets called.
     """
 
     def __init__(self, lb: LoadBalancer, name, port, pool: Pool, protocol="HTTPS"):
@@ -128,7 +217,13 @@ class Listener:
             raise ValidationError(f"invalid listener port {self.port}")
 
     def create(self, client):
-        """Create a new Listener and add it to the LoadBalancer"""
+        """Creates a new Listener and adds it to the LoadBalancer.
+
+        This function will assing the attributes ``listener`` and ``id``.
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+        """
         self.verify()
         listener = self.loadbalancer.add_listener(client, name=self.name,
                                                   protocol=self.protocol,
@@ -137,7 +232,17 @@ class Listener:
         self.id = listener["listener"]["id"]
 
     def create_pool(self, client):
-        """Creates a new Pool with members and healthmon and adds it to the Listener"""
+        """Creates a new Pool with members and healthmon and adds it to the Listener.
+
+        Requires ``create`` to be called first.
+
+        In case the ``Pool.create()`` or ``Pool.all()`` function hasn't been called,
+        call ``Pool.all()``.
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+
+        """
         self.verify()
         if not self.listener:
             raise ValidationError("need listener to create pool")
@@ -145,14 +250,50 @@ class Listener:
         self.pool.all(client, self.loadbalancer, self.id)
 
     def all(self, client):
-        """Creates a Listener and then adds a Pool to it"""
+        """Convenience function to create a Listener, then Pool.
+
+        Will call ``create`` and ``create_pool``.
+
+        Args:
+            client: An OpenStack client, usually Neutron.
+        """
 
         self.create(client)
         self.create_pool(client)
 
 
 class DexSSL:
-    """Class managing the dex TLS infrastrucutre"""
+    """Class managing the dex TLS infrastrucutre.
+
+    Dex uses a self-signed CA to sign tokens it receives from a OIDC Provider
+    such as Gitlab, GitHub or LDAP. A 3rd Party (such as the Kubernetes apiserver)
+    will then verify the signed token with Dex's public key. A client certificate,
+    that is signed by the Dex CA, is used to request a token from Dex.
+
+    On instantiation, will create the Dex CA and client cert bundles.
+
+    Example:
+        >>> dex_ssl = DexSSL("./certs", "dex.example.com")
+        >>> dex_ssl.save_certs()
+
+    Args:
+        cert_dir (str): The directory where the keys and certificates will be
+            saved to.
+        issuer (str): The issuer of the Dex CA. This needs to be an IP or DNS
+            where Dex is reachable from a host and from inside the
+            kube-apiserver.
+        k8s_ca_path (str): This is the location on the Master node(s) where
+            the Dex CA will saved under. Needs to be a full path including
+            file name. This will then be passed as an argument to the
+            kube-apiserver so it can use the certificate's public key
+            to verify an incoming token.
+
+    Attributes:
+        ca_bundle (:class:`koris.util.ssl.CertBundle`): An SSL Certificate Bundle
+            containing the Dex CA certificate and key pair.
+        client_bundle(:class:`koris.util.ssl.CertBundle`): An SSL Certificate Bundle
+            containing the client certificate and key pair.
+    """
 
     def __init__(self,
                  cert_dir: str,
@@ -163,8 +304,8 @@ class DexSSL:
         self.k8s_ca_path = k8s_ca_path
         self.issuer = issuer
 
-        self.ca_bundle = None
-        self.client_bundle = None
+        self.ca_bundle: CertBundle = None
+        self.client_bundle: CertBundle = None
 
         self.create_certs()
 

@@ -21,8 +21,7 @@ LOGGER = get_logger(__name__)
 
 
 def create_key(size=2048, public_exponent=65537):
-    """
-    create an RSA private key
+    """Create an RSA private key
 
     Args:
         size (int) - the key byte size
@@ -48,24 +47,18 @@ def create_ca(private_key, public_key, country,
     create a CA signed with private_key
 
     Args:
-        private_key (inst) - private key instance to sign the CA
-        public_key (inst) - public key for the CSR
-        country (str) - the country for the CSR
-        state_province (str) - the state or province for the CSR
-        locality (str) - the locality for the CSR
-        orga (str) - the organization for the CSR
-        unit (str) - the unit for the CSR
-        name (str) - the name for the CSR
-        key_usage (list) - Key Usage parameters, stands for:
-            - digital_signature
-            - content_commitment
-            - key_encipherment
-            - data_encipherment
-            - key_agreement
-            - key_cert_sign
-            = crl_sign
-            - encipher_only
-            - decipher_only
+        private_key (inst): private key instance to sign the CA
+        public_key (inst): public key for the CSR
+        country (str): the country for the CSR
+        state_province (str): the state or province for the CSR
+        locality (str): the locality for the CSR
+        orga (str): the organization for the CSR
+        unit (str): the unit for the CSR
+        name (str): the name for the CSR
+        key_usage (list): Key Usage parameters. Indices stand for:
+            [digital_signature, content_commitment, key_encipherment,
+            data_encipherment, key_agreement, key_cert_sign, crl_sign,
+            encipher_only, decipher_only]
 
     Return:
         ssl certificate object
@@ -134,24 +127,19 @@ def create_certificate(ca_bundle, public_key, country,
     create a certificate signed with CA private_key
 
     Args:
-        ca_bundle (inst) - private key instance to sign the CA
-        public_key (inst) - public key for the CSR
-        country (str) - the country for the CSR
-        state_province (str) - the state or province for the CSR
-        locality (str) - the locality for the CSR
-        orga (str) - the organization for the CSR
-        unit (str) - the unit for the CSR
-        name (str) - the name for the CSR
-        key_usage (list) - Key Usage parameters, stands for:
-            - digital_signature
-            - content_commitment
-            - key_encipherment
-            - data_encipherment
-            - key_agreement
-            - key_cert_sign
-            = crl_sign
-            - encipher_only
-            - decipher_only
+        ca_bundle (inst): private key instance to sign the CA
+        public_key (inst): public key for the CSR
+        country (str): the country for the CSR
+        state_province (str): the state or province for the CSR
+        locality (str): the locality for the CSR
+        orga (str): the organization for the CSR
+        unit (str): the unit for the CSR
+        name (str): the name for the CSR
+        key_usage (list): Key Usage parameters. Indices stand for:
+            [digital_signature, content_commitment, key_encipherment,
+            data_encipherment, key_agreement, key_cert_sign, crl_sign,
+            encipher_only, decipher_only]
+
     Return:
         ssl certificate object
     """
