@@ -179,8 +179,10 @@ class DexSSL:
             raise ValidationError("dex certificates needs an issuer")
 
         dex_ca_key = create_key()
+        key_usage = [False, False, False, False, False, False, False, False, False]
         dex_ca = create_ca(dex_ca_key, dex_ca_key.public_key(),
-                           "DE", "BY", "NUE", "Kubernetes", "dex", "kube-ca")
+                           "DE", "BY", "NUE", "Kubernetes", "dex", "kube-ca",
+                           key_usage=key_usage)
         dex_ca_bundle = CertBundle(dex_ca_key, dex_ca)
 
         if is_ip(self.issuer):
@@ -188,11 +190,14 @@ class DexSSL:
         else:
             hosts, ips = [self.issuer], ""
 
+        # digital_signature, content_commitment, key_encipherment
+        key_usage = [True, True, True, False, False, False, False, False, False]
         dex_client_bundle = CertBundle.create_signed(dex_ca_bundle,
                                                      "DE", "BY", "NUE", "Kubernetes",
                                                      "dex-client", "kube-ca",
-                                                     hosts=hosts, ips=ips)
-                        
+                                                     hosts=hosts, ips=ips,
+                                                     key_usage=key_usage)
+
         self.ca_bundle = dex_ca_bundle
         self.client_bundle = dex_client_bundle
 

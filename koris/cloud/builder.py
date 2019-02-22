@@ -334,7 +334,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Using subnet %s", subnet['name'])
         return cloud_config
 
-    def run(self, config):  # pylint: disable=too-many-locals
+    def run(self, config):  # pylint: disable=too-many-locals,too-many-statements
         """
         execute the complete cluster build
         """
