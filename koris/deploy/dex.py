@@ -117,7 +117,7 @@ class Pool:
         if self.algorithm not in self.allowed_algorithms:
             err = f"algorithm needs to be part of {self.allowed_algorithms}"
             raise ValidationError(err)
-        
+
         if not self.members:
             raise ValidationError("pool needs members")
 

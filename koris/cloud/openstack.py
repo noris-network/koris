@@ -435,8 +435,8 @@ class LoadBalancer:  # pragma: no coverage
 
         return fip['floating_ip_address']
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=16, delay=40,
-           backoff=0.8)
+    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=20, delay=30,
+           backoff=1, logger=LOGGER.debug)
     def add_listener(self, client, name=None, protocol="HTTPS",
                      protocol_port=6443):
         """Adds a custom listener to the LoadBalancer"""
@@ -495,7 +495,7 @@ class LoadBalancer:  # pragma: no coverage
                     hm['healthmonitor']['id'], pool_id)
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict, BadRequest), tries=24,
-           delay=5,backoff=1, logger=LOGGER.debug)
+           delay=5, backoff=1, logger=LOGGER.debug)
     def add_member(self, client, pool_id, ip_addr, protocol_port=6443):
         """
         add listener to a loadbalancers pool.

@@ -286,9 +286,9 @@ class FirstMasterInit(NthMasterInit):
                    self.pod_network)
         content = textwrap.dedent(content)
 
-        # For Dex we need to start the apiserver with special args
-        # for example where to it finds the CA certificate in order
-        # to verify incoming tokens.
+        # For Dex we need to start the apiserver with special args, such as
+        # the location of the Dex CA certificate in order to verify incoming
+        # tokens
         if dex is not None:
             dex_content = """
                 export OIDC_ISSUER_URL="https://{}:{}"

@@ -341,8 +341,3 @@ Then delete all secrets:
 .. code:: shell
 
     $ kubectl destroy secret dex.tls dex.root-ca gitlab-client
-
-Prometheus
-~~~~~~~~~~
-
-TODO
