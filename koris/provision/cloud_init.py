@@ -239,24 +239,7 @@ class FirstMasterInit(NthMasterInit):
         self.write_file("/etc/kubernetes/pki/ca.key", b64_key(ca_bundle.key),
                         "root", "root", "0600", lambda x: x)
 
-        # WORK: deploy Dex CA
-        # def prepare_dex():
-        #     from cryptography import x509
-        #     from cryptography.hazmat.backends import default_backend
-
-        #     ssl_path = os.path.abspath("dex/ssl")
-        #     dex_ca, dex_cert = None, None
-        #     # CA
-        #     with open(os.path.join(ssl_path, "ca.pem"), "rb") as rf:
-        #         data = rf.read()
-        #     dex_ca = x509.load_pem_x509_certificate(data, default_backend())
-
-        #     # Cert
-        #     with open(os.path.join(ssl_path, "cert.pem"), "rb") as rf:
-        #         data = rf.read()
-        #     dex_cert = x509.load_pem_x509_certificate(data, default_backend())
-
-        #     return dex_ca, dex_cert
+        # If Dex is to be installed, deploy its CA to the master
         if dex is not None:
             path = dex['ca_file']
             cert = dex['cert']
@@ -303,6 +286,9 @@ class FirstMasterInit(NthMasterInit):
                    self.pod_network)
         content = textwrap.dedent(content)
 
+        # For Dex we need to start the apiserver with special args
+        # for example where to it finds the CA certificate in order
+        # to verify incoming tokens.
         if dex is not None:
             dex_content = """
                 export OIDC_ISSUER_URL="https://{}:{}"

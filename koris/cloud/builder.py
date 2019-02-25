@@ -17,7 +17,7 @@ from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
 from koris.util.hue import (  # pylint: disable=no-name-in-module
-    red, info, yellow, lightcyan as cyan, bad)
+    red, info, yellow, bad, lightgreen, lightcyan as cyan)
 from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
                               create_dex_conf, ValidationError)
 from koris.util.util import get_logger
@@ -355,6 +355,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # Check if dex has to be deployed
         if 'addons' in config and 'dex' in config['addons']:
             self.deploy_dex = True
+            LOGGER.info(info(lightgreen("Addons: Dex will be configured")))
 
         # generate ssh key pair for first master node. It is used to connect
         # to the other nodes so that they can join the cluster
@@ -458,6 +459,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                                                         members=client_members))
             tasks = [dex_task, oauth_task]
             loop.run_until_complete(asyncio.gather(*tasks))
+            LOGGER.info("Finished configuring LoadBalancer for Dex")
 
         # We should no be able to query the API server for available nodes
         # with a valid certificate from the generated CA. Hence, generate

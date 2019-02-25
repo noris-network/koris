@@ -104,6 +104,7 @@ apiServerExtraArgs:
   cloud-config: /etc/kubernetes/cloud.config
 TMPL
 
+# If Dex is to be deployed, we need to start the apiserver with extra args.
 if [[ -n ${OIDC_CLIENT_ID+x} ]]; then
 cat <<TMPL > dex.tmpl
   oidc-issuer-url: "${OIDC_ISSUER_URL}"

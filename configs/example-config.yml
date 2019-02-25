@@ -81,9 +81,9 @@ certificates:
 #   # necessary flags. To deploy the rest, please consult the documentation.
 #   # For more information about Dex see: https://github.com/dexidp/dex
 #   dex:
-#     # username_claim: email     # optional, -> default   
-#     # groups_claim: groups      # optional, -> default
-#     # # LB-Listener and K8s-Service ports for Dex
+#     username_claim: email     # optional
+#     groups_claim: groups      # optional
+#     # LB-Listener and K8s-Service ports for Dex
 #     ports:
 #       listener: 32000
 #       service: 32000

@@ -1,5 +1,43 @@
-"""
-The dex module manages a dex (https://github.com/dexidp/dex) installation.
+"""The dex module manages a dex (https://github.com/dexidp/dex) installation.
+
+    The workflow is the following:
+
+    1. Create certificates for Dex (via :class:`.DexSSL`)
+
+    2. In :class:`koris.provision.cloud_init.FirstMasterInit` deploy the previously
+    created CA to the first Master that is created. Additionally, create the extra
+    arguments for the apiserver as environment variables in the ``koris.env`` file.
+
+    3. In ``koris/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
+    variables from ``koris.env`` and add their values as extra arguments to kubeadm's
+    ``init.tmpl``.
+
+    4. Take the main LoadBalancer and add two new Listeners to it: one for the Dex service
+    (via :meth:`create_dex`) and one for an OAuth2 client app
+    (via :meth:`create_oauth2`) that will be requesting tokens from Dex.
+
+    Example:
+        >>> dex_ssl = DexSSL("certs/", "dex.example.org")
+        >>> dex_ssl.save_certs()
+        >>> dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
+        >>> master_tasks = master_builder.create_masters_tasks(..., dex=dex_conf)
+        >>> # Execute master_tasks
+        >>> dex_listener = dex_conf['ports']['listener']
+        >>> dex_service = dex_conf['ports']['service']
+        >>> dex_members = master_ips
+        >>> dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
+        ...                                        listener_port=dex_listener,
+        ...                                        pool_port=dex_service,
+        ...                                        members=dex_members))
+        >>> client_listener = dex_conf['client']['ports']['listener']
+        >>> client_service = dex_conf['client']['ports']['service']
+        >>> client_members = node_ips
+        >>> oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
+        ...                                             listener_port=client_listener,
+        ...                                             pool_port=client_service,
+        ...                                             members=client_members))
+        >>> tasks = [dex_task, oauth_task]
+        >>> loop.run_until_complete(asyncio.gather(*tasks))
 """
 
 from koris.cloud.openstack import LoadBalancer
@@ -25,7 +63,7 @@ class Pool:
     is then attached to a Listener.
 
     Example:
-        >>> # Create a Pool with members
+        >>> # Create a Pool with Members
         >>> members = ["10.0.0.1", 10.0.0.2"]
         >>> pool = Pool("test-pool", "HTTPS", 32443, "ROUND_ROBIN", members)
         >>> # Assuming we have a created Listener
@@ -93,7 +131,7 @@ class Pool:
     def create(self, client, lb: LoadBalancer, listener_id):
         """Creates a Pool and adds it to a Listener.
 
-        This function will assing the attributes ``pool`` and ``id``.
+        This function will set the attributes ``pool`` and ``id``.
 
         Args:
             client: An OpenStack client, usually Neutron.
@@ -167,7 +205,7 @@ class Listener:
     LoadBalancer which will forward traffic to a specific Listener, depending on the port.
 
     Example:
-        >>> # Create a Pool with Menbers
+        >>> # Create a Pool with Members
         >>> members = ["10.0.0.1", 10.0.0.2"]
         >>> pool = Pool("test-pool", "HTTPS", 32443, "ROUND_ROBIN", members)
         >>> listener = Listener(LB, "test-listener", 443, pool)
@@ -289,9 +327,9 @@ class DexSSL:
             to verify an incoming token.
 
     Attributes:
-        ca_bundle (:class:`koris.util.ssl.CertBundle`): An SSL Certificate Bundle
+        ca_bundle (:class:`koris.ssl.CertBundle`): An SSL Certificate Bundle
             containing the Dex CA certificate and key pair.
-        client_bundle(:class:`koris.util.ssl.CertBundle`): An SSL Certificate Bundle
+        client_bundle(:class:`koris.ssl.CertBundle`): An SSL Certificate Bundle
             containing the client certificate and key pair.
     """
 
@@ -310,7 +348,13 @@ class DexSSL:
         self.create_certs()
 
     def create_certs(self):
-        """Create a CA and client cert for Dex
+        """Create a CA and client cert for Dex.
+
+        Will first create a CA bundle, then use this to sign a client certificate.
+        The Client cert will have the following Key Usage parameters: Digital Signature,
+        Content Commitment, Key Encipherment.
+
+        Will also set the attributes ``ca_bundle`` and ``client_bundle``.
 
         Returns:
             Tuple consisting of root CA bundle and cert bundle
@@ -345,7 +389,15 @@ class DexSSL:
         return dex_ca_bundle, dex_client_bundle
 
     def save_certs(self, client_prefix="dex-client", ca_prefix="dex-ca"):
-        """Saves dex client cert to disc"""
+        """Saves certificate bundles to disc.
+
+        This function uses :meth:`koris.ssl.CertBundle.save` to save the certificate
+        bundles to disc.
+
+        Args:
+            client_prefix (str): The prefix for the client certificate.
+            ca_prefix (str): The prefix for the Dex CA.
+        """
 
         if not self.client_bundle or not self.ca_bundle:
             raise ValidationError("create certificates before saving them")
@@ -357,7 +409,22 @@ class DexSSL:
 async def create_dex(client, lb: LoadBalancer, name="dex",
                      listener_port=32000, pool_port=32000, protocol="HTTPS",
                      algo="ROUND_ROBIN", members=None):
-    """Convenience function to create a Dex Listener and Pool"""
+    """Convenience function to create a Dex Listener and Pool.
+
+    This will take an existing LoadBalancer in OpenStack and adds a new Listener
+    with Pool and members to it, so Dex can be reached inside the cluster.
+
+    Will first create a :class:`.Pool`, then a :class:`.Listener` from that pool.
+
+    Args:
+        lb (LoadBalancer): The used LoadBalancer.
+        name (str): The name of the Dex Listener and Pool.
+        listener_port (int): The port the Listener should listen on.
+        pool_port (int): The exposed port of the Dex service inside the cluster.
+        protcol (str): The protocol to use. Should be HTTPS.
+        algo (str): The loadbalancing algorithm to use.
+        members (list): A list of members to add to the pool. Should be the Masters.
+    """
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
@@ -367,7 +434,22 @@ async def create_dex(client, lb: LoadBalancer, name="dex",
 async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
                         listener_port=5556, pool_port=32555, protocol="HTTP",
                         algo="ROUND_ROBIN", members=None):
-    """Convenience function to create OAuth2 Client App Listener and Pool"""
+    """Convenience function to create an OAuth2 Client App Listener and Pool.
+
+    Users need to deploy an OAuth2 Client App that talks with Dex to retrieve a
+    token. This function takes an existing LoadBalancer in OpenStack and adds a
+    new Listener with Pool and Members to it. This way, clients  and Dex
+    can reach the OAuth2 Client App.
+
+    Args:
+        lb (LoadBalancer): The used LoadBalancer.
+        name (str): The name of the OAuth2 Listener and Pool.
+        listener_port (int): The port the Listener should listen on.
+        pool_port (int): The exposed port of the OAuth2 service inside the cluster.
+        protcol (str): The protocol to use. Should be HTTPS.
+        algo (str): The loadbalancing algorithm to use.
+        members (list): A list of members to add to the pool. Should be the Nodes.
+    """
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
@@ -375,13 +457,12 @@ async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
 
 
 # pylint: disable=too-many-branches
-def create_dex_conf(config, dex_ssl: DexSSL) -> dict:
+def create_dex_conf(config, dex_ssl: DexSSL):
     """Parse the koris config for dex parameters.
 
     The user needs to validate first if dex is wished to be installed.
-    The following config arguments are optional:
-        - username_claim (default: email)
-        - groups_claim (default: group)
+    The following config arguments are optional username_claim (default: email),
+    groups_claim (default: group)
 
     Args:
         config (dict): The config['addons']['dex'] part of the config dict.
