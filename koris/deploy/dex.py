@@ -65,7 +65,7 @@ class Pool:
     Example:
         >>> # Create a Pool with Members
         >>> members = ["10.0.0.1", 10.0.0.2"]
-        >>> pool = Pool("test-pool", "TTPS", 32443, "ROUND_ROBIN", members)
+        >>> pool = Pool("test-pool", "HTTPS", 32443, "ROUND_ROBIN", members)
         >>> # Assuming we have a created Listener
         >>> pool.all(NEUTRON, LB, listener.id)
 
