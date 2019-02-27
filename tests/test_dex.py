@@ -24,8 +24,8 @@ VALID_PORTS = [0, 65535, 80, 443, 32000]
 VALID_ALGOS = ["ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP"]
 VALID_PROTOS = ["HTTPS", "HTTP", "TCP", "TERMINATED_HTTPS"]
 
-INVALID_MEMBERS = ["", "-1", "hello world", []]
-INVALID_PORTS = ["test", 1.32, None, "", [], {}, (), -25]
+INVALID_MEMBERS = ["192.168.300.2", "-1", "hello world", []]
+INVALID_PORTS = ["100.3t", 1.32, None, [], {}, (), -25]
 INVALID_ALGOS = ["", None, 1, 2.3, [], {}, (), "test"]
 INVALID_PROTOS = ["UDP"]
 INVALID_PROTOS.extend(INVALID_ALGOS)
@@ -78,7 +78,7 @@ def test_is_port():
 
 def test_is_ip():
     valid = ["::0", "::", "1.2.3.4", "2001:0db8:0000:0000:0000:ff00:0042:8329"]
-    invalid = [0, 1, 2, 3, None, "", 1.23, [], {}, (), "300.400.500.600"]
+    invalid = [0, 1, 2, 3, None, 1.23, [], {}, (), "300.400.500.600"]
     for i in valid:
         assert is_ip(i)
     for i in invalid:

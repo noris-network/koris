@@ -143,14 +143,12 @@ Afterwards adjust the Dex deployment in ``addons/dex/00-dex.yaml``:
               valueFrom:
                 secretKeyRef:
                   name: gitlab-client
-                  # Put your app-id here
-                  key: app-id
+                  key: client-id
             - name: GITLAB_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: gitlab-client
-                  # Put your app-secret here
-                  key: app-secret
+                  key: client-secret
             volumes:
             - name: config
               configMap:
@@ -186,8 +184,8 @@ Afterwards adjust the Dex deployment in ``addons/dex/00-dex.yaml``:
             config:
               baseURL: https://gitlab.com
               # Enter your app-id and app-secret
-              clientID: app-id
-              clientSecret: app-secret
+              clientID: <app-id>
+              clientSecret: <app-secret>
               # Enter your IP here
               redirectURI: https://10.36.60.232:32000/callback
         oauth2:

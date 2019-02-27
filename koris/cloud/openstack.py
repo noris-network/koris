@@ -354,7 +354,6 @@ class LoadBalancer:  # pragma: no coverage
             subnet_id = [sub['id']
                          for sub in subnets if network['id'] == sub['network_id']][0]
 
-
         lb = client.create_loadbalancer({'loadbalancer':
                                          {'provider': provider,
                                           'vip_subnet_id': subnet_id,
@@ -530,6 +529,8 @@ class LoadBalancer:  # pragma: no coverage
     @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1.05,
            logger=LOGGER.debug)
     def _del_pool(self, client, name=None, delete_all=False):
+        """Deletes a single pool by name, or all pools"""
+
         pools = None
         lb_id = {'id': self._id}
 
@@ -542,8 +543,7 @@ class LoadBalancer:  # pragma: no coverage
             pools = pools['pools']
         else:
             # Delete a specific pool by name
-            if name is None:
-                name = f"{self.name}-pool"
+            if name is None: name = f"{self.name}-pool"
             try:
                 pools = list(client.list_lbaas_pools(retrieve_all=False,
                                                      name=name))
@@ -562,27 +562,23 @@ class LoadBalancer:  # pragma: no coverage
                     self._del_health_monitor(client, pool['healthmonitor_id'])
 
                 # Delete all members
-                try:
-                    members = client.list_lbaas_members(pool_id)
-                except NotFound:
-                    LOGGER.info("Pool %s not found", pool_id)
+                members = client.list_lbaas_members(pool_id)
                 if 'members' in members:
                     for member in members['members']:
                         member_id = member['id']
                         client.delete_lbaas_member(member_id, pool_id)
 
                 # Delete pool
-                try:
-                    client.delete_lbaas_pool(pool_id)
-                except NotFound:
-                    LOGGER.info("Pool %s not found", pool_id)
+                client.delete_lbaas_pool(pool_id)
                 LOGGER.info("Deleted pool '%s' (%s)", name, pool_id)
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1.05,
            logger=LOGGER.debug)
-    def _del_listener(self, client, delete_all=False):
+    def _del_listener(self, client, name=None, delete_all=False):
+        """Delete a single listener by name, or all listeners"""
         lb_id = {'id': self._id}
         to_delete = None
+        listeners = None
 
         if delete_all:
             # Delete all listeners associated with this LB
@@ -593,9 +589,8 @@ class LoadBalancer:  # pragma: no coverage
                 LOGGER.debug("No listeners found.")
                 return
         else:
-            # Delete listener with default name
-            listeners = None
-            name = f"{self.name}-listener"
+            # Delete listener by name
+            if name is None: name = f"{self.name}-listener"
             try:
                 listeners = list(client.list_listeners(retrieve_all=False,
                                                        name=name))

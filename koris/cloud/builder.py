@@ -376,17 +376,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # calculate discovery hash
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
-        if not floatingip or floatingip == "" or not lb_dns or lb_dns == "":
-            LOGGER.error(bad(red("No Floating IP or DNS Name set")))
-            LOGGER.error(bad(red("Skipping Dex configuration")))
-            self.deploy_dex = False
-
         if self.deploy_dex:
             LOGGER.info("Setting up Dex SSL infrastructure ...")
             if lb_dns == lb_ip:
                 issuer = lb_ip
             else:
                 issuer = lb_dns
+            LOGGER.info("Dex CA Issuer set to %s", issuer)
             dex_ssl = DexSSL(cert_dir, issuer)
             dex_ssl.save_certs()
 

@@ -2,7 +2,6 @@ import io
 import unittest.mock
 
 from koris.util.util import KorisVersionCheck
-from koris.util.net import is_port, is_ip
 from koris.util.hue import red
 
 phtml = """
