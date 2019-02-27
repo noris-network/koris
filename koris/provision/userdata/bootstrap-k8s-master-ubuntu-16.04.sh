@@ -10,13 +10,24 @@
 # via an etcd cluster which is grown in a serial manner. That means we first
 # create a single etcd host, and then add N hosts one after another.
 #
-# The addition of hosts is done via SSH!
+# The addition of master nodes is done via SSH!
+#
+# This should be the content of /etc/kubernetes/koris.env
+#
+#  export B64_CA_CONTENT=""
+#  export LOAD_BALANCER_DNS=""
+#  export LOAD_BALANCER_IP=""
+#  export LOAD_BALANCER_PORT=""
+#  export BOOTSTRAP_TOKEN=""
+#  export DISCOVERY_HASH=""
+#  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
+#  export MASTERS_IP=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
+#
 ###
+
 
 set -e
 
-iptables -P FORWARD ACCEPT
-swapoff -a
 
 # load koris environment file if available
 if [ -f /etc/kubernetes/koris.env ]; then
@@ -35,13 +46,6 @@ export CALICO_VERSION=3.3
 LOGLEVEL=4
 V=${LOGLEVEL}
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
-################################################################################
-
-# install kubeadm if not already done
-sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
-
-################################################################################
 
 # create a proper kubeadm config file for each master.
 # the configuration files are ordered and contain the correct information
@@ -333,22 +337,80 @@ function apply_net_plugin(){
     esac
 }
 
+# get docker version for CentOS
+function get_docker_centos() {
+    yum install -y yum-utils \
+        device-mapper-persistent-data \
+        lvm2
+    yum-config-manager \
+    --add-repo \
+    https://download.docker.com/linux/centos/docker-ce.repo
+    # docker-ce docker-ce-cli
+    yum install -y docker-ce-"${DOCKER_VERSION}*" containerd.io
+    systemctl enable docker
+    systemctl start docker
+}
+
+# get kubeadm version for CentOS
+function get_kubeadm_centos() {
+    cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kube*
+EOF
+
+    # Set SELinux in permissive mode (effectively disabling it)
+    setenforce 0
+    sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+
+    yum install -y kubelet-${KUBE_VERSION} kubeadm-${KUBE_VERSION} kubectl-${KUBE_VERSION} --disableexcludes=kubernetes
+    systemctl enable --now kubelet
+
+    cat <<EOF >  /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sysctl --system
+}
+
+
 # enforce docker version
-function get_docker() {
+function get_docker_ubuntu() {
     dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
     curl --retry 10 -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
-    apt-get -y install docker-ce=${DOCKER_VERSION}*
+    apt-get -y install docker-ce="${DOCKER_VERSION}*"
     apt install -y socat conntrack ipset
 }
 
 # enforce kubeadm version
-function get_kubeadm() {
+function get_kubeadm_ubuntu() {
     dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
     apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
+}
+
+function get_docker(){
+    if [ -z $(which apt) ]; then
+        get_docker_centos;
+    else
+        get_docker_ubuntu;
+    fi
+}
+
+function get_kubeadm(){
+    if [ -z $(which apt) ]; then
+        get_kubeadm_centos;
+    else
+        get_kubeadm_ubuntu;
+    fi
 }
 
 # the entry point of the whole script.
@@ -409,7 +471,6 @@ join_all_hosts() {
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
 function fetch_all() {
-    apt-get update
     get_docker
     get_kubeadm
 }
@@ -424,8 +485,14 @@ function install_deps() {
 
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
-cd /root
 
-main
+if [[ $_ == $0 ]]; then
+    iptables -P FORWARD ACCEPT
+    swapoff -a
+    main
+    cd /root
+else
+    echo "Use any of the functions here in your shell"
+fi
 
 # vi: expandtab ts=4 sw=4 ai
