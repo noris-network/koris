@@ -15,8 +15,8 @@ Prerequisites
 ^^^^^^^^^^^^^
 
 Before starting, make sure koris is installed (see :doc:`installation`) and OpenStack is configured properly
-(see :ref:`prepare-openstack`). Most importantly, you will need to deploy your cluster with a network that is
-reachable from your workstation but also able to reach your identity provider.
+(see :ref:`prepare-openstack`). Most importantly, you will need to deploy your cluster in a network that is
+able to reach your identity provider.
 
 Configuration
 ^^^^^^^^^^^^^

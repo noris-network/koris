@@ -11,7 +11,8 @@ import tempfile
 from unittest import mock
 
 from koris.deploy.dex import (Pool, Listener, create_dex, create_oauth2,
-                              ValidationError, DexSSL, create_dex_conf)
+                              ValidationError, DexSSL, create_dex_conf,
+                              is_port, is_ip)
 from koris.ssl import read_cert
 
 NEUTRON = mock.Mock()
@@ -64,6 +65,24 @@ def default_conf():
             }
         }
     }
+
+
+def test_is_port():
+    valid = [0, 1, 5, 80, 443, 65535]
+    invalid = [None, "", 1.4, [], {}, ()]
+    for p in valid:
+        assert is_port(p)
+    for p in invalid:
+        assert is_port(p) is False
+
+
+def test_is_ip():
+    valid = ["::0", "::", "1.2.3.4", "2001:0db8:0000:0000:0000:ff00:0042:8329"]
+    invalid = [0, 1, 2, 3, None, "", 1.23, [], {}, (), "300.400.500.600"]
+    for i in valid:
+        assert is_ip(i)
+    for i in invalid:
+        assert is_ip(i) is False
 
 
 # Valid tests

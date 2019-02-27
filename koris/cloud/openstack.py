@@ -348,7 +348,12 @@ class LoadBalancer:  # pragma: no coverage
         if self.subnet:
             subnet_id = client.find_resource('subnet', self.subnet)['id']
         else:
-            subnet_id = client.list_subnets()['subnets'][-1]['id']
+            # match created subnet id with the corresponding one in subnets
+            network = OSNetwork(client, self.config).get_or_create()
+            subnets = client.list_subnets()['subnets']
+            subnet_id = [sub['id']
+                         for sub in subnets if network['id'] == sub['network_id']][0]
+
 
         lb = client.create_loadbalancer({'loadbalancer':
                                          {'provider': provider,

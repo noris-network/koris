@@ -43,22 +43,3 @@ def test_version_is_newer():
 
 def test_web_site_is_not_avail():
     assert KorisVersionCheck("").version == "0.0.0"
-
-
-def test_is_port():
-    valid = [0, 1, 5, 80, 443, 65535]
-    invalid = [None, "", 1.4, [], {}, ()]
-    for p in valid:
-        assert is_port(p)
-    for p in invalid:
-        assert is_port(p) is False
-
-
-def test_is_ip():
-    valid = [0, 1, 2, 3, "::0", "::", "1.2.3.4",
-             "2001:0db8:0000:0000:0000:ff00:0042:8329"]
-    invalid = [None, "", 1.23, [], {}, (), "300.400.500.600"]
-    for i in valid:
-        assert is_ip(i)
-    for i in invalid:
-        assert is_ip(i) is False

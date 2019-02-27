@@ -40,9 +40,38 @@
         >>> loop.run_until_complete(asyncio.gather(*tasks))
 """
 
+from netaddr import valid_ipv4, valid_ipv6
+
 from koris.cloud.openstack import LoadBalancer
-from koris.util.net import is_port, is_ip
 from koris.ssl import create_key, create_ca, CertBundle
+
+
+def is_port(port):
+    """Checks if a port is valid.
+
+    A port needs to be integer and between 0 and 65535.
+
+    Args:
+        port (int): The port to bee checked
+
+    Returns:
+        True, if port is valid
+    """
+
+    return isinstance(port, int) and 0 <= port <= 65535
+
+
+def is_ip(ip):
+    """Checks if an IP is a valid IPv4 or IPv6 address.
+
+    Args:
+        ip (str): The IP to be checked.
+
+    Returns:
+        True, if it's a valid IPv4 or IPv6 address
+    """
+
+    return valid_ipv4(ip) or valid_ipv6(ip)
 
 
 class ValidationError(Exception):
