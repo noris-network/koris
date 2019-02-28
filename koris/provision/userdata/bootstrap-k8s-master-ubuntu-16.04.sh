@@ -30,7 +30,6 @@
 ###
 
 
-set -e
 
 
 # load koris environment file if available
@@ -43,7 +42,7 @@ export CLUSTER_STATE=""
 
 
 #### Versions for Kube 1.12.3
-export KUBE_VERSION=1.12.3
+export KUBE_VERSION=1.12.5
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
@@ -84,6 +83,10 @@ etcd:
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: \${POD_SUBNET}
+#apiServerExtraArgs:
+#  allow-privileged: "true"
+#  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
+  #feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -242,12 +245,12 @@ function bootstrap_first_master() {
    until kubeadm -v=${V} alpha phase addon coredns --config $1; do
        sleep 1
    done
-   kubeadm alpha phase bootstrap-token all --config $1
-
+   until kubeadm alpha phase bootstrap-token all --config $1; do
+       sleep 1
+   done
    test -d /root/.kube || mkdir -p /root/.kube
    cp /etc/kubernetes/admin.conf /root/.kube/config
    chown root:root /root/.kube/config
-
    kubeadm -v=${V} alpha phase kubelet config upload  --config $1
    kubectl get nodes
 }
@@ -318,7 +321,7 @@ function get_flannel(){
 # get the correct network plugin
 function get_net_plugin(){
     case "${POD_NETWORK}" in
-        "CALICO"|*)
+        "CALICO"|"")
             get_calico
             ;;
         "FLANNEL")
@@ -332,7 +335,7 @@ function get_net_plugin(){
 # apply the correct network plugin
 function apply_net_plugin(){
     case "${POD_NETWORK}" in
-        "CALICO"|*)
+        "CALICO"|"")
             echo "installing calico"
             kubectl apply -f rbac-kdd.yaml
             kubectl apply -f calico.yaml
@@ -353,7 +356,7 @@ function get_docker_centos() {
     --add-repo \
     https://download.docker.com/linux/centos/docker-ce.repo
     # docker-ce docker-ce-cli
-    yum install -y docker-ce-"${DOCKER_VERSION}*" containerd.io
+    yum install -y 'docker-ce-'${DOCKER_VERSION}'*' containerd.io
     systemctl enable docker
     systemctl start docker
 }
@@ -459,6 +462,13 @@ function main() {
     echo "the installation has finished."
 }
 
+# join a centos node
+function join_node() {
+	HOST=$1
+	ssh ${HOST} sudo kubeadm reset -f
+	ssh ${HOST} sudo kubeadm join --token $TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
+}
+
 
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
@@ -505,11 +515,13 @@ function install_deps() {
 
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
+
 if [[ $sourced == 1 ]]; then
     echo "You can now use any of these functions:"
     echo ""
     typeset -F |  cut -d" " -f 3
 else
+    set -e
     cd /root
     install_deps
     main
