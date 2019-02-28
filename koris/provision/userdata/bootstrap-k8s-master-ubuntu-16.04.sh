@@ -21,7 +21,11 @@
 #  export BOOTSTRAP_TOKEN="$(openssl rand -hex 3).$(openssl rand -hex 8)"
 #  export DISCOVERY_HASH="$(openssl x509 -in /etc/kubernetes/pki/ca.crt -noout -pubkey | openssl rsa -pubin -outform DER 2>/dev/null | sha256sum | cut -d' ' -f1)"
 #  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
-#  export MASTERS_IP=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
+#  export MASTERS_IPS=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
+#  # choose CALICO or FLANNEL
+#  export POD_NETWORK="CALICO"
+#  export POD_SUBNET="10.233.0.0/16"
+#  export SSH_USER="ubuntu"  # for RHEL use root
 #
 ###
 
@@ -42,9 +46,12 @@ export CLUSTER_STATE=""
 export KUBE_VERSION=1.12.3
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
+export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
+export SSH_USER=${SSH_USER:-"ubuntu"}
 
 LOGLEVEL=4
 V=${LOGLEVEL}
+
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 
 # create a proper kubeadm config file for each master.
@@ -127,7 +134,7 @@ done
 # distributes configuration file and certificates to a master node
 function copy_keys() {
     host=$1
-    USER=ubuntu # customizable
+    USER=${SSH_USER}
 
     echo -n "waiting for ssh on $1"
     until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -168,7 +175,7 @@ function copy_keys() {
 # distributes configuration files and certificates
 # use this only when all hosts are already up and running
 function distribute_keys() {
-   USER=ubuntu # customizable
+   USER=${SSH_USER} # customizable
 
    for (( i=1; i<${#MASTERS_IPS[@]}; i++ )); do
        echo "distributing keys to ${MASTERS_IPS[$i]}";
@@ -249,14 +256,14 @@ function bootstrap_first_master() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
-   USER=ubuntu # customizable
-
+   USER=${SSH_USER} # customizable
    echo "*********** Bootstrapping $1 ******************"
    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
        sleep 2
    done
-
+   ssh ${SSHOPTS} ${USER}@$1 swapoff -a
+   ssh ${SSHOPTS} ${USER}@$1 iptables -P FORWARD ACCEPT
    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config /home/${USER}/kubeadm-$1.yaml
@@ -311,7 +318,7 @@ function get_flannel(){
 # get the correct network plugin
 function get_net_plugin(){
     case "${POD_NETWORK}" in
-        "CALICO")
+        "CALICO"|*)
             get_calico
             ;;
         "FLANNEL")
@@ -325,7 +332,7 @@ function get_net_plugin(){
 # apply the correct network plugin
 function apply_net_plugin(){
     case "${POD_NETWORK}" in
-        "CALICO")
+        "CALICO"|*)
             echo "installing calico"
             kubectl apply -f rbac-kdd.yaml
             kubectl apply -f calico.yaml
@@ -476,19 +483,36 @@ function fetch_all() {
 }
 
 
+# on RHEL based systems
+function disable_firewalld() {
+    if [ -z $(which apt) ]; then
+	systemctl stop firewalld
+	systemctl disable firewalld
+    fi
+}
+
+
 function install_deps() {
     for K in "${ALLHOSTS[@]}"; do
         echo "***** ${K} ******"
-        ssh ${K} "KUBE_VERSION=${KUBE_VERSION}; $(typeset -f fetch_all);  sudo fetch_all"
+        ssh ${SSHOPTS} ${K} "KUBE_VERSION=${KUBE_VERSION}; $(typeset -f fetch_all);  fetch_all"
+        ssh ${SSHOPTS} ${K} "$(typeset -f disable_firewalld); disable_firewalld"
     done
 }
 
-# The script is called as user 'root' in the directory '/'. Since we add some
+# The script is called as user 'root' in the directory '/'. nince we add some
 # files we want to change to root's home directory.
 
-iptables -P FORWARD ACCEPT
-swapoff -a
-cd /root
-main
+
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+if [[ $sourced == 1 ]]; then
+    echo "You can now use any of these functions:"
+    echo ""
+    typeset -F |  cut -d" " -f 3
+else
+    cd /root
+    install_deps
+    main
+fi
 
 # vi: expandtab ts=4 sw=4 ai
