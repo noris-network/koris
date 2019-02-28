@@ -14,12 +14,12 @@
 #
 # This should be the content of /etc/kubernetes/koris.env
 #
-#  export B64_CA_CONTENT=""
+#  export B64_CA_CONTENT="$(kubeadm alpha phase certs ca 1>/dev/null 2>&1 && base64 -w 0 /etc/kubernetes/pki/ca.crt)"
 #  export LOAD_BALANCER_DNS=""
 #  export LOAD_BALANCER_IP=""
 #  export LOAD_BALANCER_PORT=""
-#  export BOOTSTRAP_TOKEN=""
-#  export DISCOVERY_HASH=""
+#  export BOOTSTRAP_TOKEN="$(openssl rand -hex 3).$(openssl rand -hex 8)"
+#  export DISCOVERY_HASH="$(openssl x509 -in /etc/kubernetes/pki/ca.crt -noout -pubkey | openssl rsa -pubin -outform DER 2>/dev/null | sha256sum | cut -d' ' -f1)"
 #  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
 #  export MASTERS_IP=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
 #
