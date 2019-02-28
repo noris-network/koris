@@ -486,13 +486,9 @@ function install_deps() {
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
 
-if [[ $_ == $0 ]]; then
-    iptables -P FORWARD ACCEPT
-    swapoff -a
-    main
-    cd /root
-else
-    echo "Use any of the functions here in your shell"
-fi
+iptables -P FORWARD ACCEPT
+swapoff -a
+cd /root
+main
 
 # vi: expandtab ts=4 sw=4 ai
