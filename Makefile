@@ -105,6 +105,9 @@ docker-push-alpine:
 docker-push-ubuntu:
 	docker push $(ORG)/koris-ubuntu:$(TAG)
 
+docker-build-pyinstaller:
+	docker build -t $(ORG)/koris-builder:$(TAG) -f docker/Docker-pyinstaller-builder .
+
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
@@ -112,10 +115,9 @@ servedocs: docs ## compile the docs watching for changes
 release: dist ## package and upload a release
 	twine upload dist/*
 
-dist: clean ## builds source and wheel package
+dist: ## builds source and wheel package
 	$(PY) setup.py sdist
 	$(PY) setup.py bdist_wheel
-	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
@@ -353,7 +355,9 @@ install-git-hooks:
 	chmod +x .git/hooks/pre-commit
 
 build-exec: ## build a single file executable of koris
-	rm -vRf dist
 	pyinstaller koris.spec
 
+
+build-exec-in-docker:
+	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
 # vim: tabstop=4 shiftwidth=4
