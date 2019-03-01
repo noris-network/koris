@@ -325,9 +325,11 @@ class CertBundle:
         if not os.path.exists(directory):
             os.mkdir(directory)
 
-        write_key(self.key,
-                  filename=os.path.join(directory, name + key_suffix))
-        write_cert(self.cert, os.path.join(directory, name + cert_suffix))
+        if not os.path.isfile(os.path.join(directory, name + key_suffix)):
+            write_key(self.key, filename=os.path.join(directory, name + key_suffix))
+
+        if not os.path.isfile(os.path.join(directory, name + cert_suffix)):
+            write_cert(self.cert, os.path.join(directory, name + cert_suffix))
 
 
 def read_cert(cert):  # pragma: no coverage

@@ -21,7 +21,11 @@
 #  export BOOTSTRAP_TOKEN="$(openssl rand -hex 3).$(openssl rand -hex 8)"
 #  export DISCOVERY_HASH="$(openssl x509 -in /etc/kubernetes/pki/ca.crt -noout -pubkey | openssl rsa -pubin -outform DER 2>/dev/null | sha256sum | cut -d' ' -f1)"
 #  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
-#  export MASTERS_IP=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
+#  export MASTERS_IPS=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
+#  # choose CALICO or FLANNEL
+#  export POD_NETWORK="CALICO"
+#  export POD_SUBNET="10.233.0.0/16"
+#  export SSH_USER="ubuntu"  # for RHEL use root
 #
 #  # for bare metal or generic images in VMWARE set
 #  export BOOTSTRAP_NODES=1
@@ -38,12 +42,15 @@ export CLUSTER_STATE=""
 
 
 #### Versions for Kube 1.12.3
-export KUBE_VERSION=1.12.3
+export KUBE_VERSION=1.12.5
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
+export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
+export SSH_USER=${SSH_USER:-"ubuntu"}
 
 LOGLEVEL=4
 V=${LOGLEVEL}
+
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 
 # create a proper kubeadm config file for each master.
@@ -76,6 +83,10 @@ etcd:
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: \${POD_SUBNET}
+#apiServerExtraArgs:
+#  allow-privileged: "true"
+#  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
+  #feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -234,8 +245,9 @@ function bootstrap_first_master() {
    until kubeadm -v=${V} alpha phase addon coredns --config $1; do
        sleep 1
    done
-   kubeadm alpha phase bootstrap-token all --config $1
-
+   until kubeadm alpha phase bootstrap-token all --config $1; do
+       sleep 1
+   done
    test -d /root/.kube || mkdir -p /root/.kube
    cp /etc/kubernetes/admin.conf /root/.kube/config
    chown root:root /root/.kube/config
@@ -255,7 +267,6 @@ function add_master {
        echo "waiting for ssh on $1"
        sleep 2
    done
-
    if [ -n ${BOOTSTRAP_NODES} ]; then
         bootstrap_deps_node $1
    fi
@@ -314,7 +325,7 @@ function get_flannel(){
 # get the correct network plugin
 function get_net_plugin(){
     case "${POD_NETWORK}" in
-        "CALICO")
+        "CALICO"|"")
             get_calico
             ;;
         "FLANNEL")
@@ -328,7 +339,7 @@ function get_net_plugin(){
 # apply the correct network plugin
 function apply_net_plugin(){
     case "${POD_NETWORK}" in
-        "CALICO")
+        "CALICO"|"")
             echo "installing calico"
             kubectl apply -f rbac-kdd.yaml
             kubectl apply -f calico.yaml
@@ -349,7 +360,7 @@ function get_docker_centos() {
     --add-repo \
     https://download.docker.com/linux/centos/docker-ce.repo
     # docker-ce docker-ce-cli
-    yum install -y docker-ce-"${DOCKER_VERSION}*" containerd.io
+    yum install -y 'docker-ce-'${DOCKER_VERSION}'*' containerd.io
     systemctl enable docker
     systemctl start docker
 }
@@ -496,6 +507,7 @@ join_all_hosts() {
 }
 
 
+
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
 function fetch_all() {
@@ -503,19 +515,23 @@ function fetch_all() {
     get_kubeadm
 }
 
-
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
-# on bare metal clusters and VMWare you should run this script with --join-all-nodes
-# this will add all nodes
-if [[ $_ == $0 ]]; then
+
+
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+
+if [[ $sourced == 1 ]]; then
+    echo "You can now use any of these functions:"
+    echo ""
+    typeset -F |  cut -d" " -f 3
+else
     set -eu
+    cd /root
     iptables -P FORWARD ACCEPT
     swapoff -a
-    main $@
+    main
     cd /root
-else
-    echo "Use any of the functions here in your shell"
 fi
 
 # vi: expandtab ts=4 sw=4 ai
