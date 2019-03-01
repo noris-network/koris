@@ -23,11 +23,10 @@
 #  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
 #  export MASTERS_IP=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
 #
+#  # for bare metal or generic images in VMWARE set
+#  export BOOTSTRAP_NODES=1
+#  # this will install all dependencies on each node
 ###
-
-
-set -e
-
 
 # load koris environment file if available
 if [ -f /etc/kubernetes/koris.env ]; then
@@ -127,7 +126,7 @@ done
 # distributes configuration file and certificates to a master node
 function copy_keys() {
     host=$1
-    USER=ubuntu # customizable
+    USER=${SSHUSER:-ubuntu}
 
     echo -n "waiting for ssh on $1"
     until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -168,7 +167,7 @@ function copy_keys() {
 # distributes configuration files and certificates
 # use this only when all hosts are already up and running
 function distribute_keys() {
-   USER=ubuntu # customizable
+   USER=${SSHUSER:-ubuntu}
 
    for (( i=1; i<${#MASTERS_IPS[@]}; i++ )); do
        echo "distributing keys to ${MASTERS_IPS[$i]}";
@@ -249,13 +248,17 @@ function bootstrap_first_master() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
-   USER=ubuntu # customizable
+    USER=${SSHUSER:-ubuntu}
 
    echo "*********** Bootstrapping $1 ******************"
    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
        sleep 2
    done
+
+   if [ -n ${BOOTSTRAP_NODES} ]; then
+        bootstrap_deps_node $1
+   fi
 
    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
@@ -378,6 +381,19 @@ EOF
 sysctl --system
 }
 
+function bootstrap_deps_node() {
+    ssh ${1} "KUBE_VERSION=${KUBE_VERSION}; $(
+    typeset -f get_docker_ubuntu;
+    typeset -f get_docker_centos;
+    typeset -f get_kubeadm_ubuntu;
+    typeset -f get_kubeadm_centos;
+    typeset -f get_docker;
+    typeset -f get_kubeadm;
+    typeset -f fetch_all);
+    sudo iptables -P FORWARD ACCEPT;
+    sudo swapoff -a;
+    sudo fetch_all;"
+}
 
 # enforce docker version
 function get_docker_ubuntu() {
@@ -449,23 +465,35 @@ function main() {
         echo "done bootstrapping master ${MASTERS[$i]}";
     done
 
+    if [ $1 == "--join-all-nodes" ]; then
+        HOSTS=${K8SNODES:?"You must define K8SNODES"}
+        join_all_hosts --install-deps
+    fi
+
     echo "the installation has finished."
 }
 
 
-# keep this function here, although we don't use it really, it's usefull for
-# building bare metal cluster or vSphere clusters
+# when building bare metal cluster or vSphere clusters this is used to
+# install dependencies on each host and join the host to the cluster
 join_all_hosts() {
-   export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | \
-       openssl dgst -sha256 -hex | sed 's/^.* //')
-   export TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
-
+    if [ -z ${DISCOVERY_HASH} ]; then
+        export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
+                                openssl rsa -pubin -outform der 2>/dev/null | \
+                                openssl dgst -sha256 -hex | sed 's/^.* //')
+   fi
+   if [ -z ${BOOTSTRAP_TOKEN} ]; then
+        export TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
+   fi
    for K in "${!HOSTS[@]}"; do
+       echo "***** ${K} ******"
+       if [ $1 == "--install-deps" || -n ${BOOTSTRAP_NODES} ]; then
+            bootstrap_deps_node ${K}
+       fi
        ssh ${K} sudo kubeadm reset -f
-       ssh ${K} sudo kubeadm join --token $TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
+       ssh ${K} sudo kubeadm join --token $BOOTSTRAP_TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
    done
 }
-
 
 
 # keep this function here, although we don't use it really, it's usefull for
@@ -476,20 +504,15 @@ function fetch_all() {
 }
 
 
-function install_deps() {
-    for K in "${ALLHOSTS[@]}"; do
-        echo "***** ${K} ******"
-        ssh ${K} "KUBE_VERSION=${KUBE_VERSION}; $(typeset -f fetch_all);  sudo fetch_all"
-    done
-}
-
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
-
+# on bare metal clusters and VMWare you should run this script with --join-all-nodes
+# this will add all nodes
 if [[ $_ == $0 ]]; then
+    set -eu
     iptables -P FORWARD ACCEPT
     swapoff -a
-    main
+    main $@
     cd /root
 else
     echo "Use any of the functions here in your shell"
