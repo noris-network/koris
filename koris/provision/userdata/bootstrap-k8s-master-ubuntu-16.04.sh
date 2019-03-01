@@ -47,7 +47,7 @@ export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
 export SSH_USER=${SSH_USER:-"ubuntu"}
-
+export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -267,7 +267,7 @@ function add_master {
        echo "waiting for ssh on $1"
        sleep 2
    done
-   if [ -n ${BOOTSTRAP_NODES} ]; then
+   if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
         bootstrap_deps_node $1
    fi
 
