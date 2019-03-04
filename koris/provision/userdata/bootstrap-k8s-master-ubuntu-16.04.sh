@@ -56,6 +56,7 @@ SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTime
 # create a proper kubeadm config file for each master.
 # the configuration files are ordered and contain the correct information
 # of each master and the rest of the etcd cluster
+# WORK: let apiserver know where CA lies
 function create_config_files() {
     cat <<TMPL > init.tmpl
 apiVersion: kubeadm.k8s.io/v1alpha2
@@ -95,9 +96,6 @@ bootstrapTokens:
   usages:
   - signing
   - authentication
-apiServerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
 controllerManagerExtraArgs:
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
@@ -115,22 +113,37 @@ controllerManagerExtraVolumes:
   mountPath: "/etc/kubernetes/cloud.config"
   writable: false
   pathType: File
+apiServerExtraArgs:
+  cloud-provider: openstack
+  cloud-config: /etc/kubernetes/cloud.config
 TMPL
 
-for i in ${!MASTERS[@]}; do
-	echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
-	export HOST_IP="${MASTERS_IPS[$i]}"
-	export HOST_NAME="${MASTERS[$i]}"
-  if [ -z "$CURRENT_CLUSTER" ]; then
-    CLUSTER_STATE="new"
-    CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
-  else
-    CLUSTER_STATE="existing"
-    CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
-  fi
+# If Dex is to be deployed, we need to start the apiserver with extra args.
+if [[ -n ${OIDC_CLIENT_ID+x} ]]; then
+cat <<TMPL > dex.tmpl
+  oidc-issuer-url: "${OIDC_ISSUER_URL}"
+  oidc-client-id: ${OIDC_CLIENT_ID}
+  oidc-ca-file: ${OIDC_CA_FILE}
+  oidc-username-claim: ${OIDC_USERNAME_CLAIM}
+  oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
+TMPL
+    cat dex.tmpl >> init.tmpl
+fi
 
-	envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
-done
+    for i in ${!MASTERS[@]}; do
+        echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
+        export HOST_IP="${MASTERS_IPS[$i]}"
+        export HOST_NAME="${MASTERS[$i]}"
+    if [ -z "$CURRENT_CLUSTER" ]; then
+        CLUSTER_STATE="new"
+        CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
+    else
+        CLUSTER_STATE="existing"
+        CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
+    fi
+
+        envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
+    done
 
 }
 

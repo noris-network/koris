@@ -1,0 +1,48 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name:  dex-example-app
+  labels:
+    app: dex-example-app
+spec:
+  selector:
+    app:  dex-example-app
+  type:  NodePort
+  ports:
+  # Change your ports accordingly
+  - name: callback
+    port:  5555
+    nodePort: 32555
+    targetPort:  http
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: dex-example-app
+  name: dex-example-app
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: dex-example-app
+    spec:
+      containers:
+      - name: dex-example-app
+        image: obitech/dex-example-app
+        # Configure your issuer and redirect accordingly
+        args: ["--issuer", "https://127.0.0.1:32000",
+          "--issuer-root-ca", "/etc/dex/tls/dex-ca.pem",
+          "--listen", "http://0.0.0.0:5555",
+          "--redirect-uri", "http://127.0.0.1:5555/callback"]
+        ports:
+        - name: http
+          containerPort: 5555
+        volumeMounts:
+        - name: root-ca
+          mountPath: /etc/dex/tls
+      volumes:
+      - name: root-ca
+        secret:
+          secretName: dex.root-ca

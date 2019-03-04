@@ -21,8 +21,7 @@ LOGGER = get_logger(__name__)
 
 
 def create_key(size=2048, public_exponent=65537):
-    """
-    create an RSA private key
+    """Create an RSA private key
 
     Args:
         size (int) - the key byte size
@@ -39,20 +38,27 @@ def create_key(size=2048, public_exponent=65537):
     return key
 
 
+# pylint: disable=dangerous-default-value
 def create_ca(private_key, public_key, country,
-              state_province, locality, orga, unit, name):
+              state_province, locality, orga, unit, name,
+              key_usage=[True, False, True, False, False, True,
+                         False, False, False]):
     """
     create a CA signed with private_key
 
     Args:
-        private_key (inst) - private key instance to sign the CA
-        public_key (inst) - public key for the CSR
-        country (str) - the country for the CSR
-        state_province (str) - the state or province for the CSR
-        locality (str) - the locality for the CSR
-        orga (str) - the organization for the CSR
-        unit (str) - the unit for the CSR
-        name (str) - the name for the CSR
+        private_key (inst): private key instance to sign the CA
+        public_key (inst): public key for the CSR
+        country (str): the country for the CSR
+        state_province (str): the state or province for the CSR
+        locality (str): the locality for the CSR
+        orga (str): the organization for the CSR
+        unit (str): the unit for the CSR
+        name (str): the name for the CSR
+        key_usage (list): Key Usage parameters. Indices stand for:
+            [digital_signature, content_commitment, key_encipherment,
+            data_encipherment, key_agreement, key_cert_sign, crl_sign,
+            encipher_only, decipher_only]
 
     Return:
         ssl certificate object
@@ -95,8 +101,7 @@ def create_ca(private_key, public_key, country,
         datetime.datetime.utcnow() + datetime.timedelta(days=1800))
 
     cert = cert.add_extension(
-        x509.KeyUsage(True, False, True, False, False, True,
-                      False, False, False),
+        x509.KeyUsage(*key_usage),
         critical=True)
 
     cert = cert.add_extension(x509.BasicConstraints(True, None), critical=True)
@@ -114,19 +119,26 @@ def create_ca(private_key, public_key, country,
 
 
 def create_certificate(ca_bundle, public_key, country,
-                       state_province, locality, orga, unit, name, hosts, ips):
+                       state_province, locality, orga, unit, name,
+                       hosts=None, ips=None,
+                       key_usage=[True, False, True, False, False,
+                                  False, False, False, False]):
     """
     create a certificate signed with CA private_key
 
     Args:
-        ca_bundle (inst) - private key instance to sign the CA
-        public_key (inst) - public key for the CSR
-        country (str) - the country for the CSR
-        state_province (str) - the state or province for the CSR
-        locality (str) - the locality for the CSR
-        orga (str) - the organization for the CSR
-        unit (str) - the unit for the CSR
-        name (str) - the name for the CSR
+        ca_bundle (inst): private key instance to sign the CA
+        public_key (inst): public key for the CSR
+        country (str): the country for the CSR
+        state_province (str): the state or province for the CSR
+        locality (str): the locality for the CSR
+        orga (str): the organization for the CSR
+        unit (str): the unit for the CSR
+        name (str): the name for the CSR
+        key_usage (list): Key Usage parameters. Indices stand for:
+            [digital_signature, content_commitment, key_encipherment,
+            data_encipherment, key_agreement, key_cert_sign, crl_sign,
+            encipher_only, decipher_only]
 
     Return:
         ssl certificate object
@@ -179,9 +191,7 @@ def create_certificate(ca_bundle, public_key, country,
                          for ip in ips)
 
     cert = cert.add_extension(
-        x509.KeyUsage(
-            True, False, True, False, False, False, False, False, False
-        ),
+        x509.KeyUsage(*key_usage),
         critical=True
     )
 
@@ -286,7 +296,9 @@ class CertBundle:
 
     @classmethod
     def create_signed(cls, ca_bundle, country, state, locality,
-                      orga, unit, name, hosts, ips):
+                      orga, unit, name, hosts, ips,
+                      key_usage=[True, False, True, False, False,
+                                 False, False, False, False]):
 
         """
         create a sign certificate
@@ -301,7 +313,8 @@ class CertBundle:
                                   unit,
                                   name,
                                   hosts,
-                                  ips)
+                                  ips,
+                                  key_usage)
 
         return cls(key, cert)
 

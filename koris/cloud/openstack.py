@@ -30,7 +30,8 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from koris.cloud import OpenStackAPI
-from koris.util.hue import (red, info, yellow)  # pylint: disable=no-name-in-module
+from koris.util.hue import (red, info, yellow,  # pylint: disable=no-name-in-module
+                            lightcyan as cyan)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
 
@@ -193,7 +194,6 @@ class Instance:  # pylint: disable=too-many-arguments
 
 
 class LoadBalancer:  # pragma: no coverage
-
     """
     A class to create a LoadBalancer in OpenStack.
 
@@ -228,22 +228,18 @@ class LoadBalancer:  # pragma: no coverage
             master_ips (list): A list of the master IP addresses
 
         """
+
         if not self._data['listeners']:
-            LOGGER.info("Adding listener ...")
-            listener = self._add_listener(client)
+            listener = self.add_listener(client)
             listener_id = listener["listener"]['id']
-            LOGGER.info("Added listener ...")
         else:
-            LOGGER.info("Reusing listener ...")
+            LOGGER.info("Reusing listener %s", self._data['listeners'][0]['id'])
             listener_id = self._data['listeners'][0]['id']
 
         if not self._data['pools']:
-            LOGGER.info("Adding pool ...")
-            pool = self._add_pool(client, listener_id)
-            LOGGER.info("Added pool ...")
+            pool = self.add_pool(client, listener_id)
         else:
-            LOGGER.info("Reusing pool ...")
-            LOGGER.info("Removing all members ...")
+            LOGGER.info("Reusing pool, removing all members ...")
             pool = client.list_lbaas_pools(id=self._data['pools'][0]['id'])
             pool = pool['pools'][0]
             for member in pool['members']:
@@ -254,10 +250,9 @@ class LoadBalancer:  # pragma: no coverage
         LOGGER.info("Adding member ...")
         self.add_member(client, pool['id'], master_ips[0])
         if pool.get('healthmonitor_id'):
-            LOGGER.info("Reusing existing health monitor ...")
+            LOGGER.info("Reusing existing health monitor")
         else:
-            self._add_health_monitor(client, pool['id'])
-            LOGGER.info("Added health monitor ...")
+            self.add_health_monitor(client, pool['id'])
 
     def get(self, client=None):
         """
@@ -280,15 +275,14 @@ class LoadBalancer:  # pragma: no coverage
         return lb
 
     def get_or_create(self, client, provider='octavia'):
-        """
-        find if a load balancer exists, if not create it
-        """
+        """Retrieve, else create  a LoadBalancer"""
+
         lb = self.get(client)
 
         if not lb or 'DELETE' in lb['provisioning_status']:
             lb, fip_addr = self.create(client, provider=provider)
         else:
-            LOGGER.info("Reusing an existing loadbalancer")
+            LOGGER.info("Reusing existing LoadBalancer ...")
             self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(client, lb)
             LOGGER.info("Loadbalancer IP: %s", fip_addr)
@@ -301,9 +295,8 @@ class LoadBalancer:  # pragma: no coverage
 
     @property
     def ip_address(self):
-        """
-        return the loadbalancer's IP address or it's Floating IP address
-        """
+        """Return the LoadBalancer's IP or Floating IP address"""
+
         if not self._data:
             self.get(self.client)
 
@@ -335,13 +328,12 @@ class LoadBalancer:  # pragma: no coverage
                 'floatingips'][0]['floating_ip_address']
             fip_addr = self._existing_floating_ip
         else:
-            fip_addr = self._associate_floating_ip(
+            fip_addr = self.associate_floating_ip(
                 client, lb)
         return fip_addr
 
     def create(self, client, provider='octavia'):
-        """
-        provision a minimally configured LoadBalancer in OpenStack
+        """Provision a minimally configured LoadBalancer in OpenStack
 
         Args:
             client (neutronclient.v2_0.client.Client)
@@ -370,18 +362,17 @@ class LoadBalancer:  # pragma: no coverage
         self._id = lb['loadbalancer']['id']
         self._subnet_id = lb['loadbalancer']['vip_subnet_id']
         self._data = lb['loadbalancer']
-        LOGGER.info("created loadbalancer ...")
+        LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
 
         fip_addr = None
         if self.floatingip:
-            fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
+            fip_addr = self.associate_floating_ip(client, lb['loadbalancer'])
         return lb['loadbalancer'], fip_addr
 
     @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
            tries=10, logger=LOGGER.debug)
     def delete(self, client=None):
-        """
-        Delete the cluster API loadbalancer
+        """Delete the cluster API loadbalancer
 
         Deletion order of LoadBalancer:
             - remove pool (LB is pending update)
@@ -404,15 +395,13 @@ class LoadBalancer:  # pragma: no coverage
         else:
             lb = lb[0]
             self._id = lb['id']
-
-            if lb['pools']:
-                self._del_pool(client)
-            if lb['listeners']:
-                self._del_listener(client)
-
+            self._del_pool(client, delete_all=True)
+            self._del_listener(client, delete_all=True)
             self._del_loadbalancer(client)
 
-    def _associate_floating_ip(self, client, loadbalancer):
+    def associate_floating_ip(self, client, loadbalancer):
+        """Associates a Floating IP with the LoadBalancer"""
+
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
             valid_ip = re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # noqa
@@ -452,53 +441,78 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=20, delay=30,
            backoff=1, logger=LOGGER.debug)
-    def _add_listener(self, client):
+    def add_listener(self, client, name=None, protocol="HTTPS",
+                     protocol_port=6443):
+        """Adds a custom listener to the LoadBalancer"""
+
+        if name is None:
+            name = self.name
         listener = client.create_listener({'listener':
                                            {"loadbalancer_id":
                                             self._id,
-                                            "protocol": "HTTPS",
-                                            "protocol_port": 6443,
+                                            "protocol": protocol,
+                                            "protocol_port": protocol_port,
                                             'admin_state_up': True,
-                                            'name': '%s-listener' % self.name
+                                            'name': name
                                             }})
+
+        LOGGER.info("Added %s listener '%s' (%s) on port %i to LoadBalancer %s", protocol,
+                    name, listener['listener']['id'], protocol_port, self._id)
         return listener
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=30, delay=5, backoff=1,
            logger=LOGGER.debug)
-    def _add_pool(self, client, listener_id):
+    def add_pool(self, client, listener_id, lb_algorithm="SOURCE_IP", protocol="HTTPS",
+                 name=None):
+        """Adds a pool to a listener"""
+
+        if name is None:
+            name = f"{self.name}-pool"
+
         pool = client.create_lbaas_pool(
-            {"pool": {"lb_algorithm": "SOURCE_IP",
+            {"pool": {"lb_algorithm": lb_algorithm,
                       "listener_id": listener_id,
                       "loadbalancer_id": self._id,
-                      "protocol": "HTTPS",
-                      "name": "%s-pool" % self.name},
+                      "protocol": protocol,
+                      "name": name},
              })
         self.pool = pool['pool']
 
+        LOGGER.info("Added %s pool '%s' (%s) with %s to listener %s", protocol, name,
+                    pool['pool']['id'], lb_algorithm, listener_id)
         return pool['pool']
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=10,
            backoff=0.8, logger=LOGGER.debug)
-    def _add_health_monitor(self, client, pool_id):
-        client.create_lbaas_healthmonitor(
+    def add_health_monitor(self, client, pool_id, name=None):
+        """Adds a Healthmonitor to a Pool"""
+
+        if name is None:
+            name = f"{self.name}-health"
+
+        hm = client.create_lbaas_healthmonitor(
             {'healthmonitor':
              {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
               "pool_id": pool_id,
-              "name": "%s-health" % self.name}})
+              "name": name}})
+        LOGGER.info("Added health monitor '%s' (%s) to pool %s", name,
+                    hm['healthmonitor']['id'], pool_id)
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=5,
-           backoff=1, logger=LOGGER.debug)
-    def add_member(self, client, pool_id, ip_addr):
+    @retry(exceptions=(StateInvalidClient, NeutronConflict, BadRequest), tries=24,
+           delay=5, backoff=1, logger=LOGGER.debug)
+    def add_member(self, client, pool_id, ip_addr, protocol_port=6443):
         """
         add listener to a loadbalancers pool.
         """
-        client.create_lbaas_member(pool_id,
-                                   {'member':
-                                    {'subnet_id': self._subnet_id,
-                                     'protocol_port': 6443,
-                                     'address': ip_addr,
-                                     }})
+        member = client.create_lbaas_member(pool_id,
+                                            {'member':
+                                             {'subnet_id': self._subnet_id,
+                                              'protocol_port': protocol_port,
+                                              'address': ip_addr,
+                                              }})
         self.members.append(ip_addr)
+        LOGGER.info("Added member '%s' (%s) to pool %s on port %i", ip_addr,
+                    member['member']['id'], pool_id, protocol_port)
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)
@@ -509,41 +523,91 @@ class LoadBalancer:  # pragma: no coverage
         try:
             client.delete_lbaas_healthmonitor(id_)
         except NotFound:
-            LOGGER.debug("Healthmonitor not found ...")
-        LOGGER.info("deleted healthmonitor ...")
+            LOGGER.debug("Health monitor not found ...")
+        LOGGER.info("Deleted health monitor %s", id_)
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1.05,
            logger=LOGGER.debug)
-    def _del_pool(self, client):
-        # if pool has health monitor delete it first
-        pools = list(client.list_lbaas_pools(retrieve_all=False,
-                                             name="%s-pool" % self.name))
+    def _del_pool(self, client, name=None, delete_all=False):
+        """Deletes a single pool by name, or all pools"""
+
+        pools = None
         lb_id = {'id': self._id}
-        pools = pools[0]['pools']
+
+        if delete_all:
+            # Delete all pools from all listeners
+            pools = client.list_lbaas_pools(retrieve_all=True)
+            if pools is None or 'pools' not in pools:
+                LOGGER.debug("No pools found")
+                return
+            pools = pools['pools']
+        else:
+            # Delete a specific pool by name
+            if name is None:
+                name = f"{self.name}-pool"
+            try:
+                pools = list(client.list_lbaas_pools(retrieve_all=False,
+                                                     name=name))
+            except NotFound:
+                LOGGER.debug("Pool '%s' not found", name)
+
+            pools = pools[0]['pools']
+
         for pool in pools:
+            # Check if pool belongs to our LB
             if lb_id in pool['loadbalancers']:
+                pool_id = pool['id']
+
+                # Delete Healthmonitors
                 if 'healthmonitor_id' in pool:
                     self._del_health_monitor(client, pool['healthmonitor_id'])
-                try:
-                    client.delete_lbaas_pool(pool['id'])
-                except NotFound:
-                    LOGGER.debug("Pool %s not found", pool['id'])
-                LOGGER.info("deleted pool ...")
+
+                # Delete all members
+                members = client.list_lbaas_members(pool_id)
+                if 'members' in members:
+                    for member in members['members']:
+                        member_id = member['id']
+                        client.delete_lbaas_member(member_id, pool_id)
+
+                # Delete pool
+                client.delete_lbaas_pool(pool_id)
+                LOGGER.info("Deleted pool '%s' (%s)", name, pool_id)
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1.05,
            logger=LOGGER.debug)
-    def _del_listener(self, client):
+    def _del_listener(self, client, name=None, delete_all=False):
+        """Delete a single listener by name, or all listeners"""
         lb_id = {'id': self._id}
-        listeners = list(client.list_listeners(retrieve_all=False,
-                                               name="%s-listener" % self.name))
-        listeners = listeners[0]['listeners']
-        for item in listeners:
+        to_delete = None
+        listeners = None
+
+        if delete_all:
+            # Delete all listeners associated with this LB
+            listeners = client.list_listeners(retrieve_all=True)
+            if listeners and 'listeners' in listeners:
+                to_delete = listeners['listeners']
+            else:
+                LOGGER.debug("No listeners found.")
+                return
+        else:
+            # Delete listener by name
+            if name is None:
+                name = f"{self.name}-listener"
+            try:
+                listeners = list(client.list_listeners(retrieve_all=False,
+                                                       name=name))
+            except NotFound:
+                LOGGER.debug("Listener %s not found", name)
+            to_delete = listeners[0]['listeners']
+
+        for item in to_delete:
             if lb_id in item['loadbalancers']:
                 try:
                     client.delete_listener(item['id'])
                 except NotFound:
                     LOGGER.debug("Listener %s not found", item['id'])
-                LOGGER.info("Deleted listener...")
+                LOGGER.info("Deleted listener '%s' (%s)", item['name'],
+                            item['id'])
 
     @retry(exceptions=(NeutronConflict, StateInvalidClient, BadRequest),
            tries=25, delay=15, backoff=0.8, logger=LOGGER.debug)
@@ -551,8 +615,8 @@ class LoadBalancer:  # pragma: no coverage
         try:
             client.delete_loadbalancer(self._id)
         except NotFound:
-            LOGGER.debug("Could not find loadbalancer %s", self._id)
-        LOGGER.info("Deleted loadbalancer...")
+            LOGGER.debug("Could not find  LoadBalancer %s", self._id)
+        LOGGER.info("Deleted LoadBalancer '%s' (%s)", self.name, self._id)
 
     @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10,
            logger=LOGGER.debug)
@@ -560,7 +624,8 @@ class LoadBalancer:  # pragma: no coverage
         try:
             client.delete_lbaas_member(member_id, pool_id)
         except NotFound:
-            pass
+            LOGGER.debug("Member %s not found in pool %s", member_id, pool_id)
+        LOGGER.debug("Deleted member %s from pool %s", member_id, pool_id)
 
 
 class SecurityGroup:
@@ -633,7 +698,7 @@ class SecurityGroup:
         else:
             cidr = self.client.list_subnets()['subnets'][-1]['cidr']
 
-        LOGGER.debug("configuring security group ...")
+        LOGGER.debug(info(cyan("Configuring security group ...")))
         # allow communication to the API server from within the cluster
         # on port 80
         self.add_sec_rule(direction='ingress', protocol='TCP',
