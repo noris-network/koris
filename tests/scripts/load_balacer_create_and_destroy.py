@@ -2,12 +2,14 @@
 mini integration test for creation and deletion of load balancer
 in OpenStack
 """
-
+# pylint: disable=invalid-name
 import asyncio
 import os
 
 from koris.cloud.builder import get_clients
 from koris.cloud.openstack import LoadBalancer
+from koris.deploy.dex import create_dex, create_oauth2
+
 _, CLIENT, _ = get_clients()
 
 lb_name = os.getenv('LOADBALANCER_NAME', 'test')
@@ -24,13 +26,19 @@ def create_and_configure():
     we postpone the configuration to a later stage.
     """
     loop = asyncio.get_event_loop()
-    lb, _ = LB.create(CLIENT)
+    LB.create(CLIENT)
 
     master_ips = ['192.168.0.103', '192.168.0.104', '192.168.0.105']
+    node_ips = ['192.168.0.120', '192.168.0.121']
 
     configure_lb_task = loop.create_task(LB.configure(CLIENT, master_ips))
 
-    tasks = [configure_lb_task]
+    #  WORK: Dex testing
+    print("Configuring the LoadBalancer for Dex ...")
+    dex_task = loop.create_task(create_dex(CLIENT, LB, members=master_ips))
+    oauth_task = loop.create_task(create_oauth2(CLIENT, LB, members=node_ips))
+
+    tasks = [configure_lb_task, dex_task, oauth_task]
 
     loop.run_until_complete(asyncio.gather(*tasks))
 
