@@ -543,7 +543,8 @@ class LoadBalancer:  # pragma: no coverage
             pools = pools['pools']
         else:
             # Delete a specific pool by name
-            if name is None: name = f"{self.name}-pool"
+            if name is None:
+                name = f"{self.name}-pool"
             try:
                 pools = list(client.list_lbaas_pools(retrieve_all=False,
                                                      name=name))
@@ -590,7 +591,8 @@ class LoadBalancer:  # pragma: no coverage
                 return
         else:
             # Delete listener by name
-            if name is None: name = f"{self.name}-listener"
+            if name is None:
+                name = f"{self.name}-listener"
             try:
                 listeners = list(client.list_listeners(retrieve_all=False,
                                                        name=name))

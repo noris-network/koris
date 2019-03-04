@@ -378,7 +378,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         if self.deploy_dex:
             LOGGER.info("Setting up Dex SSL infrastructure ...")
-            if lb_dns == lb_ip:
+            # Dex Issuer will be set to the Floating IP, or LoadBalancer DNS Name
+            if lb_dns == lb_ip or lb_dns is None:
                 issuer = lb_ip
             else:
                 issuer = lb_dns

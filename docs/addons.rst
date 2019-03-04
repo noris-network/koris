@@ -46,8 +46,8 @@ First create your koris config under ``configs/test-dex.yml``:
     user_data: 'cloud-init-parts/generic'
     image: "your-image"
     loadbalancer:
-    # For Dex you MUST give a Floating IP. Below is used as an example,
-    # substitute with your Floating IP.
+    # Dex needs an IP or DNS name for its issuer, if you set this option to
+    # 'false', one will be assigned from the pool
       floatingip: 10.36.60.232 
     certificates:
       expriry: 8760h
@@ -126,41 +126,6 @@ Afterwards adjust the Dex deployment in ``addons/dex/00-dex.yaml``:
 
 .. code-block:: yaml
 
-    apiVersion: extensions/v1beta1
-    kind: Deployment
-    metadata:
-      labels:
-        app: dex
-      name: dex
-    spec:
-        # ...
-        spec:
-          serviceAccountName: dex
-          containers:
-            # ...
-            env:
-            - name: GITLAB_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: gitlab-client
-                  key: client-id
-            - name: GITLAB_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: gitlab-client
-                  key: client-secret
-            volumes:
-            - name: config
-              configMap:
-                name: dex
-                items:
-                - key: config.yaml
-                  path: config.yaml
-            - name: tls
-              secret:
-                # The secret that was just created
-                secretName: dex.tls
-    ---
     kind: ConfigMap
     apiVersion: v1
     metadata:
@@ -184,8 +149,8 @@ Afterwards adjust the Dex deployment in ``addons/dex/00-dex.yaml``:
             config:
               baseURL: https://gitlab.com
               # Enter your app-id and app-secret
-              clientID: <app-id>
-              clientSecret: <app-secret>
+              clientID: $GITLAB_CLIENT_ID
+              clientSecret: $GITLAB_CLIENT_SECRET
               # Enter your IP here
               redirectURI: https://10.36.60.232:32000/callback
         oauth2:
