@@ -8,15 +8,14 @@ node_flavor: 'ECS.C1.4-8'
 
 # Specify the name of the network and subnet with CIDR range. If it doesn't
 # exist, koris will create it for you.
-private_net:
-  name: 'korispipeline-office-net'
-  subnet:
-    name: 'sub-korispipeline-office-net'
-    cidr: '10.36.18.0/27'
+private_net: 
+  name: 'k8s-nude'
+  subnet: 
+    name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
+    cidr: '10.32.192.0/24'
     #  This is optional - if no router name is given a new one will be created
     router:
-      name: 'router-name'
-      network: 'ext02'
+      name: 'NORIS-K8S-NUDE-OS-MGMT-ROUTER'
 cluster-name: 'change-me'
 availibility-zones:
  - de-nbg6-1b

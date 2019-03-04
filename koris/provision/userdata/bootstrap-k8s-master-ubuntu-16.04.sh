@@ -127,9 +127,7 @@ cat <<TMPL > dex.tmpl
   oidc-username-claim: ${OIDC_USERNAME_CLAIM}
   oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
 TMPL
-
-cat dex.tmpl >> init.tmpl
-
+    cat dex.tmpl >> init.tmpl
 fi
 
     for i in ${!MASTERS[@]}; do

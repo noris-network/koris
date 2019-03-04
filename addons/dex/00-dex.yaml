@@ -73,8 +73,8 @@ data:
     #     name: Gitlab
     #     config:
     #       baseURL: https://gitlab.com
-    #       clientID: app-id
-    #       clientSecret: app-secret
+    #       clientID: $GITLAB_CLIENT_ID
+    #       clientSecret: $GITLAB_CLIENT_SECRET
     #       redirectURI: https://127.0.0.1:32000/callback
     oauth2:
       skipApprovalScreen: true
