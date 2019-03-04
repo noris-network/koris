@@ -5,19 +5,17 @@
 # https://www.noris.cloud/services/compute/openstack-nova/?lang=en#details
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-# If your project has multiple networks you MUST specify the subnetwork
-# don't change this unless you know what you are doing.
-# per default koris will create a network for your cluster and route
-# this network to ext02 network in openstack if this is undesired change this
-#private_net:
-# name: 'korispipeline-office-net'
-# subnet:
-#  name: 'sub-korispipeline-office-net'
-#  cidr: '10.36.18.0/27'
-#  This is optional - if no router name is given a new one will be created
-#  router:
-#   name: 'router-name'
-#   network: 'ext02'
+
+# Specify the name of the network and subnet with CIDR range. If it doesn't
+# exist, koris will create it for you.
+private_net: 
+  name: 'k8s-nude'
+  subnet: 
+    name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
+    cidr: '10.32.192.0/24'
+    #  This is optional - if no router name is given a new one will be created
+    router:
+      name: 'NORIS-K8S-NUDE-OS-MGMT-ROUTER'
 cluster-name: 'change-me'
 availibility-zones:
  - de-nbg6-1b
@@ -69,3 +67,29 @@ pod_subnet: "10.233.0.0/16"
 # Certificate expiry
 certificates:
   expriry: 8760h
+
+# Specify addons that should be deployed with koris
+# addons:
+#   # Dex is an OAuth2 / OpenID Connect application used to
+#   # authenticate a user against a Kubernetes cluster.
+#   # To use Dex, a Floating IP or DNS name is required, which will be
+#   # used as the Issuer for the Dex CA.
+#   # When the below block is set, the LoadBalancer will be configured properly,
+#   # a CA infrastrastructure is created and the apiserver will be launched with the
+#   # necessary flags. To deploy the rest, please consult the documentation.
+#   # For more information about Dex see: https://github.com/dexidp/dex
+#   dex:
+#     username_claim: email     # optional
+#     groups_claim: groups      # optional
+#     # LB-Listener and K8s-Service ports for Dex
+#     ports:
+#       listener: 32000
+#       service: 32000
+#     # Configuration parameters for an OAuth2 application that is deployed into
+#     # the cluster
+#     client:
+#       id: example-app
+#       # LB-Listener and K8s-Service ports for the OAuth2 application
+#       ports:
+#         listener: 5555
+#         service: 32555

@@ -1,7 +1,6 @@
 SHELL := /bin/bash
 .PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
-	clean-lb-after-integration-test \
-	clean-lb
+	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
 
@@ -356,7 +355,6 @@ install-git-hooks:
 
 build-exec: ## build a single file executable of koris
 	pyinstaller koris.spec
-
 
 build-exec-in-docker:
 	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)

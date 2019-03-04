@@ -4,7 +4,7 @@ Hue
 
 fancy colors
 
-# magic! taken from https://github.com/UltimateHackers/hue/blob/master/hue.py
+# magic! taken from https://github.com/s0md3v/hue
 """
 # flake8: noqa
 

@@ -7,6 +7,8 @@ Installation
 
 Follow the :doc:`installation` instructions to make sure koris is installed properly.
 
+.. _prepare-openstack:
+
 Prepare OpenStack
 ~~~~~~~~~~~~~~~~~
 
@@ -76,6 +78,9 @@ Deploy your cluster
    .. code:: shell
    
       $ koris apply example-config.yml
+   
+   .. note::
+        For installing Addons with your initial koris deloyment, please refer to :doc:`addons`.
 
 5. A ``kubectl`` configuration file with the name ``<cluster-name>-admin.conf`` is automatically created
    into your project root. Give you used the default names used in this tutorial it should be 
