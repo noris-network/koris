@@ -79,7 +79,7 @@ data:
     oauth2:
       skipApprovalScreen: true
     
-    # If wished, add your static clients
+    # If desired, add your static clients
     # staticClients:
     # - id: example-app
     #   redirectURIs:
@@ -88,7 +88,7 @@ data:
     #   secret: ZXhhbXBsZS1hcHAtc2VjcmV0
 
     enablePasswordDB: true
-    # If wished, add static passwords
+    # If desired, add static passwords
     # staticPasswords:
     # - email: "admin@example.com"
     #   # bcrypt hash of the string "password"
