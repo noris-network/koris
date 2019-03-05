@@ -365,7 +365,7 @@ class DexSSL:
     def __init__(self,
                  cert_dir: str,
                  issuer: str,
-                 k8s_ca_path="/etc/kubernetes/pki/oidc-ca.pem"):
+                 k8s_ca_path="/etc/ssl/certs/oidc-ca.pem"):
 
         self.cert_dir = cert_dir
         self.k8s_ca_path = k8s_ca_path
