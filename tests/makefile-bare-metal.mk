@@ -10,6 +10,7 @@ SHELL=/bin/bash
 CLUSTERNAME ?= bare-metal
 USER ?= centos
 
+
 create-volumes-masters:
 	@echo "creating volumes for masters"
 	for host in {1..3}; do \
@@ -20,10 +21,12 @@ create-volumes-nodes:
 	@openstack volume create --size 25 --bootable --availability-zone $(AZ) --type PI-Storage-Class --image $(IMAGE) $(CLUSTERNAME)-root-node-1
 
 
-create-masters: create-volumes-masters
+create-masters: #create-volumes-masters
 	for host in {1..3}; do \
 	openstack server create --network $(NETWORK) --flavor $(FLAVOR) --availability-zone $(AZ) --key-name $(KEY) \
-		--security-group $(SECGROUP) --volume bare-metal-root-master-$${host} bare-metal-master-$${host}; \
+		--security-group $(SECGROUP) --volume $(CLUSTERNAME)-root-master-$${host} \
+		--user-data $(dir $(lastword $(MAKEFILE_LIST)))scripts/fix-ssh-centos.sh \
+		$(CLUSTERNAME)-master-$${host}; \
 	done
 
 create-nodes: create-volumes-nodes
