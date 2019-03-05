@@ -48,6 +48,7 @@ export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
 export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
+export OPENSTACK=${OPENSTACK:-1}
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -87,7 +88,7 @@ networking:
 #apiServerExtraArgs:
 #  allow-privileged: "true"
 #  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
-  #feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
+#  feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -97,10 +98,14 @@ bootstrapTokens:
   - signing
   - authentication
 controllerManagerExtraArgs:
-  cloud-provider: "openstack"
-  cloud-config: /etc/kubernetes/cloud.config
   allocate-node-cidrs: "true"
   cluster-cidr: ${POD_SUBNET}
+TMPL
+# if On baremetal we don't need all OpenStack cloud provider flags
+if [[ OPENSTACK -eq 1 ]]; then
+cat <<TMPL > init.tmpl
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
 - name: "cloud-config"
   hostPath: "/etc/kubernetes/cloud.config"
@@ -117,6 +122,7 @@ apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 TMPL
+fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
 if [[ -n ${OIDC_CLIENT_ID+x} ]]; then
