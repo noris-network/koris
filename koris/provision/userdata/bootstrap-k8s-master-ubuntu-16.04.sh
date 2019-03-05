@@ -198,45 +198,6 @@ function copy_keys() {
 }
 
 
-# distributes configuration files and certificates
-# use this only when all hosts are already up and running
-function distribute_keys() {
-   USER=${SSHUSER:-ubuntu}
-
-   for (( i=1; i<${#MASTERS_IPS[@]}; i++ )); do
-       echo "distributing keys to ${MASTERS_IPS[$i]}";
-       host=${MASTERS_IPS[$i]}
-
-       # clean and recreate directory structure
-       ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
-       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
-       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
-
-       # copy over everything PKI related, copy to temporary directory with
-       # non-root write access
-       scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-       scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-       scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
-       scp ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:/home/${USER}/kubernetes/
-       scp ${SSHOPTS} /etc/kubernetes/koris.conf "${USER}"@$host:/home/${USER}/kubernetes/
-       scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
-
-       # move back to /etc on remote machine
-       ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
-       ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
-       ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
-
-       echo "done distributing keys to ${MASTERS_IPS[$i]}";
-   done
-}
-
-
 # bootstrap the first master.
 # the process is slightly different than for the rest of the N masters
 # we add
