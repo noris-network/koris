@@ -169,7 +169,8 @@ function copy_keys() {
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
 
-    tar vcf - /etc/kubernetes/ | ssh ${SSHOPTS} ${USER}@$host tar vxfC - /home/${USER}/kubernetes
+    tar --exclude=/etc/kubernetes/manifests/* --exclude=/etc/kubernetes/pki/etcd/{peer*,health*,server*} -vcf - /etc/kubernetes/ | ssh ${SSHOPTS} ${USER}@$host tar vxfC - /home/${USER}/kubernetes
+
 
     # move back to /etc on remote machine
     ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes/etc/kubernetes /etc/
