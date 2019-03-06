@@ -14,22 +14,18 @@
 #
 # This should be the content of /etc/kubernetes/koris.env
 #
-#  export B64_CA_CONTENT="$(kubeadm alpha phase certs ca 1>/dev/null 2>&1 && base64 -w 0 /etc/kubernetes/pki/ca.crt)"
-#  export LOAD_BALANCER_DNS=""
-#  export LOAD_BALANCER_IP=""
-#  export LOAD_BALANCER_PORT=""
-#  export BOOTSTRAP_TOKEN="$(openssl rand -hex 3).$(openssl rand -hex 8)"
-#  export DISCOVERY_HASH="$(openssl x509 -in /etc/kubernetes/pki/ca.crt -noout -pubkey | openssl rsa -pubin -outform DER 2>/dev/null | sha256sum | cut -d' ' -f1)"
-#  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
-#  export MASTERS_IPS=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
-#  # choose CALICO or FLANNEL
-#  export POD_NETWORK="CALICO"
-#  export POD_SUBNET="10.233.0.0/16"
-#  export SSH_USER="ubuntu"  # for RHEL use root
+#	export BOOTSTRAP_NODES=1  # for bootstrapping baremetal nodes (i.e. not an Openstack Image
+#	export SSH_USER="root"    # for ubuntu use ubuntu
+#	export POD_SUBNET="10.233.0.0/16"
+#	export POD_NETWORK="CALICO"
+#	export LOAD_BALANCER_PORT="6443"
+#	export MASTERS_IPS=( 10.32.10.1  10.32.10.2 10.32.10.3 )
+#	export MASTERS=( master-1 master-2 master-3 )
+#   # specify one of the two LOAD_BALANCER_IP or LOAD_BALANCER_DNS
+#	export LOAD_BALANCER_IP=XX.YY.ZZ.WW
+#	export BOOTSTRAP_TOKEN=$(openssl rand -hex 3).$$(openssl rand -hex 8)
+#	export OPENSTACK=0
 #
-#  # for bare metal or generic images in VMWARE set
-#  export BOOTSTRAP_NODES=1
-#  # this will install all dependencies on each node
 ###
 
 # load koris environment file if available
@@ -156,7 +152,7 @@ fi
 # distributes configuration file and certificates to a master node
 function copy_keys() {
     host=$1
-    USER=${SSHUSER:-ubuntu}
+    USER=${SSH_USER:-ubuntu}
 
     echo -n "waiting for ssh on $1"
     until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -172,25 +168,11 @@ function copy_keys() {
 
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
-    scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-    scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
 
-    if [[ ${OPENSTACK} -eq 1 ]]; then
-        scp ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:/home/${USER}/kubernetes/
-        scp ${SSHOPTS} /etc/kubernetes/koris.conf "${USER}"@$host:/home/${USER}/kubernetes/
-    fi
-
-    scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
+    tar vcf - /etc/kubernetes/ | ssh ${SSHOPTS} ${USER}@$host tar vxfC - /home/${USER}/kubernetes
 
     # move back to /etc on remote machine
-    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
+    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes/etc/kubernetes /etc/
     ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
     ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
 
@@ -244,7 +226,7 @@ function bootstrap_first_master() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
-    USER=${SSHUSER:-ubuntu}
+    USER=${SSH_USER:-ubuntu}
 
    echo "*********** Bootstrapping $1 ******************"
    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -377,17 +359,21 @@ sysctl --system
 }
 
 function bootstrap_deps_node() {
-    ssh ${1} "KUBE_VERSION=${KUBE_VERSION}; $(
-    typeset -f get_docker_ubuntu;
-    typeset -f get_docker_centos;
-    typeset -f get_kubeadm_ubuntu;
-    typeset -f get_kubeadm_centos;
-    typeset -f get_docker;
-    typeset -f get_kubeadm;
-    typeset -f fetch_all);
-    sudo iptables -P FORWARD ACCEPT;
-    sudo swapoff -a;
-    sudo fetch_all;"
+ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
+set -ex;
+iptables -P FORWARD ACCEPT;
+swapoff -a;
+KUBE_VERSION=${KUBE_VERSION};
+first_master=${first_master}
+$(typeset -f get_docker_ubuntu);
+$(typeset -f get_docker_centos);
+$(typeset -f get_kubeadm_ubuntu);
+$(typeset -f get_kubeadm_centos);
+$(typeset -f get_docker);
+$(typeset -f get_kubeadm);
+$(typeset -f fetch_all);
+fetch_all;
+EOF
 }
 
 # enforce docker version
@@ -454,6 +440,7 @@ function main() {
         copy_keys $HOST_IP
         until add_master $HOST_NAME $HOST_IP; do
             ssh $HOST_NAME sudo kubeadm reset -f
+            copy_keys $HOST_IP
         done
 
         wait_for_etcd $HOST_NAME

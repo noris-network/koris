@@ -52,13 +52,18 @@ config-loadbalancer:
 	until openstack loadbalancer show bare-metal -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
 	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 bare-metal-pool
 
+add-master-to-lb: FIRSTMASTER ?= bare-metal-master-1
+add-master-to-lb:
+	until openstack loadbalancer show bare-metal -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
+	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 bare-metal-pool
+
+
 koris.env: FIRSTMASTER ?= bare-metal-master-1
 koris.env: .SHELLFLAGS = -c eval
 koris.env: SHELL = bash -c 'eval "$${@//\\\\/}"'
 koris.env:
 	@cat <<-EOF > koris.env \
 	export BOOTSTRAP_NODES=1 \
-	export SSH_USER="root" \
 	export POD_SUBNET="10.233.0.0/16" \
 	export POD_NETWORK="CALICO" \
 	export LOAD_BALANCER_PORT="6443" \
@@ -74,7 +79,7 @@ koris.env:
 	echo "export LOAD_BALANCER_IP=\"$$(openstack loadbalancer show bare-metal -f value -c vip_address)\"" >> koris.env
 	echo "export BOOTSTRAP_TOKEN=$$(openssl rand -hex 3).$$(openssl rand -hex 8)" >> koris.env
 	echo "export OPENSTACK=0" >> koris.env
-	echo "export SSHUSER=centos" >> koris.env
+	echo "export SSH_USER=centos" >> koris.env
 
 
 cp-koris-env: FIRSTMASTER ?= bare-metal-master-1
