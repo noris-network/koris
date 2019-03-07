@@ -401,7 +401,7 @@ class LoadBalancer:  # pragma: no coverage
 
         fip_addr = None
         if self.floatingip:
-            fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
+            fip_addr = self.associate_floating_ip(client, lb['loadbalancer'])
         return lb, fip_addr
 
     @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,

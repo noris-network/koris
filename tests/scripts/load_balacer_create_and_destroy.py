@@ -7,7 +7,7 @@ import asyncio
 import os
 
 from koris.cloud.builder import get_clients
-from koris.cloud.openstack import LoadBalancer, OSNetwork
+from koris.cloud.openstack import LoadBalancer, OSNetwork, OSSubnet, OSRouter
 from koris.deploy.dex import create_dex, create_oauth2
 
 _, CLIENT, _ = get_clients()
@@ -15,12 +15,12 @@ _, CLIENT, _ = get_clients()
 lb_name = os.getenv('LOADBALANCER_NAME', 'test')
 lb_name = lb_name.split('-lb')[0]
 config = {
-    'cluster-name': lb_name,
-    'private_net': {'name': lb_name, 'subnet': {'name': ''}}
+    'cluster-name': lb_name
 }
 
-NET = OSNetwork(CLIENT, config)
-NET.get_or_create()
+NET = OSNetwork(CLIENT, config).get_or_create()
+SUBNET = OSSubnet(CLIENT, NET['id'], config).get_or_create()
+OSRouter(CLIENT, NET['id'], SUBNET, config).get_or_create()
 LB = LoadBalancer(config)
 
 
