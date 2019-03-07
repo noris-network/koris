@@ -174,7 +174,7 @@ class NthMasterInit(BaseInit):
     to be done.
     """
     def __init__(self, cloud_config, ssh_key, os_type='ubuntu',
-                 os_version="16.04"):
+                 os_version="16.04", dex=None):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
@@ -187,6 +187,13 @@ class NthMasterInit(BaseInit):
 
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key)
+
+        # If Dex is to be installed, deploy its CA to the master
+        if dex is not None:
+            path = dex['ca_file']
+            cert = dex['cert']
+            self.write_file(path, b64_cert(cert),
+                            "root", "root", "0600", lambda x: x)
 
 
 # pylint: disable=too-many-arguments,too-many-locals
@@ -217,7 +224,7 @@ class FirstMasterInit(NthMasterInit):
                  pod_subnet='10.233.0.0/16',
                  pod_network='CALICO',
                  os_type='ubuntu', os_version="16.04", dex=None):
-        super().__init__(cloud_config, ssh_key, os_type, os_version)
+        super().__init__(cloud_config, ssh_key, os_type, os_version, dex=dex)
         self.ca_bundle = ca_bundle
 
         self.master_ips = [master.ip_address for master in masters]
@@ -229,7 +236,6 @@ class FirstMasterInit(NthMasterInit):
         self.pod_network = pod_network
         self.pod_subnet = pod_subnet
         self.role = 'master'
-        self.dex = dex
 
         # assemble the parts for the first master
         # use an encoder that just returns x, since b64_cert encodes already
@@ -238,13 +244,6 @@ class FirstMasterInit(NthMasterInit):
                         "root", "root", "0600", lambda x: x)
         self.write_file("/etc/kubernetes/pki/ca.key", b64_key(ca_bundle.key),
                         "root", "root", "0600", lambda x: x)
-
-        # If Dex is to be installed, deploy its CA to the master
-        if dex is not None:
-            path = dex['ca_file']
-            cert = dex['cert']
-            self.write_file(path, b64_cert(cert),
-                            "root", "root", "0600", lambda x: x)
 
         self._write_cloud_config()
         self._write_koris_env(dex)

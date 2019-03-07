@@ -55,7 +55,6 @@ SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTime
 # create a proper kubeadm config file for each master.
 # the configuration files are ordered and contain the correct information
 # of each master and the rest of the etcd cluster
-# WORK: let apiserver know where CA lies
 function create_config_files() {
     cat <<TMPL > init.tmpl
 apiVersion: kubeadm.k8s.io/v1alpha2
