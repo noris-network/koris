@@ -25,6 +25,7 @@
 #	export LOAD_BALANCER_IP=XX.YY.ZZ.WW
 #	export BOOTSTRAP_TOKEN=$(openssl rand -hex 3).$$(openssl rand -hex 8)
 #	export OPENSTACK=0
+#       export K8SNODES=( node-1 node-2 ) # a list of nodes to join
 #
 ###
 
@@ -45,6 +46,7 @@ export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
 export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
 export OPENSTACK=${OPENSTACK:-1}
+export K8SNODES=${K8SNODES:-""}
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -168,12 +170,19 @@ function copy_keys() {
 
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
-
-    tar --exclude=/etc/kubernetes/manifests/* --exclude=/etc/kubernetes/pki/etcd/{peer*,health*,server*} -vcf - /etc/kubernetes/ | ssh ${SSHOPTS} ${USER}@$host tar vxfC - /home/${USER}/kubernetes
-
+    scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
+    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
+    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
+    scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
+    scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
 
     # move back to /etc on remote machine
-    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes/etc/kubernetes /etc/
+    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
     ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
     ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
 
@@ -364,8 +373,8 @@ ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
 set -exu;
 iptables -P FORWARD ACCEPT;
 swapoff -a;
-DOCKER_VERSION=$(DOCKER_VERSION);
 KUBE_VERSION=${KUBE_VERSION};
+DOCKER_VERSION=${DOCKER_VERSION};
 first_master=${first_master}
 $(typeset -f get_docker_ubuntu);
 $(typeset -f get_docker_centos);
@@ -449,9 +458,9 @@ function main() {
         echo "done bootstrapping master ${MASTERS[$i]}";
     done
 
-    if [ $1 == "--join-all-nodes" ]; then
-        HOSTS=${K8SNODES:?"You must define K8SNODES"}
-        join_all_hosts --install-deps
+    if [[ -n ${K8SNODES} && "$(declare -p K8SNODES)" =~ "declare -a" ]]; then
+        echo "Joining worker nodes ..."
+        join_all_hosts
     fi
 
     echo "the installation has finished."
@@ -461,17 +470,15 @@ function main() {
 # when building bare metal cluster or vSphere clusters this is used to
 # install dependencies on each host and join the host to the cluster
 join_all_hosts() {
-    if [ -z ${DISCOVERY_HASH} ]; then
-        export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
-                                openssl rsa -pubin -outform der 2>/dev/null | \
-                                openssl dgst -sha256 -hex | sed 's/^.* //')
-   fi
+   export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
+                           openssl rsa -pubin -outform der 2>/dev/null | \
+                           openssl dgst -sha256 -hex | sed 's/^.* //')
    if [ -z ${BOOTSTRAP_TOKEN} ]; then
-        export TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
+        export BOOTSTRAP_TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
    fi
-   for K in "${!HOSTS[@]}"; do
+   for K in "${K8SNODES[@]}"; do
        echo "***** ${K} ******"
-       if [ $1 == "--install-deps" || -n ${BOOTSTRAP_NODES} ]; then
+       if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
             bootstrap_deps_node ${K}
        fi
        ssh ${K} sudo kubeadm reset -f
@@ -500,7 +507,7 @@ if [[ $sourced == 1 ]]; then
     echo ""
     typeset -F |  cut -d" " -f 3
 else
-    set -eu
+    set -eux
     cd /root
     iptables -P FORWARD ACCEPT
     swapoff -a
