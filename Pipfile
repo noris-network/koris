@@ -61,6 +61,7 @@ cryptography = "*"
 python-openstackclient = "*"
 "keystoneauth1" = "*"
 python-keystoneclient = "*"
+python-octaviaclient = "*"
 
 
 [dev-packages]
