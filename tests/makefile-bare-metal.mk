@@ -18,20 +18,23 @@ create-volumes-masters:
 
 create-volumes-nodes:
 	@echo "creating volumes for nodes"
-	@openstack volume create --size 25 --bootable --availability-zone $(AZ) --type PI-Storage-Class --image $(IMAGE) $(CLUSTERNAME)-root-node-1
-
+	openstack volume create --size 25 --bootable --availability-zone $(AZ) --type PI-Storage-Class --image $(IMAGE) $(CLUSTERNAME)-root-node-1
 
 create-masters: #create-volumes-masters
 	for host in {1..3}; do \
+	until openstack volume show $(CLUSTERNAME)-root-master-$${host} -c status -f value | grep available; do sleep 2; done; \
 	openstack server create --network $(NETWORK) --flavor $(FLAVOR) --availability-zone $(AZ) --key-name $(KEY) \
 		--security-group $(SECGROUP) --volume $(CLUSTERNAME)-root-master-$${host} \
 		$(CLUSTERNAME)-master-$${host} \
 		--user-data $(USERDATA); \
 	done
 
-create-nodes: create-volumes-nodes
+create-nodes:
+	until openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep available; do sleep 2; done;  \
 	openstack server create --network $(NETWORK) --flavor $(FLAVOR) --availability-zone $(AZ) --key-name $(KEY) \
-		--security-group $(SECGROUP) --volume bare-metal-root-node-1 bare-metal-node-1;
+		--security-group $(SECGROUP) --volume $(CLUSTERNAME)-root-node-1 \
+		--user-data $(USERDATA) \
+		$(CLUSTERNAME)-node-1;
 
 integration-test-bare-metal: SUBNET ?=sub-korispipeline-office-net
 integration-test-bare-metal: create-volumes-masters create-volumes-nodes creates-masters create-nodes ## simulate installation on bare metal
@@ -80,6 +83,7 @@ koris.env:
 	echo "export BOOTSTRAP_TOKEN=$$(openssl rand -hex 3).$$(openssl rand -hex 8)" >> koris.env
 	echo "export OPENSTACK=0" >> koris.env
 	echo "export SSH_USER=$(USER)" >> koris.env
+	echo "export K8SNODES=( $(CLUSTERNAME)-node-1 )"
 
 
 cp-koris-env: FIRSTMASTER ?= bare-metal-master-1
