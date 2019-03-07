@@ -34,6 +34,17 @@ wait-for-resources:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+bare-metal-integration:
+  stage: build-cluster
+  image: oz123/koris-alpine:0.1.3
+  script:
+   - make -f tests/makefile-bare-metal.mk integration-test USER=centos
+   - make -f tests/makefile-bare-metal.mk clean-all
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+
 build-cluster:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.3

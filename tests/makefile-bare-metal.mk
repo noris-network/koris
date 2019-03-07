@@ -123,7 +123,11 @@ IT_TARGETS := create-volumes-masters create-volumes-nodes create-masters create-
 IT_TARGETS += koris.env cp-koris-env cp-bootstrap-script run-bootstrap
 
 integration-test-bare-metal: $(IT_TARGETS)
-	echo "Finished all"
+	@echo "Finished all"
+	@echo "Waiting for all nodes to become ready ..."
+	@sleep 140
+	until [ $$(ssh -A -o StrictHostKeyChecking=no root@$$(openstack server show bare-metal-master-1 -f value -c addresses | cut -f 2 -d "=") kubectl get nodes | grep -c Ready) -eq 4 ]; do echo "waiting for all nodes to become ready ..."; done
+
 
 clean-all:
 	clean-lb clean-masters clean-volumes-masters clean-nodes clean-volumes-nodes
