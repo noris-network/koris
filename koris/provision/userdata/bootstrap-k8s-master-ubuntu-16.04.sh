@@ -165,28 +165,30 @@ function copy_keys() {
     echo "distributing keys to $host";
     # clean and recreate directory structure
     ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
-    ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
-    ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
+    ssh ${SSHOPTS} ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
+    ssh ${SSHOPTS} ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
 
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
-    scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-    scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
-    scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
+    sftp ${USER}@$host << EOF
+	put /etc/kubernetes/pki/ca.crt /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/ca.key /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/sa.key /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/sa.pub /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/front-proxy-ca.crt /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/front-proxy-ca.key /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/etcd/ca.crt /home/${USER}/kubernetes/pki/etcd/
+	put /etc/kubernetes/pki/etcd/ca.key /home/${USER}/kubernetes/pki/etcd/
+	put /etc/kubernetes/admin.conf /home/${USER}/kubernetes/
+	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
+EOF
 
-    # move back to /etc on remote machine
-    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
-    ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
-    ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+   # move back to /etc on remote machine
+   ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
+   ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+   ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
 
-    echo "done distributing keys to $host";
+   echo "done distributing keys to $host";
 }
 
 
@@ -370,7 +372,7 @@ sysctl --system
 
 function bootstrap_deps_node() {
 ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
-set -exu;
+set -ex;
 iptables -P FORWARD ACCEPT;
 swapoff -a;
 KUBE_VERSION=${KUBE_VERSION};
@@ -507,7 +509,7 @@ if [[ $sourced == 1 ]]; then
     echo ""
     typeset -F |  cut -d" " -f 3
 else
-    set -eux
+    set -eu
     cd /root
     iptables -P FORWARD ACCEPT
     swapoff -a
