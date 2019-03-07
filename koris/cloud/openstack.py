@@ -50,6 +50,30 @@ if getattr(sys, 'frozen', False):
     cinderclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
 
 
+def get_connection():
+    """Establishes an OpenStack connection.
+
+    This function will exit with error code 1 in case a connection could not be
+    established.
+
+    Returns:
+        conn (OpenStackAPI.Connection): an OpenStack Connection Object.
+    """
+
+    try:
+        conn = OpenStackAPI.connect()
+    except OpenStackAPI.exceptions.ConfigException as exc:
+        LOGGER.error("unable to establish OpenStack Cloud connection:")
+        LOGGER.error("%s - have you sourced your OpenStack RC file?", exc)
+        sys.exit(1)
+
+    if conn is None or conn.session is None:
+        LOGGER.error("unable to establish OpenStack Cloud connection")
+        sys.exit(1)
+
+    return conn
+
+
 class BuilderError(Exception):
     """Raise a custom error if the build fails"""
 
@@ -332,7 +356,7 @@ class LoadBalancer:  # pragma: no coverage
                 client, lb)
         return fip_addr
 
-    def create(self, client, provider='octavia'):
+    def create(self, client, conn=None, provider='octavia'):
         """Provision a minimally configured LoadBalancer in OpenStack
 
         Args:
@@ -354,20 +378,31 @@ class LoadBalancer:  # pragma: no coverage
             subnet_id = [sub['id']
                          for sub in subnets if network['id'] == sub['network_id']][0]
 
-        lb = client.create_loadbalancer({'loadbalancer':
-                                         {'provider': provider,
-                                          'vip_subnet_id': subnet_id,
-                                          'name': "%s" % self.name
-                                          }})
-        self._id = lb['loadbalancer']['id']
-        self._subnet_id = lb['loadbalancer']['vip_subnet_id']
-        self._data = lb['loadbalancer']
+        # lb = client.create_loadbalancer({'loadbalancer':
+        #                                  {'provider': provider,
+        #                                   'vip_subnet_id': subnet_id,
+        #                                   'name': "%s" % self.name
+        #                                   }})
+        # self._id = lb['loadbalancer']['id']
+        # self._subnet_id = lb['loadbalancer']['vip_subnet_id']
+        # self._data = lb['loadbalancer']
+        # LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
+
+        lb = conn.load_balancer.create_lb({'loadbalancer':
+                                           {'provider': provider,
+                                            'vip_subnet_id': subnet_id,
+                                            'name': "%s" % self.name
+                                            }})
+        self._id = lb.get_loadbalancer_statistics(self.name).lb_id
+        self._subnet_id = lb.subnet_id
+        self._data = lb
+
         LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
 
         fip_addr = None
         if self.floatingip:
-            fip_addr = self.associate_floating_ip(client, lb['loadbalancer'])
-        return lb['loadbalancer'], fip_addr
+            fip_addr = self._associate_floating_ip(client, lb['loadbalancer'])
+        return lb, fip_addr
 
     @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
            tries=10, logger=LOGGER.debug)
