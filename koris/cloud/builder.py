@@ -259,7 +259,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                                dex=dex))
             else:
                 # create userdata for following master nodes if not existing
-                userdata = str(NthMasterInit(cloud_config, ssh_key))
+                userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex))
 
             tasks.append(loop.create_task(
                 master.create(self._info.master_flavor, self._info.secgroups,
@@ -343,6 +343,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         """
         execute the complete cluster build
         """
+
         cloud_config = self.create_network(config)
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
@@ -476,8 +477,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         LOGGER.handlers[0].terminator = "\n"
 
-        LOGGER.info("\nKubernetes API is ready!")
-        LOGGER.info("\nWaiting for all masters to become Ready")
+        LOGGER.info("\nKubernetes API is ready!"
+                    "\nWaiting for all masters to become Ready")
+
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
 
         LOGGER.info("Configured load balancer to use all API servers")
