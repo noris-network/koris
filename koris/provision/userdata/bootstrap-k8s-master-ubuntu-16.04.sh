@@ -361,9 +361,10 @@ sysctl --system
 
 function bootstrap_deps_node() {
 ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
-set -ex;
+set -exu;
 iptables -P FORWARD ACCEPT;
 swapoff -a;
+DOCKER_VERSION=$(DOCKER_VERSION);
 KUBE_VERSION=${KUBE_VERSION};
 first_master=${first_master}
 $(typeset -f get_docker_ubuntu);
@@ -490,7 +491,8 @@ function fetch_all() {
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
 
-
+# This line and the if condition bellow allow sourcing the script without executing
+# the main function
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
 if [[ $sourced == 1 ]]; then
@@ -502,8 +504,7 @@ else
     cd /root
     iptables -P FORWARD ACCEPT
     swapoff -a
-    main
-    cd /root
+    main $@
 fi
 
 # vi: expandtab ts=4 sw=4 ai

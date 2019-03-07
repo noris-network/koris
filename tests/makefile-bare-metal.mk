@@ -25,8 +25,8 @@ create-masters: #create-volumes-masters
 	for host in {1..3}; do \
 	openstack server create --network $(NETWORK) --flavor $(FLAVOR) --availability-zone $(AZ) --key-name $(KEY) \
 		--security-group $(SECGROUP) --volume $(CLUSTERNAME)-root-master-$${host} \
-		$(CLUSTERNAME)-master-$${host}; \
-		--user-data $(dir $(lastword $(MAKEFILE_LIST)))scripts/fix-ssh-centos.sh \
+		$(CLUSTERNAME)-master-$${host} \
+		--user-data $(USERDATA); \
 	done
 
 create-nodes: create-volumes-nodes
