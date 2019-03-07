@@ -9,7 +9,7 @@ SECGROUP ?= default
 SHELL=/bin/bash
 CLUSTERNAME ?= bare-metal
 USER ?= centos
-
+USERDATA ?= $(dir $(lastword $(MAKEFILE_LIST)))scripts/fix-ssh-centos.sh
 
 create-volumes-masters:
 	@echo "creating volumes for masters"
@@ -25,8 +25,8 @@ create-masters: #create-volumes-masters
 	for host in {1..3}; do \
 	openstack server create --network $(NETWORK) --flavor $(FLAVOR) --availability-zone $(AZ) --key-name $(KEY) \
 		--security-group $(SECGROUP) --volume $(CLUSTERNAME)-root-master-$${host} \
-		--user-data $(dir $(lastword $(MAKEFILE_LIST)))scripts/fix-ssh-centos.sh \
 		$(CLUSTERNAME)-master-$${host}; \
+		--user-data $(dir $(lastword $(MAKEFILE_LIST)))scripts/fix-ssh-centos.sh \
 	done
 
 create-nodes: create-volumes-nodes
@@ -76,10 +76,10 @@ koris.env:
 	done < <( openstack server list --name $(CLUSTERNAME) -f value -c Name -c Networks | sort ); \
 	echo "export MASTERS_IPS=( $${IPS[@]} )" >> koris.env \
 	echo "export MASTERS=( $${HOSTS[@]} )" >> koris.env \
-	echo "export LOAD_BALANCER_IP=\"$$(openstack loadbalancer show bare-metal -f value -c vip_address)\"" >> koris.env
+	echo "export LOAD_BALANCER_IP="$$(openstack loadbalancer show bare-metal -f value -c vip_address)"" >> koris.env
 	echo "export BOOTSTRAP_TOKEN=$$(openssl rand -hex 3).$$(openssl rand -hex 8)" >> koris.env
 	echo "export OPENSTACK=0" >> koris.env
-	echo "export SSH_USER=centos" >> koris.env
+	echo "export SSH_USER=$(USER)" >> koris.env
 
 
 cp-koris-env: FIRSTMASTER ?= bare-metal-master-1
