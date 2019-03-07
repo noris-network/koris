@@ -46,16 +46,16 @@ config-loadbalancer: FIRSTMASTER ?= bare-metal-master-1
 config-loadbalancer:
 	@echo "Waiting for loadbalancer to become ACTIVE"
 	until openstack loadbalancer show bare-metal -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
-	openstack loadbalancer listener create --name "bare-metal-lb-listener" --protocol TCP --protocol-port 6443 bare-metal
+	openstack loadbalancer listener create --name "bare-metal-lb-listener" --protocol TCP --protocol-port 6443 $(CLUSTERNAME)
+	until openstack loadbalancer show $(CLUSTERNAME) -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
+	openstack loadbalancer pool create --name $(CLUSTERNAME)-pool --protocol TCP --listener $(CLUSTERNAME)-lb-listener --lb-algorithm SOURCE_IP
 	until openstack loadbalancer show bare-metal -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
-	openstack loadbalancer pool create --name bare-metal-pool --protocol TCP --listener bare-metal-lb-listener --lb-algorithm SOURCE_IP
-	until openstack loadbalancer show bare-metal -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
-	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 bare-metal-pool
+	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 $(CLUSTERNAME)-pool
 
 add-master-to-lb: FIRSTMASTER ?= bare-metal-master-1
 add-master-to-lb:
-	until openstack loadbalancer show bare-metal -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
-	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 bare-metal-pool
+	until openstack loadbalancer show $(CLUSTERNAME) -f value -c provisioning_status | grep ACTIVE ; do sleep 2; done
+	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 $(CLUSTERNAME)-pool
 
 
 koris.env: FIRSTMASTER ?= bare-metal-master-1
@@ -92,7 +92,7 @@ cp-koris-env:
 cp-bootstrap-script: FIRSTMASTER ?= bare-metal-master-1
 cp-bootstrap-script: FIRSTMASTER_IP ?= $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=")
 cp-bootstrap-script:
-	scp -r koris/provision/userdata/bootstrap-k8s-master-ubuntu-16.04.sh centos@$(FIRSTMASTER_IP):~
+	scp -r koris/provision/userdata/bootstrap-k8s-master-ubuntu-16.04.sh $(USER)@$(FIRSTMASTER_IP):~
 
 run-bootstrap: FIRSTMASTER ?= bare-metal-master-1
 run-bootstrap: FIRSTMASTER_IP ?= $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=")
