@@ -10,22 +10,19 @@ from koris.cloud.openstack import LoadBalancer, OSNetwork, OSSubnet, OSRouter
 LB_NAME = os.getenv('LOADBALANCER_NAME', 'os-integration-test')
 LB_NAME = LB_NAME.split('-lb')[0]
 CONFIG = {
-    'cluster-name': LB_NAME,
-    "private_net": {
-        "name": LB_NAME,
-        "subnet": {
-            "name": f"{LB_NAME}-subnet",
-            "cidr": "192.168.0.0/24"
-        }
-    }
+    'cluster-name': LB_NAME
 }
+# CONFIG = {
+#     'cluster-name': LB_NAME,
+#     "private_net": {
+#         "name": LB_NAME,
+#         "subnet": {
+#             "name": f"{LB_NAME}-subnet",
+#             "cidr": "192.168.0.0/24"
+#         }
+#     }
+# }
 _, NEUTRON, _ = get_clients()
-
-# Below, needs OS_ environment variables passed
-# or functions need to be changed to use `conn`
-NET = OSNetwork(NEUTRON, CONFIG).get_or_create()
-SUBNET = OSSubnet(NEUTRON, NET['id'], CONFIG).get_or_create()
-OSRouter(NEUTRON, NET['id'], SUBNET, CONFIG).get_or_create()
 
 
 # Get an Connection object that can be used for all tests
@@ -38,6 +35,15 @@ def get_connection():
 @pytest.fixture
 def get_lb():
     return LoadBalancer(CONFIG)
+
+
+@pytest.fixture
+def get_network(get_connection):
+    NET = OSNetwork(NEUTRON, CONFIG, conn=get_connection).get_or_create()
+    SUBNET = OSSubnet(NEUTRON, NET['id'], CONFIG).get_or_create()
+    RT = OSRouter(NEUTRON, NET['id'], SUBNET, CONFIG).get_or_create()
+
+    return NET, SUBNET, RT
 
 
 def test_get_connection(get_connection):

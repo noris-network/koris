@@ -370,7 +370,8 @@ class LoadBalancer:  # pragma: no coverage
         # see examle of how to create an LB
         # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
         if self.subnet:
-            subnet_id = client.find_resource('subnet', self.subnet)['id']
+            # subnet_id = client.find_resource('subnet', self.subnet)['id']
+            subnet_id = conn.network.get_subnet(self.subnet)
         else:
             # match created subnet id with the corresponding one in subnets
             network = OSNetwork(client, self.config).get_or_create()
@@ -816,9 +817,10 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
     """
     create network if not defined
     """
-    def __init__(self, neutron_client, config):
+    def __init__(self, neutron_client, config, conn=None):
         self.net_client = neutron_client
         self.config = config
+        self.conn = conn
 
     def get_or_create(self):
         """
@@ -830,18 +832,16 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
             net_name = "koris-%s-net" % self.config['cluster-name']
         else:
             net_name = self.config.get('private_net')['name']
-        networks = self.net_client.list_networks()['networks']
-        network = [n for n in networks if n['name'] == net_name]
-        network = network[0] if network else None
-
+        network = self.conn.find_network(net_name)
         if network:
             print(info(yellow(
                 "The network [%s] already exists. Skipping" % net_name)))  # noqa
         else:
             print(info(red("Creating network [%s]" % net_name)))
-            network = self.net_client.create_network(
-                {"network": {"name": net_name, "admin_state_up": True}})
-            network = network['network']
+            network = self.conn.create_network({
+                "name": net_name,
+                "admin_state_up": True
+            })
 
         if 'private_net' in self.config:
             self.config['private_net'].update(network)
