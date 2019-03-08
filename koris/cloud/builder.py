@@ -364,7 +364,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # do not add a listener, since we created no machines yet.
         LOGGER.info("Creating the load balancer...")
         lbinst = LoadBalancer(config)
-        lb, floatingip = lbinst.get_or_create(NEUTRON)
+        lb, floatingip = lbinst.get_or_create(NEUTRON, self.info.subnet_id)
         lb_port = "6443"
 
         lb_dns = config['loadbalancer'].get('dnsname') or floatingip

@@ -371,29 +371,17 @@ class LoadBalancer:  # pragma: no coverage
         # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
         if self.subnet:
             # subnet_id = client.find_resource('subnet', self.subnet)['id']
-            subnet_id = conn.network.get_subnet(self.subnet)
+            subnet_id = conn.get_subnet(self.subnet)
         else:
             # match created subnet id with the corresponding one in subnets
-            network = OSNetwork(client, self.config).get_or_create()
+            network = OSNetwork(client, self.config, conn).get_or_create()
             subnets = client.list_subnets()['subnets']
             subnet_id = [sub['id']
                          for sub in subnets if network['id'] == sub['network_id']][0]
 
-        # lb = client.create_loadbalancer({'loadbalancer':
-        #                                  {'provider': provider,
-        #                                   'vip_subnet_id': subnet_id,
-        #                                   'name': "%s" % self.name
-        #                                   }})
-        # self._id = lb['loadbalancer']['id']
-        # self._subnet_id = lb['loadbalancer']['vip_subnet_id']
-        # self._data = lb['loadbalancer']
-        # LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
-
-        lb = conn.load_balancer.create_lb({'loadbalancer':
-                                           {'provider': provider,
-                                            'vip_subnet_id': subnet_id,
-                                            'name': "%s" % self.name
-                                            }})
+        lb = conn.load_balancer.create_load_balancer(provider=provider,
+                                                     vip_subnet_id=subnet_id,
+                                                     name=f"{self.name}")
         self._id = lb.get_loadbalancer_statistics(self.name).lb_id
         self._subnet_id = lb.subnet_id
         self._data = lb
@@ -832,7 +820,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
             net_name = "koris-%s-net" % self.config['cluster-name']
         else:
             net_name = self.config.get('private_net')['name']
-        network = self.conn.find_network(net_name)
+        network = self.conn.get_network(net_name)
         if network:
             print(info(yellow(
                 "The network [%s] already exists. Skipping" % net_name)))  # noqa
