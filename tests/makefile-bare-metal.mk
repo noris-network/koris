@@ -57,7 +57,7 @@ add-master-to-lb:
 	openstack loadbalancer member create --address $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=") --protocol-port 6443 $(CLUSTERNAME)-pool
 
 
-koris.env: FIRSTMASTER ?= bare-metal-master-1
+koris.env: FIRSTMASTER ?= $(CLUSTERNAME)-master-1
 koris.env: .SHELLFLAGS = -c eval
 koris.env: SHELL = bash -c 'eval "$${@//\\\\/}"'
 koris.env:
@@ -82,14 +82,14 @@ koris.env:
 	echo "export K8SNODES=( $(CLUSTERNAME)-node-1 )" >> koris.env
 
 
-cp-koris-env: FIRSTMASTER ?= bare-metal-master-1
+cp-koris-env: FIRSTMASTER ?= $(CLUSTERNAME)-master-1
 cp-koris-env: FIRSTMASTER_IP ?= $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=")
 cp-koris-env:
 	@echo $(FIRSTMASTER_IP)
 	ssh $(SSHOPTS) $(USER)@$(FIRSTMASTER_IP) sudo mkdir -pv /etc/kubernetes/
 	cat koris.env | ssh $(SSHOPTS) $(USER)@$(FIRSTMASTER_IP) "sudo sh -c 'cat >/etc/kubernetes/koris.env'"
 
-cp-bootstrap-script: FIRSTMASTER ?= bare-metal-master-1
+cp-bootstrap-script: FIRSTMASTER ?= $(CLUSTERNAME)-master-1
 cp-bootstrap-script: FIRSTMASTER_IP ?= $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=")
 cp-bootstrap-script:
 	scp $(SSHOPTS) -r koris/provision/userdata/bootstrap-k8s-master-ubuntu-16.04.sh $(USER)@$(FIRSTMASTER_IP):~
@@ -102,22 +102,22 @@ run-bootstrap:
 	ssh $(SSHOPTS) -A $(BOOTSTRAPUSER)@$(FIRSTMASTER_IP) bash /home/$(OSUSER)/bootstrap-k8s-master-ubuntu-16.04.sh
 
 clean-lb:
-	openstack loadbalancer delete bare-metal --cascade
+	openstack loadbalancer delete $(CLUSTERNAME) --cascade || echo "No load balancer foud"
 
 clean-masters:
-	for host in {1..3}; do openstack server delete bare-metal-master-$${host}; done
+	for host in {1..3}; do openstack server delete $(CLUSTERNAME)-master-$${host} || echo "No server found " $(CLUSTERNAME)-master-$${host} ; done
 
 clean-nodes:
-	openstack server delete bare-metal-node-1
+	openstack server delete $(CLUSTERNAME)-node-1
 
 clean-volumes-masters:
 	for host in {1..3}; \
 	do until openstack volume show $(CLUSTERNAME)-root-master-$${host} -c status -f value | grep available; do sleep 2; done; \
-	openstack volume delete bare-metal-root-master-$${host}; done
+	openstack volume delete $(CLUSTERNAME)-root-master-$${host}; done
 
 clean-volumes-nodes:
 	until openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep available; do sleep 2; done; \
-	openstack volume delete bare-metal-root-node-1
+	openstack volume delete $(CLUSTERNAME)-root-node-1
 
 IT_TARGETS := create-volumes-masters create-volumes-nodes create-masters create-nodes create-loadbalancer config-loadbalancer
 IT_TARGETS += koris.env cp-koris-env cp-bootstrap-script run-bootstrap
@@ -126,8 +126,7 @@ integration-test-bare-metal: $(IT_TARGETS)
 	@echo "Finished all"
 	@echo "Waiting for all nodes to become ready ..."
 	@sleep 140
-	until [ $$(ssh -A -o StrictHostKeyChecking=no root@$$(openstack server show bare-metal-master-1 -f value -c addresses | cut -f 2 -d "=") kubectl get nodes | grep -c Ready) -eq 4 ]; do echo "waiting for all nodes to become ready ..."; done
+	until [ $$(ssh -A -o StrictHostKeyChecking=no root@$$(openstack server show $(CLUSTERNAME)-master-1 -f value -c addresses | cut -f 2 -d "=") kubectl get nodes | grep -c Ready) -eq 4 ]; do echo "waiting for all nodes to become ready ..."; done
 
 
-clean-all:
-	clean-lb clean-masters clean-volumes-masters clean-nodes clean-volumes-nodes
+clean-all: clean-lb clean-masters clean-volumes-masters clean-nodes clean-volumes-nodes
