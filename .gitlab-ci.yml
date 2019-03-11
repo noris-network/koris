@@ -40,7 +40,7 @@ bare-metal-integration:
   script:
    - apk add openssh
    - pip install python-openstackclient python-octaviaclient
-   - mkdir .ssh; echo $SSH_PRIVATE_KEY | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
    - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
    - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos
    - make -f tests/makefile-bare-metal.mk clean-all
