@@ -173,6 +173,10 @@ compliance-checks:
   only:
   - master
   - tags
+  - compliance_check
+  artifacts:
+    paths:
+      - results
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/

@@ -1,4 +1,4 @@
-# This is an example koris config file you can use to deploy a
+# This is an example koris config file you can use to deploy a 
 # KUbernetes cluster into your own noris.cloud project.
 ---
 # Noris.cloud instance flavors. For available options see
@@ -67,29 +67,3 @@ pod_subnet: "10.233.0.0/16"
 # Certificate expiry
 certificates:
   expriry: 8760h
-
-# Specify addons that should be deployed with koris
-# addons:
-#   # Dex is an OAuth2 / OpenID Connect application used to
-#   # authenticate a user against a Kubernetes cluster.
-#   # To use Dex, a Floating IP or DNS name is required, which will be
-#   # used as the Issuer for the Dex CA.
-#   # When the below block is set, the LoadBalancer will be configured properly,
-#   # a CA infrastrastructure is created and the apiserver will be launched with the
-#   # necessary flags. To deploy the rest, please consult the documentation.
-#   # For more information about Dex see: https://github.com/dexidp/dex
-#   dex:
-#     username_claim: email     # optional
-#     groups_claim: groups      # optional
-#     # LB-Listener and K8s-Service ports for Dex
-#     ports:
-#       listener: 32000
-#       service: 32000
-#     # Configuration parameters for an OAuth2 application that is deployed into
-#     # the cluster
-#     client:
-#       id: example-app
-#       # LB-Listener and K8s-Service ports for the OAuth2 application
-#       ports:
-#         listener: 5555
-#         service: 32555
