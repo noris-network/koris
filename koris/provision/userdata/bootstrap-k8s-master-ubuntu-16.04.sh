@@ -100,7 +100,7 @@ controllerManagerExtraArgs:
 TMPL
 # if On baremetal we don't need all OpenStack cloud provider flags
 if [[ OPENSTACK -eq 1 ]]; then
-cat <<TMPL > init.tmpl
+cat <<TMPL >> init.tmpl
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
