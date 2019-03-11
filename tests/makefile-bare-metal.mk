@@ -2,7 +2,7 @@
 IMAGE ?= "noris-CentOS7 [NorisRapidDeploy]"
 KEY ?= kube
 NETWORK ?= korispipeline-office-net
-FLAVOR ?= ECS.GP1.2-8
+FLAVOR ?= ECS.GP1.2-4
 AZ ?= de-nbg6-1a
 SECGROUP ?= default
 SHELL=/bin/bash
