@@ -1,7 +1,6 @@
 SHELL := /bin/bash
 .PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
-	clean-lb-after-integration-test \
-	clean-lb
+	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
 
@@ -41,8 +40,8 @@ CIDR ?= 192.168.1.0\/16
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
-SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.12.1/sonobuoy_0.12.1_linux_amd64.tar.gz
-SONOBUOY_COMPLETED_INDICATOR = Sonobuoy has completed
+SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.13.0/sonobuoy_0.13.0_linux_amd64.tar.gz
+SONOBUOY_COMPLETED_INDICATOR = "Sonobuoy has completed"
 SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
 CIS_VERSION=1.11
 
@@ -115,10 +114,9 @@ servedocs: docs ## compile the docs watching for changes
 release: dist ## package and upload a release
 	twine upload dist/*
 
-dist: clean ## builds source and wheel package
+dist: ## builds source and wheel package
 	$(PY) setup.py sdist
 	$(PY) setup.py bdist_wheel
-	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
 	$(PY) setup.py install
@@ -242,8 +240,8 @@ clean-lb-after-integration-test:
 
 assert-node-labels: NUM ?= 1
 assert-node-labels:  ## checks that the cloud-provider set labels on the nodes
-	kubectl describe nodes --kubeconfig=$(KUBECONFIG) node-$(NUM)-koris-pipe-line-$(CLUSTER_NAME) | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
-
+	# kubectl describe nodes --kubeconfig=$(KUBECONFIG) node-$(NUM)-koris-pipe-line-$(CLUSTER_NAME) | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
+	NUM=$(NUM) KUBECONFIG=$(KUBECONFIG) CLUSTER_NAME=$(CLUSTER_NAME) ./tests/scripts/assert_node_labels.sh
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
@@ -300,50 +298,13 @@ clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
 
 check-sonobuoy:
-	echo "Downloading sonobuoy to check for compliance with kubernetes certification requirements from ${SONOBUOY_URL}"; \
-	curl -s -L -o sonobuoy.tgz ${SONOBUOY_URL}; \
-	tar --skip-old-files -x -z -f sonobuoy.tgz; \
-	echo "Running sonobuoy on the cluster. This can take a very long time (up to 3 hours and more!)..."; \
-	./sonobuoy --kubeconfig ${KUBECONFIG} run; \
-	# Careful: All errors result in a clean exit as requested by Oz Tiram for this will only be run on the master branch
-	if [ $$? -ne 0 ]; then \
-		echo "Failed to run sonobuoy!"; \
-		exit 0; \
-	fi; \
-	STARTTIME=`date +%s`; \
-	echo "Starttime: `date`"; \
-	echo -n "Waiting for result to come in, checking every 5 minutes "; \
-	while true; do \
-		sleep 300; \
-		echo -n "."; \
-		CURRTIME=`date +%s`; \
-		CURRELAPSED=$$(( CURRTIME - STARTTIME)); \
-		if [ $$CURRELAPSED -ge ${SONOBUOY_CHECK_TIMEOUT_SECONDS} ]; then \
-			echo -e "\nMaximum alloted time for sonobuoy of ${SONOBUOY_CHECK_TIMEOUT_SECONDS} seconds to complete elapsed without result :["; \
-			exit 0; \
-		fi; \
-		SONOBUOY_CURR_STATUS=`./sonobuoy --kubeconfig ${KUBECONFIG} status`; \
-		if [ $$? -ne 0 ]; then \
-			echo "Failed to check sonobuoy status!"; \
-			exit 0; \
-		fi; \
-		echo $$SONOBUOY_CURR_STATUS | grep "${SONOBUOY_COMPLETED_INDICATOR}" > /dev/null; \
-		if [ $$? -eq 0 ]; then \
-			echo -e "\nResults are in! Retrieving and displaying for e2e tests..."; \
-			./sonobuoy --kubeconfig ${KUBECONFIG} retrieve; \
-			RESULTFILE=`ls | grep *sonobuoy*.tar.gz`; \
-			echo -e "\n#####################################"; \
-			echo -e "\ņ###### RESULT: ######################"; \
-			echo -e "#####################################\n"; \
-			./sonobuoy --kubeconfig ${KUBECONFIG} e2e $$RESULTFILE; \
-			echo -e "\n#####################################\n"; \
-			exit 0; \
-		fi; \
-	done;
+	SONOBUOY_URL=$(SONOBUOY_URL) KUBECONFIG=$(KUBECONFIG) SONOBUOY_CHECK_TIMEOUT_SECONDS=$(SONOBUOY_CHECK_TIMEOUT_SECONDS) \
+	SONOBUOY_COMPLETED_INDICATOR=$(SONOBUOY_COMPLETED_INDICATOR) ./tests/scripts/sonobuoy.sh
 
 clean-sonobuoy:
-	./sonobuoy --kubeconfig ${KUBECONFIG} delete; \
-	rm -f sonobuoy.tgz sonobuoy *sonobuoy*.tar.gz
+	./sonobuoy --kubeconfig ${KUBECONFIG} delete;
+	rm sonobuoy.tgz || true;
+	rm sonobuoy || true;
 
 compliance-checks: \
 	check-sonobuoy \
@@ -356,9 +317,7 @@ install-git-hooks:
 	chmod +x .git/hooks/pre-commit
 
 build-exec: ## build a single file executable of koris
-	rm -vRf dist
 	pyinstaller koris.spec
-
 
 build-exec-in-docker:
 	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)

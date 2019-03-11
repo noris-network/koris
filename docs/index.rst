@@ -8,6 +8,7 @@ Welcome to Koris's documentation!
    readme
    installation
    usage
+   addons
    modules
    certificates
    contributing

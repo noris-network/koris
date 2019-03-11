@@ -174,7 +174,7 @@ class NthMasterInit(BaseInit):
     to be done.
     """
     def __init__(self, cloud_config, ssh_key, os_type='ubuntu',
-                 os_version="16.04"):
+                 os_version="16.04", dex=None):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
@@ -188,8 +188,15 @@ class NthMasterInit(BaseInit):
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key)
 
+        # If Dex is to be installed, deploy its CA to the master
+        if dex is not None:
+            path = dex['ca_file']
+            cert = dex['cert']
+            self.write_file(path, b64_cert(cert),
+                            "root", "root", "0600", lambda x: x)
 
-# pylint: disable=too-many-arguments
+
+# pylint: disable=too-many-arguments,too-many-locals
 class FirstMasterInit(NthMasterInit):
     """
     This node executes the bootstrap strip to create the initial cluster.
@@ -216,8 +223,8 @@ class FirstMasterInit(NthMasterInit):
                  masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
                  pod_subnet='10.233.0.0/16',
                  pod_network='CALICO',
-                 os_type='ubuntu', os_version="16.04"):
-        super().__init__(cloud_config, ssh_key, os_type, os_version)
+                 os_type='ubuntu', os_version="16.04", dex=None):
+        super().__init__(cloud_config, ssh_key, os_type, os_version, dex=dex)
         self.ca_bundle = ca_bundle
 
         self.master_ips = [master.ip_address for master in masters]
@@ -237,8 +244,9 @@ class FirstMasterInit(NthMasterInit):
                         "root", "root", "0600", lambda x: x)
         self.write_file("/etc/kubernetes/pki/ca.key", b64_key(ca_bundle.key),
                         "root", "root", "0600", lambda x: x)
+
         self._write_cloud_config()
-        self._write_koris_env()
+        self._write_koris_env(dex)
         self._write_ssh_private_key()
 
     def _write_ssh_private_key(self):
@@ -251,7 +259,7 @@ class FirstMasterInit(NthMasterInit):
         self._cloud_config_data["ssh_keys"] = {}
         self._cloud_config_data["ssh_keys"]["rsa_private"] = key
 
-    def _write_koris_env(self):
+    def _write_koris_env(self, dex=None):
         """
         writes the necessary koris information for the node to the file
         /etc/kubernetes/koris.env
@@ -276,6 +284,25 @@ class FirstMasterInit(NthMasterInit):
                    self.pod_subnet,
                    self.pod_network)
         content = textwrap.dedent(content)
+
+        # For Dex we need to start the apiserver with special args, such as
+        # the location of the Dex CA certificate in order to verify incoming
+        # tokens
+        if dex is not None:
+            dex_content = """
+                export OIDC_ISSUER_URL="https://{}:{}"
+                export OIDC_CLIENT_ID="{}"
+                export OIDC_CA_FILE="{}"
+                export OIDC_USERNAME_CLAIM="{}"
+                export OIDC_GROUPS_CLAIM="{}"
+            """.format(dex['issuer'], dex['ports']['listener'],
+                       dex['client']['id'],
+                       dex['ca_file'],
+                       dex['username_claim'],
+                       dex['groups_claim'])
+            dex_content = textwrap.dedent(dex_content)
+            content += dex_content
+
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")
 

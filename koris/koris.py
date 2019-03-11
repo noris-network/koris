@@ -9,6 +9,7 @@ It automatically creates an executable in your path.
 """
 import argparse
 import os
+import shutil
 import ssl
 import sys
 from urllib.request import urlopen
@@ -57,7 +58,7 @@ class Koris:  # pylint: disable=no-self-use
             default=argparse.SUPPRESS)
 
         try:
-            html_string = str(urlopen(KORIS_DOC_URL).read())
+            html_string = str(urlopen(KORIS_DOC_URL, timeout=1.5).read())
         except (HTTPError, URLError):
             html_string = ""
 
@@ -98,6 +99,11 @@ class Koris:  # pylint: disable=no-self-use
                 config['cluster-name'])))
 
         delete_cluster(config, self.nova, self.neutron, self.cinder, force)
+        certs_location = 'certs-' + config['cluster-name']
+        try:
+            shutil.rmtree(certs_location)
+        except FileNotFoundError:
+            print(red("Certificates {} already deleted".format(certs_location)))
         sys.exit(0)
 
     def add(self, config: str, flavor: str, zone: str,
