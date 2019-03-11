@@ -38,6 +38,7 @@ bare-metal-integration:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.3
   script:
+   - apk add openssh
    - pip install python-openstackclient python-octaviaclient
    - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos
    - make -f tests/makefile-bare-metal.mk clean-all
