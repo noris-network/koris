@@ -113,10 +113,12 @@ clean-nodes:
 
 clean-volumes-masters:
 	for host in {1..3}; \
+		openstack volume show $(CLUSTERNAME)-root-master
 	do until openstack volume show $(CLUSTERNAME)-root-master-$${host} -c status -f value | grep available; do sleep 2; done; \
 	openstack volume delete $(CLUSTERNAME)-root-master-$${host}; done
 
 clean-volumes-nodes:
+	openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep "No volume" || \
 	until openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep available; do sleep 2; done; \
 	openstack volume delete $(CLUSTERNAME)-root-node-1
 
