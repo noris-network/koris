@@ -80,6 +80,7 @@ koris.env:
 	echo "export OPENSTACK=0" >> koris.env
 	echo "export SSH_USER=$(USER)" >> koris.env
 	echo "export K8SNODES=( $(CLUSTERNAME)-node-1 )" >> koris.env
+	echo "Bootstrapping with koris.env:"; cat koris.env
 
 
 cp-koris-env: FIRSTMASTER ?= $(CLUSTERNAME)-master-1
