@@ -238,8 +238,8 @@ build:
   stage: build
   image: oz123/koris-builder:0.2
   script:
-   - python3 setup.py sdist PY=python3.6
-   - make install build-exec PY=python3.6
+   - python3 setup.py sdist
+   - make install build-exec
   artifacts:
     paths:
      - dist/koris-*.tar.gz
