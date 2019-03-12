@@ -23,7 +23,7 @@ from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
 from koris.util.util import get_logger
 from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
-                        OSCloudConfig, LoadBalancer,
+                        OSCloudConfig, LoadBalancer, get_connection,
                         )
 
 LOGGER = get_logger(__name__)
@@ -363,8 +363,9 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # create a load balancer for accessing the API server of the cluster;
         # do not add a listener, since we created no machines yet.
         LOGGER.info("Creating the load balancer...")
-        lbinst = LoadBalancer(config)
-        lb, floatingip = lbinst.get_or_create(NEUTRON, self.info.subnet_id)
+        lb_conn = get_connection()
+        lbinst = LoadBalancer(config, conn=lb_conn)
+        lb, floatingip = lbinst.get_or_create(NEUTRON)
         lb_port = "6443"
 
         lb_dns = config['loadbalancer'].get('dnsname') or floatingip

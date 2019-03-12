@@ -7,6 +7,7 @@ import pytest
 
 import koris.cloud.openstack
 
+from koris.cloud import OpenStackAPI
 from koris.cloud.openstack import OSClusterInfo, OSSubnet
 from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
 from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
@@ -168,6 +169,11 @@ SUBNETS = {
     "enable_dhcp": True,
     "created_at": "2019-01-30T13:47:45Z"
 }
+
+
+@pytest.fixture
+def get_conn():
+    return OpenStackAPI.connect()
 
 
 @pytest.fixture

@@ -7,13 +7,12 @@ import base64
 import copy
 import logging
 import os
-import re
 import sys
 import textwrap
 
 from functools import lru_cache
 
-from netaddr import IPNetwork
+from netaddr import IPNetwork, valid_ipv4, valid_ipv6
 import novaclient
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound, NoUniqueMatch)  # noqa
@@ -228,7 +227,7 @@ class LoadBalancer:  # pragma: no coverage
 
     """
 
-    def __init__(self, config, client=None):
+    def __init__(self, config, client=None, conn=None):
         self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
         self.config = config
         if not self.floatingip:
@@ -243,6 +242,7 @@ class LoadBalancer:  # pragma: no coverage
         self._existing_floating_ip = None
         self.members = []
         self.client = client
+        self.conn = conn
 
     async def configure(self, client, master_ips):
         """
@@ -278,18 +278,14 @@ class LoadBalancer:  # pragma: no coverage
         else:
             self.add_health_monitor(client, pool['id'])
 
-    def get(self, client=None):
+    def get(self):
         """
         get loadbalancer information
         """
-        if client:
-            self.client = client
-        lb = self.client.list_lbaas_loadbalancers(retrieve_all=True,
-                                                  name=self.name)['loadbalancers']
+        lb = self.conn.load_balancer.find_load_balancer(self.name)
         if lb:
-            lb = lb[0]
-            self._id = lb['id']
-            self._subnet_id = lb['vip_subnet_id']
+            self._id = lb.id
+            self._subnet_id = lb.vip_subnet_id
             self._data = lb
             try:
                 self.pool = lb['pools'][0]['id']
@@ -298,13 +294,13 @@ class LoadBalancer:  # pragma: no coverage
 
         return lb
 
-    def get_or_create(self, client, provider='octavia'):
+    def get_or_create(self, client):
         """Retrieve, else create  a LoadBalancer"""
 
-        lb = self.get(client)
+        lb = self.get()
 
         if not lb or 'DELETE' in lb['provisioning_status']:
-            lb, fip_addr = self.create(client, provider=provider)
+            lb, fip_addr = self.create(client)
         else:
             LOGGER.info("Reusing existing LoadBalancer ...")
             self._existing_floating_ip = None
@@ -322,7 +318,7 @@ class LoadBalancer:  # pragma: no coverage
         """Return the LoadBalancer's IP or Floating IP address"""
 
         if not self._data:
-            self.get(self.client)
+            self.get()
 
         if self._data['vip_address']:
             return self._data['vip_address']
@@ -346,17 +342,16 @@ class LoadBalancer:  # pragma: no coverage
 
     def _floating_ip_address(self, client, lb):
         floatingips = client.list_floatingips(retrieve_all=True,
-                                              port_id=lb['vip_port_id'])
+                                              port_id=lb.vip_port_id)
         if floatingips['floatingips']:
             self._existing_floating_ip = floatingips[
                 'floatingips'][0]['floating_ip_address']
             fip_addr = self._existing_floating_ip
         else:
-            fip_addr = self.associate_floating_ip(
-                client, lb)
+            fip_addr = self.associate_floating_ip(lb)
         return fip_addr
 
-    def create(self, client, conn=None, provider='octavia'):
+    def create(self, client):
         """Provision a minimally configured LoadBalancer in OpenStack
 
         Args:
@@ -371,26 +366,25 @@ class LoadBalancer:  # pragma: no coverage
         # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
         if self.subnet:
             # subnet_id = client.find_resource('subnet', self.subnet)['id']
-            subnet_id = conn.get_subnet(self.subnet)
+            subnet_id = self.conn.get_subnet(self.subnet).id
         else:
             # match created subnet id with the corresponding one in subnets
-            network = OSNetwork(client, self.config, conn).get_or_create()
+            net_conn = get_connection()
+            network = OSNetwork(client, self.config, net_conn).get_or_create()
             subnets = client.list_subnets()['subnets']
             subnet_id = [sub['id']
                          for sub in subnets if network['id'] == sub['network_id']][0]
-
-        lb = conn.load_balancer.create_load_balancer(provider=provider,
-                                                     vip_subnet_id=subnet_id,
-                                                     name=f"{self.name}")
-        self._id = lb.get_loadbalancer_statistics(self.name).lb_id
-        self._subnet_id = lb.subnet_id
+        lb = self.conn.load_balancer.create_load_balancer(vip_subnet_id=subnet_id,
+                                                          name=f"{self.name}")
+        self._id = lb.id
+        self._subnet_id = subnet_id
         self._data = lb
 
         LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
 
         fip_addr = None
         if self.floatingip:
-            fip_addr = self.associate_floating_ip(client, lb['loadbalancer'])
+            fip_addr = self.associate_floating_ip(lb)
         return lb, fip_addr
 
     @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
@@ -399,7 +393,7 @@ class LoadBalancer:  # pragma: no coverage
         """Delete the cluster API loadbalancer
 
         Deletion order of LoadBalancer:
-            - remove pool (LB is pending update)
+            - remove pool (LB is pending up date)
             - if healthmonitor in pool, delete it first
             - remove listener (LB is pending update)
             - remove LB (LB is pending delete)
@@ -412,56 +406,51 @@ class LoadBalancer:  # pragma: no coverage
         if not client:
             client = self.client
 
-        lb = client.list_lbaas_loadbalancers(retrieve_all=True,
-                                             name=self.name)['loadbalancers']
-        if not lb or 'DELETE' in lb[0]['provisioning_status']:
+        # Check if LB is assigned
+        lb = self._data
+        if not lb:
+            # Find LB in OpenStack
+            lb = self.get()
+
+        if not lb or 'DELETE' in lb.operating_status:
             LOGGER.warning("LB %s was not found", self.name)
         else:
-            lb = lb[0]
-            self._id = lb['id']
             self._del_pool(client, delete_all=True)
             self._del_listener(client, delete_all=True)
             self._del_loadbalancer(client)
 
-    def associate_floating_ip(self, client, loadbalancer):
+    def associate_floating_ip(self, loadbalancer):
         """Associates a Floating IP with the LoadBalancer"""
 
         fip = None
         if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
-            valid_ip = re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # noqa
-                                self.floatingip)
+            valid_ip = valid_ipv4(self.floatingip) or valid_ipv6(self.floatingip)
             if not valid_ip:
-                LOGGER.error("Please specify a valid IP address")
+                LOGGER.error("'%s' is not a valid IP address", self.floatingip)
                 sys.exit(1)
             if self._existing_floating_ip == self.floatingip:
                 return self._existing_floating_ip
 
-            fip = client.list_floatingips(
-                floating_ip_address=self.floatingip)['floatingips']
+            # Check if Floating IP exists in OpenStack
+            fip = self.conn.network.find_ip(self.floatingip)
             if not fip:
                 LOGGER.error("Could not find %s in the pool", self.floatingip)
                 sys.exit(1)
-            fip = fip[0]
         if not fip:
-            fips = client.list_floatingips()['floatingips']
+            # Get the first available FIP from the OpenStack Project the LB is located in
+            fips = list(self.conn.network.ips(project_id=loadbalancer.project_id))[0]
             if not fips:
                 raise ValueError(
                     "Please create a floating ip and specify it in the configuration file")  # noqa
-            # this is a total BS in a project like PI because this project
-            # has multiple floating IP pools. We need to fix this
-            fnet_id = fips[0]['floating_network_id']
-            fip = client.create_floatingip(
-                {'floatingip': {'project_id': loadbalancer['tenant_id'],
-                                'floating_network_id': fnet_id}})['floatingip']
+            fip = fips[0]
 
-        client.update_floatingip(fip['id'],
-                                 {'floatingip':
-                                  {'port_id': loadbalancer['vip_port_id']}})
+            # Assign FIP to LB
+            fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
 
         LOGGER.info("Loadbalancer external IP: %s",
-                    fip['floating_ip_address'])
+                    fip.floating_ip_address)
 
-        return fip['floating_ip_address']
+        return fip.floating_ip_address
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=20, delay=30,
            backoff=1, logger=LOGGER.debug)
@@ -826,10 +815,8 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
                 "The network [%s] already exists. Skipping" % net_name)))  # noqa
         else:
             print(info(red("Creating network [%s]" % net_name)))
-            network = self.conn.create_network({
-                "name": net_name,
-                "admin_state_up": True
-            })
+            network = self.conn.create_network(name=net_name,
+                                               admin_state_up=True)
 
         if 'private_net' in self.config:
             self.config['private_net'].update(network)
@@ -843,10 +830,11 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
     """
     create subnet if not defined
     """
-    def __init__(self, neutron_client, network_id, config):
+    def __init__(self, neutron_client, network_id, config, conn=None):
         self.net_client = neutron_client
         self.net_id = network_id
         self.config = config
+        self.conn = conn
 
     def get_or_create(self):
         """
@@ -1020,12 +1008,13 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     def __init__(self, nova_client, neutron_client,
                  cinder_client,
                  config):
+        self.conn = get_connection()
         self.keypair = nova_client.keypairs.get(config['keypair'])
 
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-        self.net = OSNetwork(neutron_client, config).get_or_create()
+        self.net = OSNetwork(neutron_client, config, conn=self.conn).get_or_create()
         subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
         OSRouter(neutron_client, self.net['id'], subnet, config).get_or_create()
         self.subnet_id = subnet['id']
