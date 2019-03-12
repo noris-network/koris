@@ -187,6 +187,10 @@ compliance-checks:
   only:
   - master
   - tags
+  - compliance_check
+  artifacts:
+    paths:
+      - results
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -263,8 +267,8 @@ build:
   stage: build
   image: oz123/koris-builder:0.2
   script:
+   - make install build-exec
    - python3 setup.py sdist
-   - make install build-exec PY=python3.6
   artifacts:
     paths:
      - dist/koris-*.tar.gz
