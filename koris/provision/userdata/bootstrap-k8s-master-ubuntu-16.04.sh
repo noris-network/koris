@@ -25,7 +25,7 @@
 #	export LOAD_BALANCER_IP=XX.YY.ZZ.WW
 #	export BOOTSTRAP_TOKEN=$(openssl rand -hex 3).$$(openssl rand -hex 8)
 #	export OPENSTACK=0
-#       export K8SNODES=( node-1 node-2 ) # a list of nodes to join
+#	export K8SNODES=( node-1 node-2 ) # a list of nodes to join
 #
 ###
 
@@ -169,7 +169,7 @@ function copy_keys() {
 
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
-    sftp ${USER}@$host << EOF
+    sftp ${SSHOPTS} ${USER}@$host << EOF
 	put /etc/kubernetes/pki/ca.crt /home/${USER}/kubernetes/pki/
 	put /etc/kubernetes/pki/ca.key /home/${USER}/kubernetes/pki/
 	put /etc/kubernetes/pki/sa.key /home/${USER}/kubernetes/pki/
