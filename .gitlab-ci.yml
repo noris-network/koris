@@ -216,7 +216,7 @@ clean-bare-metal:
     LANG: "C.UTF-8"
   script:
    - pip install python-openstackclient python-octaviaclient
-   - make -f tests/makefile-bare-metal.mk clean-all
+   - make -f tests/makefile-bare-metal.mk clean-all CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
   when: always
   except:
     variables:
@@ -263,7 +263,7 @@ build:
   stage: build
   image: oz123/koris-builder:0.2
   script:
-   - python3 setup.py sdist PY=python3.6
+   - python3 setup.py sdist
    - make install build-exec PY=python3.6
   artifacts:
     paths:
