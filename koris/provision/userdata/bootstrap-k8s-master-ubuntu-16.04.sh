@@ -14,22 +14,19 @@
 #
 # This should be the content of /etc/kubernetes/koris.env
 #
-#  export B64_CA_CONTENT="$(kubeadm alpha phase certs ca 1>/dev/null 2>&1 && base64 -w 0 /etc/kubernetes/pki/ca.crt)"
-#  export LOAD_BALANCER_DNS=""
-#  export LOAD_BALANCER_IP=""
-#  export LOAD_BALANCER_PORT=""
-#  export BOOTSTRAP_TOKEN="$(openssl rand -hex 3).$(openssl rand -hex 8)"
-#  export DISCOVERY_HASH="$(openssl x509 -in /etc/kubernetes/pki/ca.crt -noout -pubkey | openssl rsa -pubin -outform DER 2>/dev/null | sha256sum | cut -d' ' -f1)"
-#  export MASTERS=( hostname.domain hostname1.domain hostname2.domain ... )
-#  export MASTERS_IPS=( 110.234.20.118 10.234.20.119 10.234.20.120 ... )
-#  # choose CALICO or FLANNEL
-#  export POD_NETWORK="CALICO"
-#  export POD_SUBNET="10.233.0.0/16"
-#  export SSH_USER="ubuntu"  # for RHEL use root
+#	export BOOTSTRAP_NODES=1  # for bootstrapping baremetal nodes (i.e. not an Openstack Image
+#	export SSH_USER="root"    # for ubuntu use ubuntu
+#	export POD_SUBNET="10.233.0.0/16"
+#	export POD_NETWORK="CALICO"
+#	export LOAD_BALANCER_PORT="6443"
+#	export MASTERS_IPS=( 10.32.10.1  10.32.10.2 10.32.10.3 )
+#	export MASTERS=( master-1 master-2 master-3 )
+#   # specify one of the two LOAD_BALANCER_IP or LOAD_BALANCER_DNS
+#	export LOAD_BALANCER_IP=XX.YY.ZZ.WW
+#	export BOOTSTRAP_TOKEN=$(openssl rand -hex 3).$$(openssl rand -hex 8)
+#	export OPENSTACK=0
+#	export K8SNODES=( node-1 node-2 ) # a list of nodes to join
 #
-#  # for bare metal or generic images in VMWARE set
-#  export BOOTSTRAP_NODES=1
-#  # this will install all dependencies on each node
 ###
 
 # load koris environment file if available
@@ -48,6 +45,8 @@ export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
 export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
+export OPENSTACK=${OPENSTACK:-1}
+export K8SNODES=${K8SNODES:-""}
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -56,7 +55,6 @@ SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTime
 # create a proper kubeadm config file for each master.
 # the configuration files are ordered and contain the correct information
 # of each master and the rest of the etcd cluster
-# WORK: let apiserver know where CA lies
 function create_config_files() {
     cat <<TMPL > init.tmpl
 apiVersion: kubeadm.k8s.io/v1alpha2
@@ -87,7 +85,7 @@ networking:
 #apiServerExtraArgs:
 #  allow-privileged: "true"
 #  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
-  #feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
+#  feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
@@ -97,10 +95,14 @@ bootstrapTokens:
   - signing
   - authentication
 controllerManagerExtraArgs:
-  cloud-provider: "openstack"
-  cloud-config: /etc/kubernetes/cloud.config
   allocate-node-cidrs: "true"
   cluster-cidr: ${POD_SUBNET}
+TMPL
+# if On baremetal we don't need all OpenStack cloud provider flags
+if [[ OPENSTACK -eq 1 ]]; then
+cat <<TMPL >> init.tmpl
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
 - name: "cloud-config"
   hostPath: "/etc/kubernetes/cloud.config"
@@ -117,6 +119,7 @@ apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 TMPL
+fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
 if [[ -n ${OIDC_CLIENT_ID+x} ]]; then
@@ -150,7 +153,7 @@ fi
 # distributes configuration file and certificates to a master node
 function copy_keys() {
     host=$1
-    USER=${SSHUSER:-ubuntu}
+    USER=${SSH_USER:-ubuntu}
 
     echo -n "waiting for ssh on $1"
     until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -161,69 +164,30 @@ function copy_keys() {
     echo "distributing keys to $host";
     # clean and recreate directory structure
     ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
-    ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
-    ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
+    ssh ${SSHOPTS} ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
+    ssh ${SSHOPTS} ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
 
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
-    scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-    scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-    scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
-    scp ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:/home/${USER}/kubernetes/
-    scp ${SSHOPTS} /etc/kubernetes/koris.conf "${USER}"@$host:/home/${USER}/kubernetes/
-    scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
+    sftp ${SSHOPTS} ${USER}@$host << EOF
+	put /etc/kubernetes/pki/ca.crt /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/ca.key /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/sa.key /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/sa.pub /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/front-proxy-ca.crt /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/front-proxy-ca.key /home/${USER}/kubernetes/pki/
+	put /etc/kubernetes/pki/etcd/ca.crt /home/${USER}/kubernetes/pki/etcd/
+	put /etc/kubernetes/pki/etcd/ca.key /home/${USER}/kubernetes/pki/etcd/
+	put /etc/kubernetes/admin.conf /home/${USER}/kubernetes/
+	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
+EOF
 
-    # move back to /etc on remote machine
-    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
-    ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
-    ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+   # move back to /etc on remote machine
+   ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
+   ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+   ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
 
-    echo "done distributing keys to $host";
-}
-
-
-# distributes configuration files and certificates
-# use this only when all hosts are already up and running
-function distribute_keys() {
-   USER=${SSHUSER:-ubuntu}
-
-   for (( i=1; i<${#MASTERS_IPS[@]}; i++ )); do
-       echo "distributing keys to ${MASTERS_IPS[$i]}";
-       host=${MASTERS_IPS[$i]}
-
-       # clean and recreate directory structure
-       ssh ${SSHOPTS} ${USER}@$host sudo rm -vRf /etc/kubernetes
-       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/pki/etcd
-       ssh ${SSHOPTS}  ${USER}@$host mkdir -pv /home/${USER}/kubernetes/manifests
-
-       # copy over everything PKI related, copy to temporary directory with
-       # non-root write access
-       scp ${SSHOPTS} /etc/kubernetes/pki/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/sa.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/sa.pub "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/front-proxy-ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/
-       scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.crt "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-       scp ${SSHOPTS} /etc/kubernetes/pki/etcd/ca.key "${USER}"@$host:/home/${USER}/kubernetes/pki/etcd/
-       scp ${SSHOPTS} /etc/kubernetes/admin.conf "${USER}"@$host:/home/${USER}/kubernetes/
-       scp ${SSHOPTS} /etc/kubernetes/cloud.config "${USER}"@$host:/home/${USER}/kubernetes/
-       scp ${SSHOPTS} /etc/kubernetes/koris.conf "${USER}"@$host:/home/${USER}/kubernetes/
-       scp ${SSHOPTS} /etc/kubernetes/koris.env "${USER}"@$host:/home/${USER}/kubernetes/
-
-       # move back to /etc on remote machine
-       ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
-       ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
-       ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
-
-       echo "done distributing keys to ${MASTERS_IPS[$i]}";
-   done
+   echo "done distributing keys to $host";
 }
 
 
@@ -273,7 +237,7 @@ function bootstrap_first_master() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
-    USER=${SSHUSER:-ubuntu}
+    USER=${SSH_USER:-ubuntu}
 
    echo "*********** Bootstrapping $1 ******************"
    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
@@ -406,17 +370,22 @@ sysctl --system
 }
 
 function bootstrap_deps_node() {
-    ssh ${1} "KUBE_VERSION=${KUBE_VERSION}; $(
-    typeset -f get_docker_ubuntu;
-    typeset -f get_docker_centos;
-    typeset -f get_kubeadm_ubuntu;
-    typeset -f get_kubeadm_centos;
-    typeset -f get_docker;
-    typeset -f get_kubeadm;
-    typeset -f fetch_all);
-    sudo iptables -P FORWARD ACCEPT;
-    sudo swapoff -a;
-    sudo fetch_all;"
+ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
+set -ex;
+iptables -P FORWARD ACCEPT;
+swapoff -a;
+KUBE_VERSION=${KUBE_VERSION};
+DOCKER_VERSION=${DOCKER_VERSION};
+first_master=${first_master}
+$(typeset -f get_docker_ubuntu);
+$(typeset -f get_docker_centos);
+$(typeset -f get_kubeadm_ubuntu);
+$(typeset -f get_kubeadm_centos);
+$(typeset -f get_docker);
+$(typeset -f get_kubeadm);
+$(typeset -f fetch_all);
+fetch_all;
+EOF
 }
 
 # enforce docker version
@@ -483,15 +452,16 @@ function main() {
         copy_keys $HOST_IP
         until add_master $HOST_NAME $HOST_IP; do
             ssh $HOST_NAME sudo kubeadm reset -f
+            copy_keys $HOST_IP
         done
 
         wait_for_etcd $HOST_NAME
         echo "done bootstrapping master ${MASTERS[$i]}";
     done
 
-    if [ $1 == "--join-all-nodes" ]; then
-        HOSTS=${K8SNODES:?"You must define K8SNODES"}
-        join_all_hosts --install-deps
+    if [[ -n ${K8SNODES} && "$(declare -p K8SNODES)" =~ "declare -a" ]]; then
+        echo "Joining worker nodes ..."
+        join_all_hosts
     fi
 
     echo "the installation has finished."
@@ -501,17 +471,15 @@ function main() {
 # when building bare metal cluster or vSphere clusters this is used to
 # install dependencies on each host and join the host to the cluster
 join_all_hosts() {
-    if [ -z ${DISCOVERY_HASH} ]; then
-        export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
-                                openssl rsa -pubin -outform der 2>/dev/null | \
-                                openssl dgst -sha256 -hex | sed 's/^.* //')
-   fi
+   export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
+                           openssl rsa -pubin -outform der 2>/dev/null | \
+                           openssl dgst -sha256 -hex | sed 's/^.* //')
    if [ -z ${BOOTSTRAP_TOKEN} ]; then
-        export TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
+        export BOOTSTRAP_TOKEN=$(kubeadm token list | grep -v TOK| cut -d" " -f 1 | grep '^\S')
    fi
-   for K in "${!HOSTS[@]}"; do
+   for K in "${K8SNODES[@]}"; do
        echo "***** ${K} ******"
-       if [ $1 == "--install-deps" || -n ${BOOTSTRAP_NODES} ]; then
+       if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
             bootstrap_deps_node ${K}
        fi
        ssh ${K} sudo kubeadm reset -f
@@ -531,7 +499,8 @@ function fetch_all() {
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
 
-
+# This line and the if condition bellow allow sourcing the script without executing
+# the main function
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
 if [[ $sourced == 1 ]]; then
@@ -543,8 +512,7 @@ else
     cd /root
     iptables -P FORWARD ACCEPT
     swapoff -a
-    main
-    cd /root
+    main $@
 fi
 
 # vi: expandtab ts=4 sw=4 ai
