@@ -260,26 +260,26 @@ class LoadBalancer:  # pragma: no coverage
             listener = self.add_listener()
             listener_id = listener.id
         else:
-            LOGGER.info("Reusing listener %s", self._data['listeners'][0]['id'])
+            LOGGER.info("Reusing listener %s", self._data.listeners[0].id)
             listener_id = self._data.listeners[0].id
 
         if not self._data.pools:
             pool = self.add_pool(listener_id)
         else:
             LOGGER.info("Reusing pool, removing all members ...")
-            pool = client.list_lbaas_pools(id=self._data['pools'][0]['id'])
+            pool = client.list_lbaas_pools(id=self._data.pools[0].id)
             pool = pool['pools'][0]
             for member in pool['members']:
-                self._del_member(client, member['id'], pool['id'])
+                self._del_member(client, member.id, pool.id)
 
-        self.pool = pool['id']
+        self.pool = pool.id
 
         LOGGER.info("Adding member ...")
-        self.add_member(client, pool['id'], master_ips[0])
+        self.add_member(pool.id, master_ips[0])
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor")
         else:
-            self.add_health_monitor(client, pool['id'])
+            self.add_health_monitor(client, pool.id)
 
     def get(self):
         """
@@ -511,21 +511,21 @@ class LoadBalancer:  # pragma: no coverage
         LOGGER.info("Added health monitor '%s' (%s) to pool %s", name,
                     hm['healthmonitor']['id'], pool_id)
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict, BadRequest), tries=24,
+    @retry(exceptions=(StateInvalidClient, OSConflict, BadRequest), tries=24,
            delay=5, backoff=1, logger=LOGGER.debug)
-    def add_member(self, client, pool_id, ip_addr, protocol_port=6443):
+    def add_member(self, pool_id, ip_addr, protocol_port=6443):
         """
         add listener to a loadbalancers pool.
         """
-        member = client.create_lbaas_member(pool_id,
-                                            {'member':
-                                             {'subnet_id': self._subnet_id,
-                                              'protocol_port': protocol_port,
-                                              'address': ip_addr,
-                                              }})
+
+        member = self.conn.network.create_pool_member(pool=pool_id,
+                                                      subnet_id=self._subnet_id,
+                                                      protocol_port=protocol_port,
+                                                      address=ip_addr)
+
         self.members.append(ip_addr)
         LOGGER.info("Added member '%s' (%s) to pool %s on port %i", ip_addr,
-                    member['member']['id'], pool_id, protocol_port)
+                    member.id, pool_id, protocol_port)
 
     @retry(exceptions=(OSError, NeutronConflict), backoff=1,
            logger=LOGGER.debug)

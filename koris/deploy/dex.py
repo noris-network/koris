@@ -174,11 +174,10 @@ class Pool:
         self.id = pool.id
         self.pool = pool
 
-    def add_members(self, client, lb: LoadBalancer):
+    def add_members(self, lb: LoadBalancer):
         """Adds Members to a Pool.
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
         """
 
@@ -187,7 +186,7 @@ class Pool:
         self.verify()
 
         for ip in self.members:
-            lb.add_member(client, self.id, ip, self.port)
+            lb.add_member(self.id, ip, self.port)
 
     def add_health_monitor(self, client, lb: LoadBalancer):
         """Adds a Health monitor to a Pool with default settings
@@ -213,7 +212,7 @@ class Pool:
         """
 
         self.create(lb, listener_id)
-        self.add_members(client, lb)
+        self.add_members(lb)
         self.add_health_monitor(client, lb)
 
 
