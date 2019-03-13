@@ -157,22 +157,21 @@ class Pool:
             if not is_ip(ip):
                 raise ValidationError(f"invalid IP address: {ip}")
 
-    def create(self, client, lb: LoadBalancer, listener_id):
+    def create(self, lb: LoadBalancer, listener_id):
         """Creates a Pool and adds it to a Listener.
 
         This function will set the attributes ``pool`` and ``id``.
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
             listener_id (str): The Listener ID this pool should be added to.
         """
 
         self.verify()
-        pool = lb.add_pool(client, listener_id=listener_id, lb_algorithm=self.algorithm,
+        pool = lb.add_pool(listener_id=listener_id, lb_algorithm=self.algorithm,
                            protocol=self.protocol,
                            name=self.name)
-        self.id = pool["id"]
+        self.id = pool.id
         self.pool = pool
 
     def add_members(self, client, lb: LoadBalancer):
@@ -209,12 +208,11 @@ class Pool:
         Will call ``create``, ``add_members`` and ``add_health_monitor``.
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
             listener_id (str): The Listener ID this pool should be added to.
         """
 
-        self.create(client, lb, listener_id)
+        self.create(lb, listener_id)
         self.add_members(client, lb)
         self.add_health_monitor(client, lb)
 
@@ -283,20 +281,18 @@ class Listener:
         if not is_port(self.port):
             raise ValidationError(f"invalid listener port {self.port}")
 
-    def create(self, client):
+    def create(self):
         """Creates a new Listener and adds it to the LoadBalancer.
 
         This function will assing the attributes ``listener`` and ``id``.
 
-        Args:
-            client: An OpenStack client, usually Neutron.
         """
         self.verify()
-        listener = self.loadbalancer.add_listener(client, name=self.name,
+        listener = self.loadbalancer.add_listener(name=self.name,
                                                   protocol=self.protocol,
                                                   protocol_port=self.port)
         self.listener = listener
-        self.id = listener["listener"]["id"]
+        self.id = listener.id
 
     def create_pool(self, client):
         """Creates a new Pool with members and healthmon and adds it to the Listener.
@@ -325,7 +321,7 @@ class Listener:
             client: An OpenStack client, usually Neutron.
         """
 
-        self.create(client)
+        self.create()
         self.create_pool(client)
 
 

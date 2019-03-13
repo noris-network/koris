@@ -20,7 +20,8 @@ config = {
     'private_net': {
         'name': 'koris-test-net',
         'subnet': {
-            'name': 'test-subnet'
+            'name': 'test-subnet',
+            'cidr': '192.168.0.0/16'
         }
     }
 }
@@ -29,7 +30,7 @@ CONN = OpenStackAPI.connect()
 NET = OSNetwork(CLIENT, config, CONN).get_or_create()
 SUBNET = OSSubnet(CLIENT, NET['id'], config).get_or_create()
 OSRouter(CLIENT, NET['id'], SUBNET, config).get_or_create()
-LB = LoadBalancer(config, CONN)
+LB = LoadBalancer(config, client=CLIENT, conn=CONN)
 
 
 def create_and_configure():

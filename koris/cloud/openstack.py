@@ -25,6 +25,8 @@ from neutronclient.common.exceptions import StateInvalidClient
 from neutronclient.common.exceptions import NotFound
 from neutronclient.common.exceptions import BadRequest
 
+from openstack.exceptions import ConflictException as OSConflict
+
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
@@ -253,15 +255,16 @@ class LoadBalancer:  # pragma: no coverage
 
         """
 
-        if not self._data['listeners']:
-            listener = self.add_listener(client)
-            listener_id = listener["listener"]['id']
+        # If not present, add listener
+        if not self._data.listeners:
+            listener = self.add_listener()
+            listener_id = listener.id
         else:
             LOGGER.info("Reusing listener %s", self._data['listeners'][0]['id'])
-            listener_id = self._data['listeners'][0]['id']
+            listener_id = self._data.listeners[0].id
 
-        if not self._data['pools']:
-            pool = self.add_pool(client, listener_id)
+        if not self._data.pools:
+            pool = self.add_pool(listener_id)
         else:
             LOGGER.info("Reusing pool, removing all members ...")
             pool = client.list_lbaas_pools(id=self._data['pools'][0]['id'])
@@ -452,48 +455,45 @@ class LoadBalancer:  # pragma: no coverage
 
         return fip.floating_ip_address
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=20, delay=30,
+    @retry(exceptions=(StateInvalidClient, OSConflict), tries=20, delay=30,
            backoff=1, logger=LOGGER.debug)
-    def add_listener(self, client, name=None, protocol="HTTPS",
+    def add_listener(self, name=None, protocol="HTTPS",
                      protocol_port=6443):
         """Adds a custom listener to the LoadBalancer"""
 
         if name is None:
             name = self.name
-        listener = client.create_listener({'listener':
-                                           {"loadbalancer_id":
-                                            self._id,
-                                            "protocol": protocol,
-                                            "protocol_port": protocol_port,
-                                            'admin_state_up': True,
-                                            'name': name
-                                            }})
+
+        listener = self.conn.network.create_listener(load_balancer_id=self._id,
+                                                     protocol=protocol,
+                                                     protocol_port=protocol_port,
+                                                     is_admin_state_up=True,
+                                                     name=name)
 
         LOGGER.info("Added %s listener '%s' (%s) on port %i to LoadBalancer %s", protocol,
-                    name, listener['listener']['id'], protocol_port, self._id)
+                    name, listener.id, protocol_port, self._id)
         return listener
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=30, delay=5, backoff=1,
+    @retry(exceptions=(StateInvalidClient, OSConflict), tries=30, delay=5, backoff=1,
            logger=LOGGER.debug)
-    def add_pool(self, client, listener_id, lb_algorithm="SOURCE_IP", protocol="HTTPS",
+    def add_pool(self, listener_id, lb_algorithm="SOURCE_IP", protocol="HTTPS",
                  name=None):
         """Adds a pool to a listener"""
 
         if name is None:
             name = f"{self.name}-pool"
 
-        pool = client.create_lbaas_pool(
-            {"pool": {"lb_algorithm": lb_algorithm,
-                      "listener_id": listener_id,
-                      "loadbalancer_id": self._id,
-                      "protocol": protocol,
-                      "name": name},
-             })
-        self.pool = pool['pool']
+        pool = self.conn.network.create_pool(listener_id=listener_id,
+                                             load_balancer_id=self._id,
+                                             protocol=protocol,
+                                             lb_algorithm=lb_algorithm,
+                                             name=name)
+
+        self.pool = pool
 
         LOGGER.info("Added %s pool '%s' (%s) with %s to listener %s", protocol, name,
-                    pool['pool']['id'], lb_algorithm, listener_id)
-        return pool['pool']
+                    pool.id, lb_algorithm, listener_id)
+        return pool
 
     @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=10,
            backoff=0.8, logger=LOGGER.debug)
