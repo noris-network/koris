@@ -87,7 +87,10 @@ cp-koris-env: FIRSTMASTER ?= $(CLUSTERNAME)-master-1
 cp-koris-env: FIRSTMASTER_IP ?= $$(openstack server show $(FIRSTMASTER) -f value -c addresses | cut -f 2 -d "=")
 cp-koris-env:
 	@echo $(FIRSTMASTER_IP)
-	ssh $(SSHOPTS) $(USER)@$(FIRSTMASTER_IP) sudo mkdir -pv /etc/kubernetes/
+	for i in 1..60; do \
+		ssh $(SSHOPTS) $(USER)@$(FIRSTMASTER_IP) sudo mkdir -pv /etc/kubernetes/ && break; \
+		sleep 5 ; \
+	done
 	cat koris.env | ssh $(SSHOPTS) $(USER)@$(FIRSTMASTER_IP) "sudo sh -c 'cat >/etc/kubernetes/koris.env'"
 
 cp-bootstrap-script: FIRSTMASTER ?= $(CLUSTERNAME)-master-1
