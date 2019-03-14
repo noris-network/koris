@@ -72,3 +72,23 @@ For example:
 
 Finally, make sure all swaps and firewall are disabled on all hosts!
 
+Running the script:
+-------------------
+
+First, create a correct ``koris.env`` file and copy it to the first master where
+you intead to run the script. You can do this with ``ansible`` or directly with ``scp``.
+The file must be saved in ``/etc/kuberentes/koris.env``.
+
+Then, obtain the `bootstrap script`_ either from ``git clone``, ``curl`` or any other method.
+If you downloaded it to your work machine, copy it over to the first master
+(the same machine where ``/etc/kubernetes/koris.env`` is found). Then run the script
+as root::
+
+   # bash bootstrap-k8s-master-ubuntu-16.04.sh
+
+The script will intall all dependencies on all node if you instructed it to do so.
+This takes a little while, dependending on the number of masters nodes and how
+fast is the internet connection is.
+
+.. _bootstrap script: https://gitlab.noris.net/PI/koris/raw/master/koris/provision/userdata/bootstrap-k8s-master-ubuntu-16.04.sh
+
