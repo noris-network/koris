@@ -31,7 +31,7 @@ from keystoneauth1 import session
 
 from koris.cloud import OpenStackAPI
 from koris.util.hue import (red, info, yellow,  # pylint: disable=no-name-in-module
-                            lightcyan as cyan)  # pylint: disable=no-name-in-module
+                            bad, lightcyan as cyan)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
 
@@ -815,6 +815,35 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
 
         return network
 
+    # pylint: disable=inconsistent-return-statements
+    @staticmethod
+    def find_external_network(conn, default="ext02", fallback="ext01"):
+        """Finds and returns an external network in OpenStack.
+
+        This function will look for all external networks, then try to find the one with
+        name passed as the "default" parameter. In case this can't be found, it will try
+        to return the external network with the "fallback" parameter. In case this can't
+        be found, it will return the first external network it finds.
+
+        Args:
+            conn (OpenStackAPI.connection.Connection): An OpenStack Connection object.
+            default (str): The default external network to use.
+            fallback (str): The fallback external network to use in case the default
+                is not found.
+
+        Returns:
+            An :class:`OpenStackAPI.network.v2.network` object or None if no external
+                network can be found.
+        """
+
+        # Retrieve all external networks as list
+        ext_networks = list(conn.network.networks(is_router_external=True))
+
+        for net_name in [default, fallback]:
+            nets = [x for x in ext_networks if x.name == net_name]
+            if nets:
+                return nets[0]
+
 
 class OSSubnet:  # pylint: disable=too-few-public-methods
     """
@@ -894,7 +923,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
             print(info(yellow(
                 "The router [%s] already exists. Skipping" % router_name)))  # noqa
         else:
-            print(info(red("Creating router")))
+            print(info(cyan("Creating router")))
             payload = {
                 "router": {
                     "name": router_name,
@@ -910,16 +939,23 @@ class OSRouter:  # pylint: disable=too-few-public-methods
                                      "name": router_name + "-PORT"}}
             port = self.net_client.create_port(port_payload)['port']
             self.net_client.add_interface_router(router['id'], {'port_id': port['id']})
+
+            conn = OpenStackAPI.connect()
+            ext_net = OSNetwork.find_external_network(conn)
+            if ext_net is None:
+                print(bad(red("No external network found")))
+                sys.exit(1)
+
             # dynamically find network id matching router network in config
             network_name = self.config['private_net'].get(
                 'router', {"name": "router-%s" % self.config['cluster-name'],
-                           "network": "ext02"})['network']
+                           "network": ext_net.name})['network']
             networks = self.net_client.list_networks()['networks']
             try:
                 network_id = [net['id']
                               for net in networks if net['name'] == network_name][0]
             except IndexError:
-                print(red("Wrong router network in config"))
+                print(bad(red("Wrong router network in config")))
                 sys.exit(1)
             self.net_client.add_gateway_router(router['id'], {"network_id": network_id})
 
