@@ -826,7 +826,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
         be found, it will return the first external network it finds.
 
         Args:
-            conn (OpenStackAPI.connection.Connection): An OpenStack Connection object.
+            conn (:class:`OpenStackAPI.connection.connection`): An OpenStack Connection.
             default (str): The default external network to use.
             fallback (str): The fallback external network to use in case the default
                 is not found.
