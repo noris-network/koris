@@ -11,7 +11,7 @@ private_net:
  name: 'korispipeline-office-net'
  subnet:
   name: 'sub-korispipeline-office-net'
-  cidr: '10.36.18.0/27'
+  cidr: '10.36.23.0/24'
 #  This is optional - if no router name is given a new one will be created
   router:
    name: 'kubepipeline-office-rt'
