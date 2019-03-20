@@ -45,12 +45,12 @@ def create_and_configure():
     master_ips = ['192.168.0.103', '192.168.0.104', '192.168.0.105']
     node_ips = ['192.168.0.120', '192.168.0.121']
 
-    configure_lb_task = loop.create_task(LB.configure(CLIENT, master_ips))
+    configure_lb_task = loop.create_task(LB.configure(master_ips))
 
     #  WORK: Dex testing
     print("Configuring the LoadBalancer for Dex ...")
-    dex_task = loop.create_task(create_dex(CLIENT, LB, members=master_ips))
-    oauth_task = loop.create_task(create_oauth2(CLIENT, LB, members=node_ips))
+    dex_task = loop.create_task(create_dex(LB, members=master_ips))
+    oauth_task = loop.create_task(create_oauth2(LB, members=node_ips))
 
     tasks = [configure_lb_task, dex_task, oauth_task]
 

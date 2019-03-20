@@ -26,6 +26,7 @@ from neutronclient.common.exceptions import NotFound
 from neutronclient.common.exceptions import BadRequest
 
 from openstack.exceptions import ConflictException as OSConflict
+from openstack.exceptions import ResourceNotFound as OSNotFound
 
 from keystoneauth1 import identity
 from keystoneauth1 import session
@@ -246,7 +247,7 @@ class LoadBalancer:  # pragma: no coverage
         self.client = client
         self.conn = conn
 
-    async def configure(self, client, master_ips):
+    async def configure(self, master_ips):
         """
         Configure a load balancer created in earlier step
 
@@ -267,19 +268,22 @@ class LoadBalancer:  # pragma: no coverage
             pool = self.add_pool(listener_id)
         else:
             LOGGER.info("Reusing pool, removing all members ...")
-            pool = client.list_lbaas_pools(id=self._data.pools[0].id)
-            pool = pool['pools'][0]
-            for member in pool['members']:
-                self._del_member(client, member.id, pool.id)
+            # (aknipping) This should be handled differently. If there are multiple
+            # pools present, we want to specify which it should be added too. Maybe with a
+            # default pool name that is independent of the cluster name?
+            pool = self.conn.network.find_pool(self._data.pools[0].id)
+            for member_id in [list(x.values())[0] for x in pool.members]:
+                self._del_member(member_id, pool.id)
 
         self.pool = pool.id
 
-        LOGGER.info("Adding member ...")
-        self.add_member(pool.id, master_ips[0])
+        for member in master_ips:
+            LOGGER.info("Adding member %s ...", member)
+            self.add_member(pool.id, member)
         if pool.get('healthmonitor_id'):
             LOGGER.info("Reusing existing health monitor")
         else:
-            self.add_health_monitor(client, pool.id)
+            self.add_health_monitor(pool.id)
 
     def get(self):
         """
@@ -418,7 +422,7 @@ class LoadBalancer:  # pragma: no coverage
         if not lb or 'DELETE' in lb.operating_status:
             LOGGER.warning("LB %s was not found", self.name)
         else:
-            self._del_pool(client, delete_all=True)
+            self._del_pool(delete_all=True)
             self._del_listener(client, delete_all=True)
             self._del_loadbalancer(client)
 
@@ -495,28 +499,30 @@ class LoadBalancer:  # pragma: no coverage
                     pool.id, lb_algorithm, listener_id)
         return pool
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), tries=24, delay=10,
+    @retry(exceptions=(StateInvalidClient, OSConflict), tries=24, delay=10,
            backoff=0.8, logger=LOGGER.debug)
-    def add_health_monitor(self, client, pool_id, name=None):
+    def add_health_monitor(self, pool_id, name=None):
         """Adds a Healthmonitor to a Pool"""
 
         if name is None:
             name = f"{self.name}-health"
 
-        hm = client.create_lbaas_healthmonitor(
-            {'healthmonitor':
-             {"delay": 5, "timeout": 3, "max_retries": 3, "type": "TCP",
-              "pool_id": pool_id,
-              "name": name}})
+        hm = self.conn.network.create_health_monitor(
+            delay=5,
+            timeout=3,
+            max_retries=4,
+            type="TCP",
+            pool_id=pool_id,
+            name=name
+        )
+
         LOGGER.info("Added health monitor '%s' (%s) to pool %s", name,
-                    hm['healthmonitor']['id'], pool_id)
+                    hm.id, pool_id)
 
     @retry(exceptions=(StateInvalidClient, OSConflict, BadRequest), tries=24,
            delay=5, backoff=1, logger=LOGGER.debug)
     def add_member(self, pool_id, ip_addr, protocol_port=6443):
-        """
-        add listener to a loadbalancers pool.
-        """
+        """Adds a Listener to a Pool."""
 
         member = self.conn.network.create_pool_member(pool=pool_id,
                                                       subnet_id=self._subnet_id,
@@ -527,66 +533,63 @@ class LoadBalancer:  # pragma: no coverage
         LOGGER.info("Added member '%s' (%s) to pool %s on port %i", ip_addr,
                     member.id, pool_id, protocol_port)
 
-    @retry(exceptions=(OSError, NeutronConflict), backoff=1,
+    @retry(exceptions=(OSError, OSConflict), backoff=1,
            logger=LOGGER.debug)
-    def _del_health_monitor(self, client, id_):  # pylint: disable=no-self-use
-        """
-        delete a LB health monitor
-        """
+    def _del_health_monitor(self, id_):  # pylint: disable=no-self-use
+        """Delete a Healthmonitor from an LB"""
+
         try:
-            client.delete_lbaas_healthmonitor(id_)
-        except NotFound:
+            self.conn.network.delete_health_monitor(id_, ignore_missing=False)
+        except OSNotFound:
             LOGGER.debug("Health monitor not found ...")
         LOGGER.info("Deleted health monitor %s", id_)
 
-    @retry(exceptions=(StateInvalidClient, NeutronConflict), backoff=1.05,
+    @retry(exceptions=(StateInvalidClient, OSConflict), backoff=1, delay=5, tries=5,
            logger=LOGGER.debug)
-    def _del_pool(self, client, name=None, delete_all=False):
+    def _del_pool(self, name=None, delete_all=False):
         """Deletes a single pool by name, or all pools"""
 
         pools = None
-        lb_id = {'id': self._id}
+        lb_id = self._id
 
         if delete_all:
             # Delete all pools from all listeners
-            pools = client.list_lbaas_pools(retrieve_all=True)
-            if pools is None or 'pools' not in pools:
+            pools = list(self.conn.load_balancer.pools())
+            if not pools:
                 LOGGER.debug("No pools found")
                 return
-            pools = pools['pools']
         else:
             # Delete a specific pool by name
             if name is None:
                 name = f"{self.name}-pool"
-            try:
-                pools = list(client.list_lbaas_pools(retrieve_all=False,
-                                                     name=name))
-            except NotFound:
-                LOGGER.debug("Pool '%s' not found", name)
 
-            pools = pools[0]['pools']
+            pool = self.conn.load_balancer.find_pool(name)
+            if not pools:
+                LOGGER.debug("Pool '%s' not found", name)
+                return
+
+            pools = [pool]
 
         for pool in pools:
-            # Check if pool belongs to our LB
-            if lb_id in pool['loadbalancers']:
-                pool_id = pool['id']
-
+            # Check if pool belongs to our LB:
+            # pool.load_balancer_ids returns a list of dicts where each dict has a single
+            # key (id). We then iterate over this list and check if lb_id is present
+            # as a value
+            if lb_id in [list(x.values())[0] for x in pool.loadbalancers]:
                 # Delete Healthmonitors
-                if 'healthmonitor_id' in pool:
-                    self._del_health_monitor(client, pool['healthmonitor_id'])
+                if pool.health_monitor_id:
+                    self._del_health_monitor(pool.health_monitor_id)
 
                 # Delete all members
-                members = client.list_lbaas_members(pool_id)
-                if 'members' in members:
-                    for member in members['members']:
-                        member_id = member['id']
-                        client.delete_lbaas_member(member_id, pool_id)
+                members = list(self.conn.network.pool_members(pool.id))
+                for member in members:
+                    self._del_member(member.id, pool.id)
 
                 # Delete pool
-                client.delete_lbaas_pool(pool_id)
-                LOGGER.info("Deleted pool '%s' (%s)", name, pool_id)
+                self.conn.network.delete_pool(pool.id)
+                LOGGER.info("Deleted pool '%s' (%s)", name, pool.id)
 
-    @retry(exceptions=(NeutronConflict, StateInvalidClient), backoff=1.05,
+    @retry(exceptions=(OSConflict, StateInvalidClient), backoff=1.05,
            logger=LOGGER.debug)
     def _del_listener(self, client, name=None, delete_all=False):
         """Delete a single listener by name, or all listeners"""
@@ -622,7 +625,7 @@ class LoadBalancer:  # pragma: no coverage
                 LOGGER.info("Deleted listener '%s' (%s)", item['name'],
                             item['id'])
 
-    @retry(exceptions=(NeutronConflict, StateInvalidClient, BadRequest),
+    @retry(exceptions=(OSConflict, StateInvalidClient, BadRequest),
            tries=25, delay=15, backoff=0.8, logger=LOGGER.debug)
     def _del_loadbalancer(self, client):
         try:
@@ -631,12 +634,12 @@ class LoadBalancer:  # pragma: no coverage
             LOGGER.debug("Could not find  LoadBalancer %s", self._id)
         LOGGER.info("Deleted LoadBalancer '%s' (%s)", self.name, self._id)
 
-    @retry(exceptions=(StateInvalidClient,), backoff=1, tries=10,
+    @retry(exceptions=(StateInvalidClient, OSConflict), backoff=1, tries=5, delay=5,
            logger=LOGGER.debug)
-    def _del_member(self, client, member_id, pool_id):  # pylint: disable=no-self-use
+    def _del_member(self, member_id, pool_id):  # pylint: disable=no-self-use
         try:
-            client.delete_lbaas_member(member_id, pool_id)
-        except NotFound:
+            self.conn.network.delete_pool_member(member_id, pool_id, ignore_missing=False)
+        except OSNotFound:
             LOGGER.debug("Member %s not found in pool %s", member_id, pool_id)
         LOGGER.debug("Deleted member %s from pool %s", member_id, pool_id)
 

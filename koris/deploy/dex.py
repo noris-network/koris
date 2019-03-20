@@ -188,20 +188,19 @@ class Pool:
         for ip in self.members:
             lb.add_member(self.id, ip, self.port)
 
-    def add_health_monitor(self, client, lb: LoadBalancer):
+    def add_health_monitor(self, lb: LoadBalancer):
         """Adds a Health monitor to a Pool with default settings
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
         """
 
         if not self.id:
             raise ValidationError("need pool id to create health monitor")
         self.verify()
-        lb.add_health_monitor(client, self.id, f"{self.name}-health")
+        lb.add_health_monitor(self.id, f"{self.name}-health")
 
-    def all(self, client, lb: LoadBalancer, listener_id):
+    def all(self, lb: LoadBalancer, listener_id):
         """Convenience function to create a Pool with Members and Health Monitor.
 
         Will call ``create``, ``add_members`` and ``add_health_monitor``.
@@ -213,7 +212,7 @@ class Pool:
 
         self.create(lb, listener_id)
         self.add_members(lb)
-        self.add_health_monitor(client, lb)
+        self.add_health_monitor(lb)
 
 
 class Listener:
@@ -293,35 +292,28 @@ class Listener:
         self.listener = listener
         self.id = listener.id
 
-    def create_pool(self, client):
+    def create_pool(self):
         """Creates a new Pool with members and healthmon and adds it to the Listener.
 
         Requires ``create`` to be called first.
 
         In case the ``Pool.create()`` or ``Pool.all()`` function hasn't been called,
         call ``Pool.all()``.
-
-        Args:
-            client: An OpenStack client, usually Neutron.
-
         """
         self.verify()
         if not self.listener:
             raise ValidationError("need listener to create pool")
 
-        self.pool.all(client, self.loadbalancer, self.id)
+        self.pool.all(self.loadbalancer, self.id)
 
-    def all(self, client):
+    def all(self):
         """Convenience function to create a Listener, then Pool.
 
         Will call ``create`` and ``create_pool``.
-
-        Args:
-            client: An OpenStack client, usually Neutron.
         """
 
         self.create()
-        self.create_pool(client)
+        self.create_pool()
 
 
 class DexSSL:
@@ -430,7 +422,7 @@ class DexSSL:
         self.ca_bundle.save(ca_prefix, self.cert_dir)
 
 
-async def create_dex(client, lb: LoadBalancer, name="dex",
+async def create_dex(lb: LoadBalancer, name="dex",
                      listener_port=32000, pool_port=32000, protocol="HTTPS",
                      algo="ROUND_ROBIN", members=None):
     """Convenience function to create a Dex Listener and Pool.
@@ -452,10 +444,10 @@ async def create_dex(client, lb: LoadBalancer, name="dex",
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
-    listener.all(client)
+    listener.all()
 
 
-async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
+async def create_oauth2(lb: LoadBalancer, name="oauth2",
                         listener_port=5556, pool_port=32555, protocol="HTTP",
                         algo="ROUND_ROBIN", members=None):
     """Convenience function to create an OAuth2 Client App Listener and Pool.
@@ -477,7 +469,7 @@ async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
-    listener.all(client)
+    listener.all()
 
 
 # pylint: disable=too-many-branches
