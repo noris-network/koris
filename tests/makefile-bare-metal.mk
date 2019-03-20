@@ -125,9 +125,12 @@ clean-volumes-nodes:
 	until openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep available; do sleep 2; done; \
 	openstack volume delete $(CLUSTERNAME)-root-node-1
 
-IT_TARGETS := create-volumes-masters create-volumes-nodes create-masters create-nodes create-loadbalancer config-loadbalancer
-IT_TARGETS += koris.env cp-koris-env cp-bootstrap-script run-bootstrap
 
+BUILD_TARGETS := create-volumes-masters create-volumes-nodes create-masters create-nodes create-loadbalancer config-loadbalancer
+build-cluster-bare-metal: $(BUILD_TARGETS)
+	@echo "Finished building a 'bare metal cluster, using Noris Standard image'"
+
+IT_TARGETS += koris.env cp-koris-env cp-bootstrap-script run-bootstrap
 integration-test-bare-metal: $(IT_TARGETS)
 	@echo "Finished all"
 	@echo "Waiting for all nodes to become ready ..."

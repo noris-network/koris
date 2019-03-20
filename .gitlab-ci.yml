@@ -34,8 +34,22 @@ wait-for-resources:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
-bare-metal-integration:
+bare-metal-build:
   stage: build-cluster
+  image: oz123/koris-alpine:0.1.3
+  script:
+   - apk add openssh
+   - pip install python-openstackclient python-octaviaclient
+   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
+   - make -f tests/makefile-bare-metal.mk build-cluster-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+
+bare-metal-integration:
+  stage: integration-test
   image: oz123/koris-alpine:0.1.3
   script:
    - apk add openssh
