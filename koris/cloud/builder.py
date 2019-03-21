@@ -21,6 +21,7 @@ from koris.util.hue import (  # pylint: disable=no-name-in-module
 from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
                               create_dex_conf, ValidationError)
 from koris.util.util import get_logger
+from koris.ssl import b64_cert, b64_key
 from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer,
@@ -349,7 +350,6 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # the clients that can use kubeadm
         ca_bundle = self.create_ca()
         cert_dir = "-".join(("certs", config["cluster-name"]))
-        ca_bundle.save("k8s", cert_dir)
 
         # Check if dex has to be deployed
         if 'addons' in config and 'dex' in config['addons']:
@@ -459,11 +459,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         client_cert = CertBundle.create_signed(
             ca_bundle, "DE", "BY", "NUE", "system:masters", "system:masters",
             "kubernetes-admin", "", "")
-        client_cert.save("k8s-client", cert_dir)
 
+        # send certificates and keys to kube config
         kubeconfig = write_kubeconfig(config["cluster-name"], lb_ip,
-                                      lb_port, cert_dir, "k8s.pem",
-                                      "k8s-client.pem", "k8s-client-key.pem")
+                                      lb_port, b64_cert(ca_bundle.cert),
+                                      b64_cert(client_cert.cert),
+                                      b64_key(client_cert.key))
 
         # Now connect to the the API server and query which masters are
         # available.
