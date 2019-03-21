@@ -253,7 +253,6 @@ class LoadBalancer:  # pragma: no coverage
 
         Args:
             master_ips (list): A list of the master IP addresses
-
         """
 
         # If not present, add listener
@@ -271,7 +270,7 @@ class LoadBalancer:  # pragma: no coverage
             # (aknipping) This should be handled differently. If there are multiple
             # pools present, we want to specify which it should be added too. Maybe with a
             # default pool name that is independent of the cluster name?
-            pool = self.conn.network.find_pool(self._data.pools[0].id)
+            pool = self.conn.network.find_pool(self._data.pools[0]['id'])
             for member_id in [list(x.values())[0] for x in pool.members]:
                 self._del_member(member_id, pool.id)
 
@@ -286,16 +285,15 @@ class LoadBalancer:  # pragma: no coverage
             self.add_health_monitor(pool.id)
 
     def get(self):
-        """
-        get loadbalancer information
-        """
+        """Retrieve LoadBalancer information"""
+
         lb = self.conn.load_balancer.find_load_balancer(self.name)
         if lb:
             self._id = lb.id
             self._subnet_id = lb.vip_subnet_id
             self._data = lb
             try:
-                self.pool = lb['pools'][0]['id']
+                self.pool = lb.pools[0]['id']
             except (IndexError, KeyError):
                 self.pool = None
 
@@ -313,10 +311,10 @@ class LoadBalancer:  # pragma: no coverage
             self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(client, lb)
             LOGGER.info("Loadbalancer IP: %s", fip_addr)
-            self._id = lb['id']
-            self._subnet_id = lb['vip_subnet_id']
+            self._id = lb.id
+            self._subnet_id = lb.vip_subnet_id
             self._data = lb
-            self.pool = lb['pools'][0]['id'] if lb['pools'] else None
+            self.pool = lb.pools[0]['id'] if lb.pools else None
 
         return lb, fip_addr
 
@@ -410,8 +408,6 @@ class LoadBalancer:  # pragma: no coverage
             suffix (str) - the suffix of the name, appended to name
 
         """
-        if not client:
-            client = self.client
 
         # Check if LB is assigned
         lb = self._data
@@ -422,8 +418,6 @@ class LoadBalancer:  # pragma: no coverage
         if not lb or 'DELETE' in lb.operating_status:
             LOGGER.warning("LB %s was not found", self.name)
         else:
-            # self._del_pool(delete_all=True)
-            # self._del_listener(delete_all=True)
             self._del_loadbalancer()
 
     def associate_floating_ip(self, loadbalancer):
@@ -474,6 +468,10 @@ class LoadBalancer:  # pragma: no coverage
                                                      is_admin_state_up=True,
                                                      name=name)
 
+        if not listener:
+            LOGGER.error("Unable to add listener '%s' to LoadBalancer %s", name, self._id)
+            return None
+
         LOGGER.info("Added %s listener '%s' (%s) on port %i to LoadBalancer %s", protocol,
                     name, listener.id, protocol_port, self._id)
         return listener
@@ -492,6 +490,10 @@ class LoadBalancer:  # pragma: no coverage
                                              protocol=protocol,
                                              lb_algorithm=lb_algorithm,
                                              name=name)
+
+        if not pool:
+            LOGGER.error("Unable to add pool '%s' to listener %s", name, listener_id)
+            return None
 
         self.pool = pool
 
@@ -513,36 +515,46 @@ class LoadBalancer:  # pragma: no coverage
             max_retries=4,
             type="TCP",
             pool_id=pool_id,
-            name=name
-        )
+            name=name)
 
-        LOGGER.info("Added health monitor '%s' (%s) to pool %s", name,
-                    hm.id, pool_id)
+        if not hm:
+            LOGGER.error("Unable to add health monitor '%s' to pool %s", name, pool_id)
+            return None
+
+        LOGGER.info("Added health monitor '%s' (%s) to pool %s", name, hm.id, pool_id)
+        return hm
 
     @retry(exceptions=(StateInvalidClient, OSConflict, BadRequest), tries=24,
            delay=5, backoff=1, logger=LOGGER.debug)
     def add_member(self, pool_id, ip_addr, protocol_port=6443):
         """Adds a Listener to a Pool."""
 
-        member = self.conn.network.create_pool_member(pool=pool_id,
-                                                      subnet_id=self._subnet_id,
-                                                      protocol_port=protocol_port,
-                                                      address=ip_addr)
+        member = self.conn.network.create_pool_member(
+            pool=pool_id,
+            subnet_id=self._subnet_id,
+            protocol_port=protocol_port,
+            address=ip_addr)
+
+        if not member:
+            LOGGER.error("Unable to add member '%s' to pool %s", ip_addr, pool_id)
+            return None
 
         self.members.append(ip_addr)
         LOGGER.info("Added member '%s' (%s) to pool %s on port %i", ip_addr,
                     member.id, pool_id, protocol_port)
 
+        return member
+
     @retry(exceptions=(OSError, OSConflict), backoff=1,
            logger=LOGGER.debug)
-    def _del_health_monitor(self, id_):  # pylint: disable=no-self-use
+    def _del_health_monitor(self, id_):
         """Delete a Healthmonitor from an LB"""
 
         try:
             self.conn.network.delete_health_monitor(id_, ignore_missing=False)
+            LOGGER.info("Deleted health monitor %s", id_)
         except OSNotFound:
             LOGGER.debug("Health monitor not found ...")
-        LOGGER.info("Deleted health monitor %s", id_)
 
     @retry(exceptions=(StateInvalidClient, OSConflict), backoff=1, delay=5, tries=5,
            logger=LOGGER.debug)
@@ -643,9 +655,9 @@ class LoadBalancer:  # pragma: no coverage
     def _del_member(self, member_id, pool_id):  # pylint: disable=no-self-use
         try:
             self.conn.network.delete_pool_member(member_id, pool_id, ignore_missing=False)
+            LOGGER.debug("Deleted member %s from pool %s", member_id, pool_id)
         except OSNotFound:
             LOGGER.debug("Member %s not found in pool %s", member_id, pool_id)
-        LOGGER.debug("Deleted member %s from pool %s", member_id, pool_id)
 
 
 class SecurityGroup:
