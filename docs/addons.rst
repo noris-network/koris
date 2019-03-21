@@ -5,11 +5,11 @@ Addons
 Dex
 ---
 
-`Dex <https://github.com/dexidp/dex>`_ is an identity service that uses 
-`OpenID Connect <https://openid.net/connect/>`_ to drive authentication for other apps. It can 
+`Dex <https://github.com/dexidp/dex>`_ is an identity service that uses
+`OpenID Connect <https://openid.net/connect/>`_ to drive authentication for other apps. It can
 be used to authenticate against `OAuth2 <https://oauth.net/2/>`_ compatible apps such as Gitlab or
 LDAP and then use this for further authentication, for example against the Kubernetes API.
-This tutorial explains how to deploy Dex with koris on OpenStack. 
+This tutorial explains how to deploy Dex with koris on OpenStack.
 
 Prerequisites
 ^^^^^^^^^^^^^
@@ -28,9 +28,9 @@ First create your koris config under ``configs/test-dex.yml``:
     master_flavor: 'ECS.GP1.2-8'
     node_flavor: 'ECS.C1.4-8'
     # Adjust this according to your environment
-    private_net: 
+    private_net:
       name: 'your-net'
-      subnet: 
+      subnet:
         name: 'your-subnet'
         cidr: '10.32.192.0/24'
         router:
@@ -48,7 +48,7 @@ First create your koris config under ``configs/test-dex.yml``:
     loadbalancer:
     # Dex needs an IP or DNS name for its issuer, if you set this option to
     # 'false', one will be assigned from the pool
-      floatingip: 10.36.60.232 
+      floatingip: 10.36.60.232
     certificates:
       expriry: 8760h
     storage_class: "PI-Storage-Class"
@@ -57,29 +57,34 @@ First create your koris config under ``configs/test-dex.yml``:
     # Configuration block for Dex
     addons:
       dex:
-        username_claim: email     
+        username_claim: email
         groups_claim: groups
         # LB-Listener and K8s-Service ports for Dex
         ports:
-        listener: 32000
-        service: 32000
+          listener: 32000
+          service: 32000
         # Configuration parameters for an OAuth2 application that is
         # deployed into the cluster
         client:
-        id: example-app
-        # LB-Listener and K8s-Service ports for the OAuth2 application
+          id: example-app
+          # LB-Listener and K8s-Service ports for the OAuth2 application
         ports:
             listener: 5555
             service: 32555
 
-In this example we will use the IP **10.36.60.232** for our LoadBalancer. When this IP shows up from now on, substitute it with
-your IP. Dex will then be reachable on port **32000** and the Dex `example-app <https://github.com/obitech/dex-example-app>`_ 
-reachable on port **5555**. Clients can contact the example-app which will request an OIDC token from Dex. 
+In this example we will use the IP **10.36.60.232** for our LoadBalancer.
+When this IP shows up from now on, substitute it with
+your IP. Dex will then be reachable on port **32000** and the Dex
+`example-app <https://github.com/obitech/dex-example-app>`_
+reachable on port **5555**.
+Clients can contact the example-app which will request an OIDC token from Dex.
 
-As an example we will be using Gitlab as an identity provider, but any other compatible provider will work as well
-(for more info on how to configure Dex for other connectors, please consult the 
-`official documentation <https://github.com/dexidp/dex/tree/master/Documentation/connectors>`_). Head to Gitlab under 
-**Settings -> Applications** and create a new application with the following settings and scopes:
+As an example we will be using Gitlab as an identity provider, but any other
+compatible provider will work as well (for more info on how to configure Dex
+for other connectors, please consult the
+`official documentation <https://github.com/dexidp/dex/tree/master/Documentation/connectors>`_).
+Head to Gitlab under**Settings -> Applications**
+and create a new application with the following settings and scopes:
 
 ============  =======================================
 Parameter     Value
@@ -90,16 +95,19 @@ read_user     set
 openid        set
 ============  =======================================
 
-After saving, Gitlab will provide you with an **Application ID** (its value followingly known as **app-id**) and **Secret** 
-(its value followingly known as **app-secret**). Make sure to copy those for later. 
+After saving, Gitlab will provide you with an **Application ID**
+(its value followingly known as **app-id**) and **Secret**
+(its value followingly known as **app-secret**).
+Make sure to copy those for later.
 
 Deployment
 ^^^^^^^^^^
 
-Next, deploy your cluster, wait for it to be created and then source your kubeconfig:
+Next, deploy your cluster, wait for it to be created and then source your
+kubeconfig:
 
 .. code:: shell
-    
+
     $ koris apply configs/test-dex.yml
     # ...
     $ export KUBECONFIG=test-dex-admin.conf
@@ -114,10 +122,11 @@ Before configuring Dex, deploy the certificates as secrets into the cluster:
     $ kubectl create secret generic dex.root-ca \
     >    --from-file=certs-test-dex/dex-ca.pem
 
-Then deploy the **app-id** and **app-secret** as secrets into the cluster (make sure to substitute):
+Then deploy the **app-id** and **app-secret** as secrets into the cluster
+(make sure to substitute):
 
 .. code:: shell
-    
+
     $ kubectl create secret generic gitlab-client \
     >    --from-literal=client-id=app-id \
     >    --from-literal=client-secret=app-secret
@@ -240,15 +249,17 @@ Then configure the example-app via ``addons/dex/01-example-app.yml``:
               # The secret that was just created
               secretName: dex.root-ca
 
-And deploy it: 
+And deploy it:
 
 .. code:: shell
 
     $ kubectl create -f addons/dex/01-example-app.yml
 
-Afterwards, open your browser and head to http://10.36.60.232:5555, click on **Login**, allow
-the exception. Then click on **Login in with Gitlab**, which will redirect to Gitlab and ask for
-authorization. After accepting and a short wait, an ID token is returned that can be used to 
+Afterwards, open your browser and head to http://10.36.60.232:5555,
+click on **Login**, allow the exception. Then click on
+**Login in with Gitlab**, which will redirect to Gitlab and ask for
+authorization.
+After accepting and a short wait, an ID token is returned that can be used to
 authenticate against the API server:
 
 .. code:: shell
@@ -256,8 +267,9 @@ authenticate against the API server:
     $ token='( ID token )'
     $ curl --http1.1 -H "Authorization: Bearer $token" -k https://10.36.60.232:6443/api/v1/nodes
 
-The request will fail, since no (Cluster)RoleBinding has been created yet. In order to give your user
-cluster admin privileges, edit the ``addons/02-clusterrolebinding.yml`` and enter the Email address you
+The request will fail, since no (Cluster)RoleBinding has been created yet.
+In order to give your user cluster admin privileges,
+edit the ``addons/02-clusterrolebinding.yml`` and enter the Email address you
 have used for Gitlab:
 
 .. code-block:: yaml
@@ -277,7 +289,7 @@ have used for Gitlab:
 Then deploy it into the cluster:
 
 .. code:: shell
-    
+
     $ kubectl create -f addons/dex/02-clusterrolebinding.yml
 
 Now send the request again:
