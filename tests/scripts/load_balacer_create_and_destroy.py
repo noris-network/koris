@@ -70,11 +70,11 @@ if __name__ == '__main__':
         create_and_configure()
         sys.exit(0)
     if action == 1:
-        LB.delete(CLIENT)
+        LB.delete()
         sys.exit(0)
     if action == 2:
         create_and_configure()
-        LB.delete(CLIENT)
+        LB.delete()
         sys.exit(0)
     else:
         print("You must run this script with an action")

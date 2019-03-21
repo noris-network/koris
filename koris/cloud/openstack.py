@@ -396,7 +396,7 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
            tries=10, logger=LOGGER.debug)
-    def delete(self, client=None):
+    def delete(self):
         """Delete the cluster API loadbalancer
 
         Deletion order of LoadBalancer:
@@ -422,9 +422,9 @@ class LoadBalancer:  # pragma: no coverage
         if not lb or 'DELETE' in lb.operating_status:
             LOGGER.warning("LB %s was not found", self.name)
         else:
-            self._del_pool(delete_all=True)
-            self._del_listener(client, delete_all=True)
-            self._del_loadbalancer(client)
+            # self._del_pool(delete_all=True)
+            # self._del_listener(delete_all=True)
+            self._del_loadbalancer()
 
     def associate_floating_ip(self, loadbalancer):
         """Associates a Floating IP with the LoadBalancer"""
@@ -591,48 +591,52 @@ class LoadBalancer:  # pragma: no coverage
 
     @retry(exceptions=(OSConflict, StateInvalidClient), backoff=1.05,
            logger=LOGGER.debug)
-    def _del_listener(self, client, name=None, delete_all=False):
+    def _del_listener(self, name=None, delete_all=False):
         """Delete a single listener by name, or all listeners"""
-        lb_id = {'id': self._id}
+        lb_id = self._id
         to_delete = None
         listeners = None
 
         if delete_all:
             # Delete all listeners associated with this LB
-            listeners = client.list_listeners(retrieve_all=True)
-            if listeners and 'listeners' in listeners:
-                to_delete = listeners['listeners']
-            else:
+            listeners = list(self.conn.load_balancer.listeners(load_balancer_id=lb_id))
+            if not listeners:
                 LOGGER.debug("No listeners found.")
                 return
+
+            to_delete = listeners
+
         else:
             # Delete listener by name
             if name is None:
                 name = f"{self.name}-listener"
             try:
-                listeners = list(client.list_listeners(retrieve_all=False,
-                                                       name=name))
-            except NotFound:
+                listener = self.conn.load_balancer.find_listener(
+                    name,
+                    ignore_missing=False)
+                to_delete = listener
+            except OSNotFound:
                 LOGGER.debug("Listener %s not found", name)
-            to_delete = listeners[0]['listeners']
 
         for item in to_delete:
-            if lb_id in item['loadbalancers']:
+            if lb_id in [list(x.values())[0] for x in item.load_balancers]:
                 try:
-                    client.delete_listener(item['id'])
-                except NotFound:
-                    LOGGER.debug("Listener %s not found", item['id'])
-                LOGGER.info("Deleted listener '%s' (%s)", item['name'],
-                            item['id'])
+                    self.conn.load_balancer.delete_listener(item)
+                    LOGGER.info("Deleted listener '%s' (%s)", item.name, item.id)
+                except OSNotFound:
+                    LOGGER.debug("Listener %s not found", item.id)
 
     @retry(exceptions=(OSConflict, StateInvalidClient, BadRequest),
            tries=25, delay=15, backoff=0.8, logger=LOGGER.debug)
-    def _del_loadbalancer(self, client):
+    def _del_loadbalancer(self):
         try:
-            client.delete_loadbalancer(self._id)
-        except NotFound:
+            self.conn.load_balancer.delete_load_balancer(
+                self._id,
+                ignore_missing=False,
+                cascade=True)
+            LOGGER.info("Deleted LoadBalancer '%s' (%s)", self.name, self._id)
+        except OSNotFound:
             LOGGER.debug("Could not find  LoadBalancer %s", self._id)
-        LOGGER.info("Deleted LoadBalancer '%s' (%s)", self.name, self._id)
 
     @retry(exceptions=(StateInvalidClient, OSConflict), backoff=1, tries=5, delay=5,
            logger=LOGGER.debug)
