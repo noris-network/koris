@@ -32,22 +32,31 @@ def get_logger(name, level=logging.INFO):
     return logger
 
 
-KUBECONFIG = {'apiVersion': 'v1',
-              'clusters': [{'cluster': {'server': '%%%%MASTERURI%%%%',
-                                        'certificate-authority': '%%%%CA%%%%'},
-                            'name': 'kubernetes'}],
-              'contexts': [{'context': {'cluster': 'kubernetes',
-                                        'user': '%%%USERNAME%%%'},
-                            'name': '%%%USERNAME%%%-context'}],
-              'current-context': '%%%USERNAME%%%-context',
-              'kind': 'Config',
-              'users': [
-                  {'name': '%%%USERNAME%%%',
-                   'user': {'client-certificate': '%%%%CLIENT_CERT%%%%',
-                            'client-key': '%%%%CLIENT_KEY%%%%'
-                            }
-                   }]
-              }
+KUBECONFIG_EMB = {'apiVersion': 'v1',
+                  'clusters': [{
+                      'cluster': {
+                          'server': '%%%%MASTERURI%%%%',
+                          'certificate-authority-data': '%%%%CA%%%%'
+                      },
+                      'name': 'kubernetes'
+                  }],
+                  'contexts': [{
+                      'context': {
+                          'cluster': 'kubernetes',
+                          'user': '%%%USERNAME%%%'
+                      },
+                      'name': '%%%USERNAME%%%-context'
+                  }],
+                  'current-context': '%%%USERNAME%%%-context',
+                  'kind': 'Config',
+                  'users': [{
+                      'name': '%%%USERNAME%%%',
+                      'user': {
+                          'client-certificate-data': '%%%%CLIENT_CERT%%%%',
+                          'client-key-data': '%%%%CLIENT_KEY%%%%'
+                      }
+                  }]
+                  }
 
 
 def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
@@ -55,15 +64,15 @@ def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
     """
     format a kube configuration file
     """
-    config = copy.deepcopy(KUBECONFIG)
+    config = copy.deepcopy(KUBECONFIG_EMB)
     config['clusters'][0]['cluster']['server'] = master_uri
-    config['clusters'][0]['cluster']['certificate-authority'] = ca_cert
+    config['clusters'][0]['cluster']['certificate-authority-data'] = ca_cert
     config['contexts'][0]['context']['user'] = "%s" % username
     config['contexts'][0]['name'] = "%s-context" % username
     config['current-context'] = "%s-context" % username
     config['users'][0]['name'] = username
-    config['users'][0]['user']['client-certificate'] = client_cert
-    config['users'][0]['user']['client-key'] = client_key
+    config['users'][0]['user']['client-certificate-data'] = client_cert
+    config['users'][0]['user']['client-key-data'] = client_key
 
     yml_config = yaml.dump(config)
     if encode:
