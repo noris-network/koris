@@ -52,11 +52,17 @@ V=${LOGLEVEL}
 
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 
-# create a proper kubeadm config file for each master.
-# the configuration files are ordered and contain the correct information
-# of each master and the rest of the etcd cluster
-function create_config_files() {
-    cat <<TMPL > init.tmpl
+# create a configuration file for kubeadm
+# this function excpects CURRENT_CLUSTER, HOST_IP and HOST_NAME
+# to be defined as global variables
+function create_kubeadm_config () {
+
+    HOST_NAME=$1
+    HOST_IP=$2
+    CURRENT_CLUSTER=$3
+    CLUSTER_STATE=$4
+
+    cat <<TMPL > kubeadm-"${HOST_NAME}".yaml
 apiVersion: kubeadm.k8s.io/v1alpha2
 kind: MasterConfiguration
 kubernetesVersion: v${KUBE_VERSION}
@@ -67,21 +73,21 @@ api:
 etcd:
   local:
     extraArgs:
-      listen-client-urls: "https://127.0.0.1:2379,https://\${HOST_IP}:2379"
-      advertise-client-urls: "https://\${HOST_IP}:2379"
-      listen-peer-urls: "https://\${HOST_IP}:2380"
-      initial-advertise-peer-urls: "https://\${HOST_IP}:2380"
-      initial-cluster: "\${CURRENT_CLUSTER}"
-      initial-cluster-state: "\${CLUSTER_STATE}"
+      listen-client-urls: "https://127.0.0.1:2379,https://${HOST_IP}:2379"
+      advertise-client-urls: "https://${HOST_IP}:2379"
+      listen-peer-urls: "https://${HOST_IP}:2380"
+      initial-advertise-peer-urls: "https://${HOST_IP}:2380"
+      initial-cluster: "${CURRENT_CLUSTER}"
+      initial-cluster-state: "${CLUSTER_STATE}"
     serverCertSANs:
-      - \${HOST_NAME}
-      - \${HOST_IP}
+      - ${HOST_NAME}
+      - ${HOST_IP}
     peerCertSANs:
-      - \${HOST_NAME}
-      - \${HOST_IP}
+      - ${HOST_NAME}
+      - ${HOST_IP}
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
-    podSubnet: \${POD_SUBNET}
+    podSubnet: ${POD_SUBNET}
 #apiServerExtraArgs:
 #  allow-privileged: "true"
 #  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
@@ -89,7 +95,7 @@ networking:
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
-  token: "\${BOOTSTRAP_TOKEN}"
+  token: "${BOOTSTRAP_TOKEN}"
   ttl: 24h0m0s
   usages:
   - signing
@@ -100,7 +106,7 @@ controllerManagerExtraArgs:
 TMPL
 # if On baremetal we don't need all OpenStack cloud provider flags
 if [[ OPENSTACK -eq 1 ]]; then
-cat <<TMPL >> init.tmpl
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
 apiServerExtraVolumes:
@@ -130,24 +136,8 @@ cat <<TMPL > dex.tmpl
   oidc-username-claim: ${OIDC_USERNAME_CLAIM}
   oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
 TMPL
-    cat dex.tmpl >> init.tmpl
+    cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
 fi
-
-    for i in ${!MASTERS[@]}; do
-        echo $i, ${MASTERS[$i]}, ${MASTERS_IPS[$i]}
-        export HOST_IP="${MASTERS_IPS[$i]}"
-        export HOST_NAME="${MASTERS[$i]}"
-    if [ -z "$CURRENT_CLUSTER" ]; then
-        CLUSTER_STATE="new"
-        CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
-    else
-        CLUSTER_STATE="existing"
-        CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
-    fi
-
-        envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
-    done
-
 }
 
 # distributes configuration file and certificates to a master node
@@ -195,16 +185,26 @@ EOF
 # the process is slightly different than for the rest of the N masters
 # we add
 function bootstrap_first_master() {
+   HOST_NAME=$1
+   HOST_IP=$2
+
+   CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
+
+   echo "******* Preparing kubeadm config for $1 *******"
+   create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
+
+   local CONFIG=kubeadm-"${HOST_NAME}".yaml
+
    echo "*********** Bootstrapping master-1 ******************"
-   kubeadm -v=${V} alpha phase certs all --config $1
-   kubeadm -v=${V} alpha phase kubelet config write-to-disk --config $1
-   kubeadm -v=${V} alpha phase kubelet write-env-file --config $1
-   kubeadm -v=${V} alpha phase kubeconfig kubelet --config $1
-   kubeadm -v=${V} alpha phase kubeconfig all --config $1
+   kubeadm -v=${V} alpha phase certs all --config "${CONFIG}"
+   kubeadm -v=${V} alpha phase kubelet config write-to-disk --config "${CONFIG}"
+   kubeadm -v=${V} alpha phase kubelet write-env-file --config "${CONFIG}"
+   kubeadm -v=${V} alpha phase kubeconfig kubelet --config "${CONFIG}"
+   kubeadm -v=${V} alpha phase kubeconfig all --config "${CONFIG}"
    systemctl start kubelet
-   kubeadm -v=${V} alpha phase etcd local --config $1
-   kubeadm -v=${V} alpha phase controlplane all --config $1
-   until kubeadm -v=${V} alpha phase mark-master --config $1; do
+   kubeadm -v=${V} alpha phase etcd local --config "${CONFIG}"
+   kubeadm -v=${V} alpha phase controlplane all --config "${CONFIG}"
+   until kubeadm -v=${V} alpha phase mark-master --config "${CONFIG}"; do
        sleep 1
    done
 
@@ -216,20 +216,20 @@ function bootstrap_first_master() {
        do echo "api server is not up! trying again ...";
    done
 
-   until kubeadm -v=${V} alpha phase addon kube-proxy --config $1; do
+   until kubeadm -v=${V} alpha phase addon kube-proxy --config "${CONFIG}"; do
        sleep 1
    done
-   until kubeadm -v=${V} alpha phase addon coredns --config $1; do
+   until kubeadm -v=${V} alpha phase addon coredns --config "${CONFIG}"; do
        sleep 1
    done
-   until kubeadm alpha phase bootstrap-token all --config $1; do
+   until kubeadm alpha phase bootstrap-token all --config "${CONFIG}"; do
        sleep 1
    done
    test -d /root/.kube || mkdir -p /root/.kube
    cp /etc/kubernetes/admin.conf /root/.kube/config
    chown root:root /root/.kube/config
 
-   kubeadm -v=${V} alpha phase kubelet config upload  --config $1
+   kubeadm -v=${V} alpha phase kubelet config upload  --config "${CONFIG}"
    kubectl get nodes
 }
 
@@ -239,31 +239,46 @@ function bootstrap_first_master() {
 function add_master {
     USER=${SSH_USER:-ubuntu}
 
-   echo "*********** Bootstrapping $1 ******************"
-   until ssh ${SSHOPTS} ${USER}@$1 hostname; do
+    HOST_NAME=$1
+    HOST_IP=$2
+    CURRENT_CLUSTER=$3
+    ETCD_HOST=$4
+    ETCD_IP=$5
+
+    local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
+
+    echo "******* Preparing kubeadm config for $1 ******"
+    create_kubeadm_config ${HOST_NAME} ${HOST_IP} ${CURRENT_CLUSTER} "existing"
+
+    echo "*********** Bootstrapping $1 ******************"
+    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
        sleep 2
-   done
-   if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
+    done
+    if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
         bootstrap_deps_node $1
-   fi
+    fi
 
-   scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
+    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig kubelet --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo systemctl start kubelet
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig kubelet --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 sudo systemctl start kubelet
 
-   # join the etcd host to the cluster, this is executed on local node!
-   kubectl exec -n kube-system etcd-${first_master} -- etcdctl --ca-file /etc/kubernetes/pki/etcd/ca.crt --cert-file /etc/kubernetes/pki/etcd/peer.crt --key-file /etc/kubernetes/pki/etcd/peer.key --endpoints=https://${first_master_ip}:2379 member add $1 https://$2:2380
+    # join the etcd host to the cluster, this is executed on local node!
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf exec -n kube-system etcd-${ETCD_HOST} -- etcdctl \
+        --ca-file /etc/kubernetes/pki/etcd/ca.crt \
+        --cert-file /etc/kubernetes/pki/etcd/peer.crt \
+        --key-file /etc/kubernetes/pki/etcd/peer.key \
+        --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380
 
-   # launch etcd
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase controlplane all --config /home/${USER}/kubeadm-$1.yaml
-   ssh ${SSHOPTS} ${USER}@$1 "until sudo kubeadm alpha phase mark-master --config /home/${USER}/kubeadm-$1.yaml; do sleep 1; done"
+    # launch etcd
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase controlplane all --config "${CONFIG}"
+    ssh ${SSHOPTS} ${USER}@$1 "until sudo kubeadm alpha phase mark-master --config "${CONFIG}"; do sleep 1; done"
 }
 
 
@@ -435,12 +450,11 @@ function main() {
 
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
-    create_config_files
 
     wait $pid_get_kubeadm
 
-    bootstrap_first_master kubeadm-${first_master}.yaml
-    wait_for_etcd ${first_master}
+    bootstrap_first_master "${first_master}" "${first_master_ip}"
+    wait_for_etcd "${first_master}"
 
     wait $pid_get_net_plugin
     apply_net_plugin
@@ -449,8 +463,9 @@ function main() {
         echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
+        CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
         copy_keys $HOST_IP
-        until add_master $HOST_NAME $HOST_IP; do
+        until add_master $HOST_NAME $HOST_IP $CURRENT_CLUSTER $first_master $first_master_ip; do
             ssh $HOST_NAME sudo kubeadm reset -f
             copy_keys $HOST_IP
         done
