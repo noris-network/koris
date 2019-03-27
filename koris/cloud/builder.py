@@ -271,7 +271,6 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
 
 class ClusterBuilder:  # pylint: disable=too-few-public-methods
-
     """
     Plan and build a kubernetes cluster in the cloud
     """
@@ -364,8 +363,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # do not add a listener, since we created no machines yet.
         LOGGER.info("Creating the load balancer...")
         lb_conn = get_connection()
-        lbinst = LoadBalancer(config, conn=lb_conn)
-        lb, floatingip = lbinst.get_or_create(NEUTRON)
+        lbinst = LoadBalancer(config, lb_conn)
+        lb, floatingip = lbinst.get_or_create()
         lb_port = "6443"
 
         lb_dns = config['loadbalancer'].get('dnsname') or floatingip
@@ -416,7 +415,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Configuring the LoadBalancer...")
         first_master_ip = results[0].ip_address
         configure_lb_task = loop.create_task(
-            lbinst.configure(NEUTRON, [first_master_ip]))
+            lbinst.configure([first_master_ip]))
 
         # create the worker nodes
         LOGGER.info("Waiting for the worker machines to be launched and the "
@@ -436,7 +435,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             dex_listener = self.dex_conf['ports']['listener']
             dex_service = self.dex_conf['ports']['service']
             dex_members = master_ips
-            dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
+            dex_task = loop.create_task(create_dex(lbinst,
                                                    listener_port=dex_listener,
                                                    pool_port=dex_service,
                                                    members=dex_members))
@@ -444,7 +443,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             client_listener = self.dex_conf['client']['ports']['listener']
             client_service = self.dex_conf['client']['ports']['service']
             client_members = node_ips
-            oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
+            oauth_task = loop.create_task(create_oauth2(lbinst,
                                                         listener_port=client_listener,
                                                         pool_port=client_service,
                                                         members=client_members))

@@ -27,10 +27,10 @@ config = {
 }
 
 CONN = OpenStackAPI.connect()
-NET = OSNetwork(CLIENT, config, CONN).get_or_create()
+NET = OSNetwork(config, CONN).get_or_create()
 SUBNET = OSSubnet(CLIENT, NET['id'], config).get_or_create()
 OSRouter(CLIENT, NET['id'], SUBNET, config).get_or_create()
-LB = LoadBalancer(config, client=CLIENT, conn=CONN)
+LB = LoadBalancer(config, CONN)
 
 
 def create_and_configure():
@@ -40,7 +40,7 @@ def create_and_configure():
     """
 
     loop = asyncio.get_event_loop()
-    LB.create(CLIENT)
+    LB.create()
 
     master_ips = ['192.168.0.103', '192.168.0.104', '192.168.0.105']
     node_ips = ['192.168.0.120', '192.168.0.121']
