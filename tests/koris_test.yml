@@ -38,8 +38,7 @@ loadbalancer:
  floatingip: false
 certificates:
   expriry: 8760h
-#storage_class: "BSS-Performance-Storage"
-storage_class: "PI-Storage-Class"
+storage_class: "BSS-Performance-Storage"
 pod_subnet: "10.233.0.0/16"
 pod_network: "CALICO"
 #pod_subnet: "10.244.0.0/16"

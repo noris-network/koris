@@ -2,6 +2,7 @@
 A small script to test instance creation on OpenStack
 """
 
+# pylint: disable=no-name-in-module,invalid-name,no-value-for-parameter,assignment-from-no-return
 import asyncio
 import sys
 
@@ -9,7 +10,7 @@ import sys
 from koris.cloud.openstack import Instance, get_clients, get_or_create_sec_group
 
 CONFIG = {'zone': 'de-nbg6-1a',
-          'class': 'PI-Storage-Class',
+          'class': 'BSS-Performance-Storage',
           'flavor': 'ECS.C1.1-2',
           'image': "Ubuntu Xenial Server Cloudimg",
           'secgroup': 'default',
@@ -25,7 +26,7 @@ secgroups = [secgroup['id']]
 
 instance = Instance(CINDER, NOVA, 'tiny-test', net, 'de-nbg6-1a',
                     'dummy',
-                    {'class': "PI-Storage-Class",
+                    {'class': "BSS-Performance-Storage",
                      'image': NOVA.glance.find_image(CONFIG['image'])})
 
 keypair = NOVA.keypairs.get(CONFIG['keypair'])
