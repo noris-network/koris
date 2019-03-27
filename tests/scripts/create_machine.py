@@ -2,7 +2,8 @@
 A small script to test instance creation on OpenStack
 """
 
-# pylint: disable=no-name-in-module,invalid-name,no-value-for-parameter,assignment-from-no-return
+# pylint: disable=no-name-in-module,invalid-name,no-value-for-parameter
+# pylint: disable=assignment-from-no-return
 import asyncio
 import sys
 
