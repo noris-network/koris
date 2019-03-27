@@ -66,4 +66,4 @@ websocket-client==0.53.0
 wrapt==1.10.11
 python-glanceclient==2.13.0
 keystoneauth1==3.11.2
-python-keystoneclient==*
+python-keystoneclient
