@@ -52,8 +52,8 @@ loadbalancer:
 # https://www.noris.cloud/services/storage/openstack-cinder/?lang=en#details
 # Right now we need to choose PI-Storage-Class which has no IOPS limitation.
 # If you don't have access to it, please ask to the OpenStack team.
-storage_class: "PI-Storage-Class"
-# storage_class: "BSS-Performance-Storage"
+#storage_class: "PI-Storage-Class"
+storage_class: "BSS-Performance-Storage"
 
 # The Kubernetes pod network plugin
 pod_network: "CALICO"
