@@ -1,4 +1,4 @@
-# This is an example koris config file you can use to deploy a 
+# This is an example koris config file you can use to deploy a
 # KUbernetes cluster into your own noris.cloud project.
 ---
 # Noris.cloud instance flavors. For available options see
@@ -8,9 +8,9 @@ node_flavor: 'ECS.C1.4-8'
 
 # Specify the name of the network and subnet with CIDR range. If it doesn't
 # exist, koris will create it for you.
-private_net: 
+private_net:
   name: 'k8s-nude'
-  subnet: 
+  subnet:
     name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
     cidr: '10.32.192.0/24'
     #  This is optional - if no router name is given a new one will be created
@@ -50,9 +50,6 @@ loadbalancer:
 
 # The noris.cloud storage class. For available options check
 # https://www.noris.cloud/services/storage/openstack-cinder/?lang=en#details
-# Right now we need to choose PI-Storage-Class which has no IOPS limitation.
-# If you don't have access to it, please ask to the OpenStack team.
-#storage_class: "PI-Storage-Class"
 storage_class: "BSS-Performance-Storage"
 
 # The Kubernetes pod network plugin
