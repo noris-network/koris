@@ -167,6 +167,38 @@ function make_secrets(){
 }
 
 
+# create a config map with a script to add a master
+function add_master_script_config_map() {
+
+    # a little bit of meta programming is possible in bash ;)
+    # typeset -f prints the code of a function
+    { echo "#!/bin/bash" ;
+      echo "set -e";
+      echo "export KUBE_VERSION=${KUBE_VERSION}";
+      echo "touch /etc/kubernetes/koris.env";
+      echo "touch /etc/kubernetes/koris.conf";
+      # shellcheck disable=SC2034
+      typeset -f copy_keys;
+      # shellcheck disable=SC2034
+      typeset -f create_kubeadm_config;
+      # shellcheck disable=SC2034
+      typeset -f wait_for_etcd;
+      typeset -f get_docker;
+      typeset -f get_kubeadm;
+      # shellcheck disable=SC2034
+      typeset -f add_master;
+      echo "apk add openssh";
+      echo "HOST_NAME=\$1";
+      echo "HOST_IP=\$2" ;
+      echo "ssh \${SSHOPTS} ubuntu@\${HOST_NAME} sudo kubeadm reset -f" ;
+      echo "copy_keys \$2";
+      echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
+      echo "add_master \$1 \$2 \$CURRENT_CLUSTER \$4 \$5";
+    } >> add_master_script.sh
+
+      kubectl --kubeconfig=/etc/kubernetes/admin.conf create -n kube-system configmap add-master-script.sh --from-file=add_master_script.sh
+}
+
 
 # distributes configuration file and certificates to a master node
 function copy_keys() {
@@ -556,7 +588,7 @@ else
     cd /root
     iptables -P FORWARD ACCEPT
     swapoff -a
-    main $@
+    main "$@"
 fi
 
 # vi: expandtab ts=4 sw=4 ai
