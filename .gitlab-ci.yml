@@ -212,7 +212,7 @@ compliance-checks:
 
 cleanup:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.2
+  image: oz123/koris-alpine:0.1.3
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
