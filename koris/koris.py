@@ -30,7 +30,7 @@ from .deploy.k8s import K8S
 from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
-from .cloud.builder import ClusterBuilder, NodeBuilder
+from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
 from .cloud.openstack import OSClusterInfo
 
 # pylint: disable=protected-access
@@ -38,6 +38,44 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 KORIS_DOC_URL = "https://pi.docs.noris.net/koris/"
 LOGGER = get_logger(__name__)
+
+
+def update_config(config_dict, config, amount, role='nodes'):
+    """update the cluster configuration file"""
+    key = "n-%s" % role
+    config_dict[key] = config_dict[key] + amount
+    updated_name = config.split(".")
+    updated_name.insert(-1, "updated")
+    updated_name = ".".join(updated_name)
+    with open(updated_name, 'w') as stream:
+        yaml.dump(config_dict, stream=stream)
+
+    print(infomsg("An updated cluster configuration was written to: {}".format(
+        updated_name)))
+
+
+def add_node(cloud_config,
+             os_cluster_info,
+             role,
+             zone,
+             amount,
+             flavor,
+             k8s,
+             config_dict):
+    """the actual logic of adding a node"""
+    node_builder = NodeBuilder(
+        config_dict,
+        os_cluster_info,
+        cloud_config=cloud_config)
+
+    tasks = node_builder.create_nodes_tasks(k8s.host,
+                                            k8s.get_bootstrap_token(),
+                                            k8s.ca_info,
+                                            role=role,
+                                            zone=zone,
+                                            flavor=flavor,
+                                            amount=amount)
+    node_builder.launch_new_nodes(tasks)
 
 
 @mach1()
@@ -125,6 +163,8 @@ class Koris:  # pylint: disable=no-self-use
             config_dict = yaml.safe_load(stream)
 
         k8s = K8S(os.getenv("KUBECONFIG"))
+
+        os_cluster_info = OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict)
         try:
             subnet = self.neutron.find_resource('subnet', config_dict['subnet'])
         except KeyError:
@@ -132,28 +172,18 @@ class Koris:  # pylint: disable=no-self-use
 
         cloud_config = OSCloudConfig(subnet['id'])
 
-        node_builder = NodeBuilder(
-            config_dict,
-            OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict),
-            cloud_config=cloud_config)
-
-        tasks = node_builder.create_nodes_tasks(k8s.host,
-                                                k8s.get_bootstrap_token(),
-                                                k8s.ca_info,
-                                                role=role,
-                                                zone=zone,
-                                                flavor=flavor,
-                                                amount=amount)
-        node_builder.launch_new_nodes(tasks)
-        config_dict['n-nodes'] = config_dict['n-nodes'] + amount
-        updated_name = config.split(".")
-        updated_name.insert(-1, "updated")
-        updated_name = ".".join(updated_name)
-        with open(updated_name, 'w') as stream:
-            yaml.dump(config_dict, stream=stream)
-
-        print(infomsg("An updated cluster configuration was written to: {}".format(
-            updated_name)))
+        if role == 'node':
+            add_node(
+                cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
+                config_dict)
+            update_config(config_dict, config, amount)
+        elif role == 'master':
+            builder = ControlPlaneBuilder(config_dict, os_cluster_info, cloud_config)
+            master = builder.add_master(zone, flavor)
+            k8s.launch_master_adder(master.name, master.ip_address)
+            update_config(config_dict, config, 1, role='masters')
+        else:
+            print("Unknown role")
 
 
 def main():

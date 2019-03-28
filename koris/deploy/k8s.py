@@ -4,12 +4,15 @@ deploy cluster service to kubernetes via the API server
 import base64
 from datetime import datetime, timedelta
 import getpass
+import json
 import logging
 import os
 import random
 import socket
 import string
+import subprocess as sp
 import sys
+import time
 import urllib3
 
 from pkg_resources import resource_filename, Requirement
@@ -28,6 +31,121 @@ else:
                                       'koris/deploy/manifests')
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
+
+
+def get_node_addr(addresses, addr_type):
+    """
+    Parse the address of the node
+
+    Args:
+        addresses (object) - instance of addresses returned from k8s API
+        addr_type (str) - the address type
+    """
+    return [i.address for i in addresses if i.type == addr_type][0]
+
+
+KUBE_VERSION = "1.12.5"
+
+
+MASTER_ADDER_POD = {
+    "apiVersion": "v1", "kind": "Pod", "metadata":
+    {"labels": {"k8s-app": "master-adder"},
+     "name": "master-adder", "namespace": "kube-system"},
+    "spec": {"containers":
+             [{"name": "mastrer-adder",
+               "image": "oz123/koris-etcd:0.1",
+               "command": ["sleep"], "args": ["86400"],
+               "volumeMounts": [
+                   {"name": "add-master-script",
+                    "mountPath": "/usr/local/bin/add-master-script",
+                    "subPath": "add_master_script.sh"},
+                   {"name": "cloud-config",
+                    "mountPath": "/etc/kubernetes/cloud.config",
+                    "subPath": "cloud.config"},
+                   {"name": "admin-conf",
+                    "mountPath": "/etc/kubernetes/admin.conf",
+                    "subPath": "admin.conf"},
+                   {"name": "sa-key",
+                    "mountPath": "/etc/kubernetes/pki/sa.key",
+                    "subPath": "sa.key"},
+                   {"name": "sa-pub",
+                    "mountPath": "/etc/kubernetes/pki/sa.pub",
+                    "subPath": "sa.pub"},
+                   {"name": "cluster-ca",
+                    "mountPath": "/etc/kubernetes/pki/ca.crt",
+                    "subPath": "tls.crt"},
+                   {"name": "cluster-ca-key",
+                    "mountPath": "/etc/kubernetes/pki/ca.key",
+                    "subPath": "tls.key"},
+                   {"name": "ssh-key",
+                    "mountPath": "/etc/ssh/ssh_host_rsa_key",
+                    "subPath": "ssh_host_rsa_key"},
+                   {"name": "etcd-peer",
+                    "mountPath": "/etc/kubernetes/pki/etcd/peer.crt",
+                    "subPath": "tls.crt"},
+                   {"name": "etcd-peer-key",
+                    "mountPath": "/etc/kubernetes/pki/etcd/peer.key",
+                    "subPath": "tls.key"},
+                   {"name": "etcd-ca",
+                    "mountPath": "/etc/kubernetes/pki/etcd/ca.crt",
+                    "subPath": "tls.crt"},
+                   {"name": "etcd-ca-key",
+                    "mountPath": "/etc/kubernetes/pki/etcd/ca.key",
+                    "subPath": "tls.key"},
+                   {"name": "front-proxy-key",
+                    "mountPath": "/etc/kubernetes/pki/front-proxy-ca.key",
+                    "subPath": "tls.key"},
+                   {"name": "front-proxy-ca",
+                    "mountPath": "/etc/kubernetes/pki/front-proxy-ca.crt",
+                    "subPath": "tls.crt"}],
+               "envFrom": [{"configMapRef": {"name": "korisenv"}},
+                           {"configMapRef": {"name": "current-cluster"}}],
+               "env": [
+                   {"name": "SSHOPTS",
+                    "value": ("-i /etc/ssh/ssh_host_rsa_key "
+                              "-o StrictHostKeyChecking=no "
+                              "-o ConnectTimeout=60")},
+                   {"name": "TRIMKUBEADM",
+                    "value": "1"},
+                   {"name": "KUBE_VERSION",
+                    "value": KUBE_VERSION},
+                   {"name": "ETCDCTL_CA_FILE",
+                    "value": "/etc/kubernetes/pki/etcd/ca.crt"},
+                   {"name": "ETCDCTL_CERT_FILE",
+                    "value": "/etc/kubernetes/pki/etcd/peer.crt"},
+                   {"name": "ETCDCTL_KEY_FILE",
+                    "value": "/etc/kubernetes/pki/etcd/peer.key"}]}],
+             "volumes": [
+                 {"name": "add-master-script",
+                  "configMap": {"name":
+                                "add-master-script.sh",
+                                "defaultMode": 484}},
+                 {"name": "cloud-config",
+                  "secret": {"secretName": "cloud.config"}},
+                 {"name": "admin-conf",
+                  "secret": {"secretName": "admin.conf"}},
+                 {"name": "sa-key", "secret": {"secretName": "sa-key"}},
+                 {"name": "sa-pub", "secret": {"secretName": "sa-pub"}},
+                 {"name": "cluster-ca",
+                  "secret": {"secretName": "cluster-ca"}},
+                 {"name": "cluster-ca-key",
+                  "secret": {"secretName": "cluster-ca"}},
+                 {"name": "front-proxy",
+                  "secret": {"secretName": "front-proxy"}},
+                 {"name": "koris-conf",
+                  "configMap": {"name": "koris.conf", "defaultMode": 420}},
+                 {"name": "etcd-peer",
+                  "secret": {"secretName": "etcd-peer"}},
+                 {"name": "etcd-peer-key",
+                  "secret": {"secretName": "etcd-peer"}},
+                 {"name": "etcd-ca", "secret": {"secretName": "etcd-ca"}},
+                 {"name": "etcd-ca-key", "secret": {"secretName": "etcd-ca"}},
+                 {"name": "ssh-key",
+                  "secret": {"secretName": "ssh-key", "defaultMode": 384}},
+                 {"name": "front-proxy-ca",
+                  "secret": {"secretName": "front-proxy"}},
+                 {"name": "front-proxy-key",
+                  "secret": {"secretName": "front-proxy"}}]}}
 
 
 def rand_string(num):
@@ -150,3 +268,43 @@ class K8S:
                             LOGGER.info(
                                 "Added member no. %d %s to the loadbalancer",
                                 len(lb_inst.members), address)
+
+    def launch_master_adder(self, new_master_name, new_master_ip):
+        """
+        launch the add_master_pod and run it.
+
+        Args:
+            new_master_name (str) - the new master's name
+            new_master_ip (str) - the new master's IP address
+        """
+        nodes = self.api.list_node(pretty=True)
+        nodes = [node for node in nodes.items if
+                 'node-role.kubernetes.io/master' in node.metadata.labels]
+        addresses = nodes[0].status.addresses
+        master_ip = get_node_addr(addresses, "InternalIP")
+        master_name = get_node_addr(addresses, "Hostname")
+
+        # replace this with proper Python API call
+        kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
+        kctl.communicate(json.dumps(MASTER_ADDER_POD).encode())
+
+        result = self.api.list_namespaced_pod(
+            "kube-system",
+            label_selector='k8s-app=master-adder')
+
+        print("Waiting for the pod to run ...")
+        while result.items[0].status.phase != "Running":
+            time.sleep(1)
+            result = self.api.list_namespaced_pod(
+                "kube-system",
+                label_selector='k8s-app=master-adder')
+
+        print("Waiting a minute for SSH to on %s ..." % new_master_name)
+        # replace this with proper Python API call
+        cmd = ('kubectl exec -it master-adder -n kube-system -- /bin/bash -c '
+               '"/usr/local/bin/add-master-script '
+               '%s %s ${CURRENT_CLUSTER} %s %s"' % (
+                   new_master_name, new_master_ip,
+                   master_name, master_ip))
+        kctl = sp.Popen(cmd, shell=True)
+        kctl.communicate()
