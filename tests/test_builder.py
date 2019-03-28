@@ -7,7 +7,6 @@ import pytest
 
 import koris.cloud.openstack
 
-from koris.cloud import OpenStackAPI
 from koris.cloud.openstack import OSClusterInfo, OSSubnet
 from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
 from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
@@ -171,9 +170,8 @@ SUBNETS = {
 }
 
 
-@pytest.fixture
-def get_conn():
-    return OpenStackAPI.connect()
+def dummy_create_network(*args, **kwargs):
+    return {"id": "asdfadsfdasf"}
 
 
 @pytest.fixture
@@ -192,11 +190,16 @@ def os_info():  # pylint disable=redefined-outer-name
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
+
+    conn = mock.Mock()
+    conn.get_network = dummy_create_network
+    conn.create_network = dummy_create_network
+    osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG, conn)
     return osinfo
 
 
-def test_create_network_settings_from_config():
+@mock.patch('koris.cloud.OpenStackAPI')
+def test_create_network_settings_from_config(patch):
     """test create network from config"""
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
@@ -207,7 +210,8 @@ def test_create_network_settings_from_config():
     assert 'cidr' in subs
 
 
-def test_create_network_settings_not_in_config():
+@mock.patch('koris.cloud.OpenStackAPI')
+def test_create_network_settings_not_in_config(*args):
     """test create network no settings in config"""
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
@@ -218,7 +222,8 @@ def test_create_network_settings_not_in_config():
     assert 'cidr' in subs
 
 
-def test_node_builder(os_info, dummy_server):  # pylint disable=redefined-outer-name
+@mock.patch('koris.cloud.OpenStackAPI')
+def test_node_builder(patch, os_info, dummy_server):  # pylint disable=redefined-outer-name
     """ test the node builder class """
     NOVA.servers.find = mock.MagicMock(return_value=dummy_server)
     nb = NodeBuilder(CONFIG, os_info)

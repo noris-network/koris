@@ -1052,8 +1052,9 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     """
     def __init__(self, nova_client, neutron_client,
                  cinder_client,
-                 config):
-        self.conn = get_connection()
+                 config,
+                 connection=None):
+        self.conn = connection
         self.keypair = nova_client.keypairs.get(config['keypair'])
 
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
