@@ -69,8 +69,8 @@ Deploy your cluster
    :download:`pi-dev-config <../configs/pi-dev-config.yml>`.
 
    .. note::
-       Please check if you have access to the pre-built koris images (e.g. ``koris-2019-02-08``) and the
-       Volume type ``PI-Storage-Class``. If not, please contact the OpenStack team to enable them for you.
+       Please check if you have access to the pre-built koris images (e.g. ``koris-2019-02-08``).
+       If not, please contact the OpenStack team to enable them for you.
 
 4. Pass the your config file to ``koris apply``:
 

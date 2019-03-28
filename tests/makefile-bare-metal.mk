@@ -14,11 +14,11 @@ SSHOPTS = -o StrictHostKeyChecking=no
 create-volumes-masters:
 	@echo "creating volumes for masters"
 	for host in {1..3}; do \
-	openstack volume create --size 25 --bootable --availability-zone $(AZ) --type PI-Storage-Class --image $(IMAGE) $(CLUSTERNAME)-root-master-$${host}; done
+	openstack volume create --size 25 --bootable --availability-zone $(AZ) --type BSS-Performance-Storage --image $(IMAGE) $(CLUSTERNAME)-root-master-$${host}; done
 
 create-volumes-nodes:
 	@echo "creating volumes for nodes"
-	openstack volume create --size 25 --bootable --availability-zone $(AZ) --type PI-Storage-Class --image $(IMAGE) $(CLUSTERNAME)-root-node-1
+	openstack volume create --size 25 --bootable --availability-zone $(AZ) --type BSS-Performance-Storage --image $(IMAGE) $(CLUSTERNAME)-root-node-1
 
 create-masters: #create-volumes-masters
 	for host in {1..3}; do \
