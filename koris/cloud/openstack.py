@@ -388,16 +388,11 @@ class LoadBalancer:
     def delete(self):
         """Delete the cluster API loadbalancer
 
-        Deletion order of LoadBalancer:
+        Deletion order of LoadBalancer (done via --cascade):
             - remove pool (LB is pending up date)
             - if healthmonitor in pool, delete it first
             - remove listener (LB is pending update)
             - remove LB (LB is pending delete)
-
-        Args:
-            client (neutron client)
-            suffix (str) - the suffix of the name, appended to name
-
         """
 
         # Check if LB is assigned
