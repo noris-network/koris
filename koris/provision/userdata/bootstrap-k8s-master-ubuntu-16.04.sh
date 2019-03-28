@@ -140,13 +140,41 @@ TMPL
 fi
 }
 
+# create secrets and config maps
+# these are used by the master pod which we call from the CLI
+function make_secrets(){
+    local args="--kubeconfig=/etc/kubernetes/admin.conf create secret -n kube-system"
+    # shellcheck disable=SC2086
+    kubectl ${args} generic ssh-key --from-file=/etc/ssh/ssh_host_rsa_key
+    # shellcheck disable=SC2086
+    kubectl ${args} tls "cluster-ca" --key /etc/kubernetes/pki/ca.key --cert /etc/kubernetes/pki/ca.crt
+    # shellcheck disable=SC2086
+    kubectl ${args} tls "front-proxy" --key /etc/kubernetes/pki/front-proxy-ca.key --cert /etc/kubernetes/pki/front-proxy-ca.crt
+    # shellcheck disable=SC2086
+    kubectl ${args} tls "etcd-ca" --key /etc/kubernetes/pki/etcd/ca.key --cert /etc/kubernetes/pki/etcd/ca.crt
+    # shellcheck disable=SC2086
+    kubectl ${args} tls "etcd-peer" --key /etc/kubernetes/pki/etcd/peer.key --cert /etc/kubernetes/pki/etcd/peer.crt
+    # shellcheck disable=SC2086
+    kubectl ${args} generic "sa-pub" --from-file=/etc/kubernetes/pki/sa.pub
+    # shellcheck disable=SC2086
+    kubectl ${args} generic "sa-key" --from-file=/etc/kubernetes/pki/sa.key
+    # shellcheck disable=SC2086
+    kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
+    # shellcheck disable=SC2086
+    kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
+    # shellcheck disable=SC2086
+    kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.conf --from-file=/etc/kubernetes/koris.conf
+}
+
+
+
 # distributes configuration file and certificates to a master node
 function copy_keys() {
     host=$1
     USER=${SSH_USER:-ubuntu}
 
     echo -n "waiting for ssh on $1"
-    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
+    until ssh "${SSHOPTS}" "${USER}"@"$1" hostname; do
        echo -n "."
        sleep 1
     done
@@ -455,6 +483,7 @@ function main() {
 
     bootstrap_first_master "${first_master}" "${first_master_ip}"
     wait_for_etcd "${first_master}"
+    make_secrets
 
     wait $pid_get_net_plugin
     apply_net_plugin
@@ -464,7 +493,7 @@ function main() {
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
         CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
-        copy_keys $HOST_IP
+        copy_keys "${HOST_IP}"
         until add_master $HOST_NAME $HOST_IP $CURRENT_CLUSTER $first_master $first_master_ip; do
             ssh $HOST_NAME sudo kubeadm reset -f
             copy_keys $HOST_IP
