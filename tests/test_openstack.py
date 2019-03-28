@@ -1,6 +1,10 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from koris.cloud.openstack import OSNetwork
+import pytest
+
+from koris.cloud.openstack import (OSNetwork, get_connection, LoadBalancer)
+from koris.cloud import OpenStackAPI
+from .testdata import CONFIG
 
 
 class Network:
@@ -62,3 +66,43 @@ def test_fallback_networks():
     conn.network.networks = valid_fallback
 
     assert OSNetwork.find_external_network(conn).name == "ext01"
+
+
+def test_get_connection():
+    # All good
+    conn = get_connection()
+    assert conn
+
+    # RC file not sourced
+    with patch.object(OpenStackAPI,
+                      'connect',
+                      side_effect=OpenStackAPI.exceptions.ConfigException):
+
+        with pytest.raises(SystemExit):
+            conn = get_connection()
+
+    # Other error
+    with patch.object(OpenStackAPI,
+                      'connect',
+                      return_value=None):
+
+        with pytest.raises(SystemExit):
+            conn = get_connection()
+
+
+@pytest.fixture
+def get_lb(scope="function"):
+    conn = get_connection()
+    return LoadBalancer(CONFIG, conn)
+
+
+def test_create_loadbalancer(get_lb):
+    conn = get_connection()
+
+    # All good
+    lb = LoadBalancer(CONFIG, conn)
+    assert lb
+
+    # Test fixture
+    lb = get_lb
+    assert lb

@@ -39,7 +39,7 @@ from koris.util.util import (get_logger, host_names,
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
-if getattr(sys, 'frozen', False):
+if getattr(sys, 'frozen', False):  # pragma: nocoverage
     def monkey_patch():
         """monkey patch get available versions, because the original
         code uses __file__ which is not available in frozen build"""
@@ -219,7 +219,7 @@ class Instance:  # pylint: disable=too-many-arguments
             pass
 
 
-class LoadBalancer:  # pragma: no coverage
+class LoadBalancer:
     """
     A class to create a LoadBalancer in OpenStack.
 
@@ -1053,8 +1053,13 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     def __init__(self, nova_client, neutron_client,
                  cinder_client,
                  config,
-                 connection=None):
-        self.conn = connection
+                 conn=None):
+
+        if not conn:
+            self.conn = get_connection()
+        else:
+            self.conn = conn
+
         self.keypair = nova_client.keypairs.get(config['keypair'])
 
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
@@ -1086,9 +1091,8 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         try:
             return self._novaclient.glance.find_image(self._image_name)
         except NoUniqueMatch:
-            conn = OpenStackAPI.connect()
             return self._novaclient.glance.find_image(
-                [l.id for l in conn.list_images() if l.name == self._image_name][0])
+                [l.id for l in self.conn.list_images() if l.name == self._image_name][0])
 
     @lru_cache()
     def _get_or_create(self, hostname, zone, role, flavor):
