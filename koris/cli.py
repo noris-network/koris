@@ -10,7 +10,7 @@ Don't use directly
 import asyncio
 import sys
 
-from cinderclient.exceptions import BadRequest
+from cinderclient.exceptions import BadRequest, NotFound
 
 from koris.util.hue import red, yellow  # pylint: disable=no-name-in-module
 from koris.cloud.openstack import OSClusterInfo, LoadBalancer
@@ -94,7 +94,7 @@ def remove_cluster(config, nova, neutron, cinder):
             if config['cluster-name'] in vol.name and vol.status != 'in-use':
                 try:
                     vol.delete()
-                except BadRequest:
+                except (BadRequest, NotFound):
                     pass
 
         except TypeError:
