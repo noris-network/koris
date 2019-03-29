@@ -22,7 +22,7 @@ parsed and the following actions will be taken:
 
 3. Creation of virtual network interfaces.
 
-4. Create a set of virtual machines with attached volume and network interface 
+4. Create a set of virtual machines with attached volume and network interface
    previously created. This first set of machines (1 or more) are the kubernetes
    masters.
 
@@ -56,7 +56,7 @@ The main driver of the steps describe above is in :py:mod:`koris.cloud.builder`
 which abstracts the dirty details of communication with the OpenStack API,
 which is found in :py:mod:`koris.cloud.openstack`.
 
-The package :py:mod:`koris.provision` includes a python module :py:mod:`cloud_init`
+The package :py:mod:`koris.provision` includes a python module :py:mod:`koris.provision.cloud_init`
 responsible of preparing the cloud-init file (also known as ``userdata``)
 for each machine type.
 The directory :ref:`userdata` contains all the BASH shell scripts for each
