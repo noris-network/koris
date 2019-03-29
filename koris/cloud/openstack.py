@@ -379,7 +379,10 @@ class LoadBalancer:
         LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
 
         fip_addr = None
-        if self.floatingip:
+
+        # Only associate floatingip if it's set to a value in config
+        # (aknipping) for now, setting it to 'true' will not do anything
+        if isinstance(self.floatingip, str):
             fip_addr = self.associate_floating_ip(lb)
         return lb, fip_addr
 
@@ -409,30 +412,22 @@ class LoadBalancer:
     def associate_floating_ip(self, loadbalancer):
         """Associates a Floating IP with the LoadBalancer"""
 
-        fip = None
-        if isinstance(self.floatingip, str):  # pylint: disable=undefined-variable
-            valid_ip = valid_ipv4(self.floatingip) or valid_ipv6(self.floatingip)
-            if not valid_ip:
-                LOGGER.error("'%s' is not a valid IP address", self.floatingip)
-                sys.exit(1)
-            if self._existing_floating_ip == self.floatingip:
-                return self._existing_floating_ip
+        valid_ip = valid_ipv4(self.floatingip) or valid_ipv6(self.floatingip)
+        if not valid_ip:
+            LOGGER.error("'%s' is not a valid IP address", self.floatingip)
+            sys.exit(1)
+        if self._existing_floating_ip == self.floatingip:
+            return self._existing_floating_ip
 
-            # Check if Floating IP exists in OpenStack
-            fip = self.conn.network.find_ip(self.floatingip)
-            if not fip:
-                LOGGER.error("Could not find %s in the pool", self.floatingip)
-                sys.exit(1)
+        # Check if Floating IP exists in OpenStack
+        fip = self.conn.network.find_ip(self.floatingip)
         if not fip:
-            # Get the first available FIP from the OpenStack Project the LB is located in
-            fips = list(self.conn.network.ips(project_id=loadbalancer.project_id))[0]
-            if not fips:
-                raise ValueError(
-                    "Please create a floating ip and specify it in the configuration file")  # noqa
-            fip = fips[0]
+            LOGGER.error("Floating IP %s doesn't exist, please create it first",
+                         self.floatingip)
+            sys.exit(1)
 
-            # Assign FIP to LB
-            fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
+        # Assign IP to LB
+        fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
 
         LOGGER.info("Loadbalancer external IP: %s",
                     fip.floating_ip_address)
