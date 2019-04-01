@@ -23,6 +23,9 @@ config = {
             'name': 'test-subnet',
             'cidr': '192.168.0.0/16'
         }
+    },
+    'loadbalancer': {
+        'floatingip': False
     }
 }
 

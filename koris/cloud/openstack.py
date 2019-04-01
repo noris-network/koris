@@ -246,7 +246,7 @@ class LoadBalancer:
         self.members = []
         self.conn = conn
 
-    async def configure(self, master_ips):
+    async def configure(self, master_ips, name="master"):
         """
         Configure a load balancer created in earlier step
 
@@ -256,14 +256,14 @@ class LoadBalancer:
 
         # If not present, add listener
         if not self._data.listeners:
-            listener = self.add_listener()
+            listener = self.add_listener(name=f"{name}-listener")
             listener_id = listener.id
         else:
             LOGGER.info("Reusing listener %s", self._data.listeners[0].id)
             listener_id = self._data.listeners[0].id
 
         if not self._data.pools:
-            pool = self.add_pool(listener_id)
+            pool = self.add_pool(listener_id, name=f"{name}-pool")
         else:
             LOGGER.info("Reusing pool, removing all members ...")
             # (aknipping) This should be handled differently. If there are multiple
