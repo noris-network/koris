@@ -284,7 +284,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         # replace this with proper Python API call
         kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
         kctl.communicate(json.dumps(MASTER_ADDER_POD).encode())
-        if kctl.returncode != os.EX_OK:
+
+        if kctl.returncode:
             raise ValueError("Could not apply master adder pod!")
 
         LOGGER.info("Waiting for the pod to run ...")
@@ -300,22 +301,20 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         LOGGER.info("Extract current etcd cluster state...")
         etcd_pod = 'etcd-master-1-%s' % cluster_name
-        cmd = ('kubectl exec -it %s -n kube-system '
-               '--kubeconfig=%s-admin.conf -- /bin/sh -c "ETCDCTL_API=3 '
-               'etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt '
-               '--cert /etc/kubernetes/pki/etcd/peer.crt '
-               '--key /etc/kubernetes/pki/etcd/peer.key '
-               '--endpoints=https://%s:2380 member list -w json" '
-               '| jq -r -M --compact-output \'[.members | .[] '
-               '| .name + "=" + .clientURLs[0]] | join(",")\'') % (etcd_pod,
-                                                                   cluster_name,
-                                                                   master_ip)
-                                                                   
-        import pdb; pdb.set_trace()
-        
+        cmd = ("kubectl exec -it %s -n kube-system "
+               "--kubeconfig=%s-admin.conf -- /bin/sh -c 'ETCDCTL_API=3 "
+               "etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt "
+               "--cert /etc/kubernetes/pki/etcd/peer.crt "
+               "--key /etc/kubernetes/pki/etcd/peer.key "
+               "--endpoints=https://%s:2379 member list -w json' "
+               "| jq -r -M --compact-output '[.members | .[] "
+               "| .name + \"=\" + .clientURLs[0]] | join(\",\")'") % (etcd_pod,
+                                                                      cluster_name,
+                                                                      master_ip)
         kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE)
         stdout, _ = kctl.communicate()
-        if kctl.returncode != os.EX_OK:
+
+        if kctl.returncode:
             raise ValueError("Could not extract current etcd cluster state!")
 
         lines = stdout.decode().strip().splitlines()
@@ -325,8 +324,6 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         etcd_cluster = lines[0]
         LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
-
-        import pdb; pdb.set_trace()
 
         LOGGER.info("Waiting a minute for SSH to on %s ...", new_master_name)
         time.sleep(MASTER_ADDER_WAIT_SSH_SECONDS)
