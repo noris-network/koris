@@ -46,7 +46,7 @@ def get_node_addr(addresses, addr_type):
 
 KUBE_VERSION = "1.12.5"
 
-
+MASTER_ADDER_WAIT_SSH_SECONDS = 60
 MASTER_ADDER_POD = {
     "apiVersion": "v1", "kind": "Pod", "metadata":
     {"labels": {"k8s-app": "master-adder"},
@@ -250,8 +250,7 @@ class K8S:
 
     def add_all_masters_to_loadbalancer(self,
                                         n_masters,
-                                        lb_inst,
-                                        neutron_client
+                                        lb_inst
                                         ):
         """
         If we find at least one node that has no Ready: True, return False.
@@ -263,16 +262,18 @@ class K8S:
                     if 'master' in item.metadata.name:
                         address = item.status.addresses[0].address
                         if address not in lb_inst.members:
-                            lb_inst.add_member(neutron_client, lb_inst.pool,
+                            lb_inst.add_member(lb_inst.pool,
                                                address)
                             LOGGER.info(
                                 "Added member no. %d %s to the loadbalancer",
                                 len(lb_inst.members), address)
 
-    def launch_master_adder(self, new_master_name, new_master_ip):
+    def launch_master_adder(self, cluster_name, new_master_name, new_master_ip):
         """
         launch the add_master_pod and run it.
 
+        TODO: the Popen calls in this section could be replaced by proper
+              Kubernetes Python API calls for higher code quality.
         Args:
             new_master_name (str) - the new master's name
             new_master_ip (str) - the new master's IP address
@@ -299,8 +300,50 @@ class K8S:
                 "kube-system",
                 label_selector='k8s-app=master-adder')
 
-        print("Waiting a minute for SSH to on %s ..." % new_master_name)
-        # replace this with proper Python API call
+        # TODO:  add the command to get cluster state with jq and etcdctl
+        # see KORIS-100
+        # master-3-test=https://192.168.0.10:2379=master-1-test=https://192.168.0.24:2379=master-2-test=https://192.168.0.5:2379
+        
+        cmd = ()
+        
+        # kubectl get nodes --selector=kubernetes.io/role!=master -o jsonpath={.items[*].status.addresses[?\(@.type==\"InternalIP\"\)].address}
+        # und dann eine der Adressen auswählen
+        
+        # get_node_addr
+        master_ip = "" # TODO: how? maybe use direct Python Kuberentes API?
+        
+        
+        
+        etcd_pod = 'etcd-master-1-%s' % cluster_name
+        
+        LOGGER.debug("Extract current etcd cluster state...")
+        cmd = ('kubectl exec -it %s -n kube-system '
+               '--kubeconfig=%s-admin.conf -- /bin/sh -c "ETCDCTL_API=3 '
+               'etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt '
+               '--cert /etc/kubernetes/pki/etcd/peer.crt '
+               '--key /etc/kubernetes/pki/etcd/peer.key '
+               '--endpoints=https://%s:2379 member list -w json" '
+               '| jq -r -M --compact-output \'[.members | .[] '
+               '| .name + "=" + .clientURLs[0]] | join("=")\'') % (
+                etcd_pod,
+                cluster_name,
+                master_ip
+               )
+        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        stdout, stderr = kctl.communicate()
+        lines = stdout.decode().strip().splitlines()
+        
+        if len(lines) != 1:
+            pass
+        else:
+            res = lines[0]
+            
+        LOGGER.debug("CURRENT_CLUSTER is set to %s" % res)
+
+        LOGGER.info("Waiting a minute for SSH to on %s ..." % new_master_name)
+        time.sleep(MASTER_ADDER_WAIT_SSH_SECONDS)
+        
+        LOGGER.info("Executing adder script on current master node...")
         cmd = ('kubectl exec -it master-adder -n kube-system -- /bin/bash -c '
                '"/usr/local/bin/add-master-script '
                '%s %s ${CURRENT_CLUSTER} %s %s"' % (

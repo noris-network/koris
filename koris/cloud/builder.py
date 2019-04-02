@@ -556,7 +556,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("\nKubernetes API is ready!"
                     "\nWaiting for all masters to become Ready")
 
-        k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst, NEUTRON)
+        k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst)
 
         LOGGER.info("Configured load balancer to use all API servers")
 

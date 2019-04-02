@@ -38,7 +38,7 @@ export CURRENT_CLUSTER=""
 export CLUSTER_STATE=""
 
 
-#### Versions for Kube 1.12.3
+#### Versions for Kube 1.12.5
 export KUBE_VERSION=1.12.5
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
@@ -143,26 +143,47 @@ fi
 # create secrets and config maps
 # these are used by the master pod which we call from the CLI
 function make_secrets(){
+    local del_args="--kubeconfig=/etc/kubernetes/admin.conf -n kube-system --ignore-not-found=true delete secret"
     local args="--kubeconfig=/etc/kubernetes/admin.conf create secret -n kube-system"
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} ssh-key
     kubectl ${args} generic ssh-key --from-file=/etc/ssh/ssh_host_rsa_key
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} "cluster-ca"
     kubectl ${args} tls "cluster-ca" --key /etc/kubernetes/pki/ca.key --cert /etc/kubernetes/pki/ca.crt
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} "front-proxy"
     kubectl ${args} tls "front-proxy" --key /etc/kubernetes/pki/front-proxy-ca.key --cert /etc/kubernetes/pki/front-proxy-ca.crt
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} "etcd-ca"
     kubectl ${args} tls "etcd-ca" --key /etc/kubernetes/pki/etcd/ca.key --cert /etc/kubernetes/pki/etcd/ca.crt
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} "etcd-peer"
     kubectl ${args} tls "etcd-peer" --key /etc/kubernetes/pki/etcd/peer.key --cert /etc/kubernetes/pki/etcd/peer.crt
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} "sa-pub"
     kubectl ${args} generic "sa-pub" --from-file=/etc/kubernetes/pki/sa.pub
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} "sa-key"
     kubectl ${args} generic "sa-key" --from-file=/etc/kubernetes/pki/sa.key
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} admin.conf
     kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
+    
     # shellcheck disable=SC2086
+    kubectl ${del_args} cloud.config
     kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
+    
     # shellcheck disable=SC2086
+    kubectl delete --kubeconfig=/etc/kubernetes/admin.conf  --ignore-not-found=true -n kube-system configmap koris.conf
     kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.conf --from-file=/etc/kubernetes/koris.conf
 }
 
@@ -206,7 +227,7 @@ function copy_keys() {
     USER=${SSH_USER:-ubuntu}
 
     echo -n "waiting for ssh on $1"
-    until ssh "${SSHOPTS}" "${USER}"@"$1" hostname; do
+    until ssh ${SSHOPTS} "${USER}"@"$1" hostname; do
        echo -n "."
        sleep 1
     done
