@@ -166,7 +166,7 @@ def get_token_description():
                               datetime.now())
 
 
-class K8S:
+class K8S:  # pylint: disable=too-many-locals,too-many-arguments
     """
     Deploy basic service to the cluster
 
@@ -300,49 +300,13 @@ class K8S:
                 "kube-system",
                 label_selector='k8s-app=master-adder')
 
-        # TODO:  add the command to get cluster state with jq and etcdctl
-        # see KORIS-100
-        # master-3-test=https://192.168.0.10:2379=master-1-test=https://192.168.0.24:2379=master-2-test=https://192.168.0.5:2379
-        
-        cmd = ()
-        
-        # kubectl get nodes --selector=kubernetes.io/role!=master -o jsonpath={.items[*].status.addresses[?\(@.type==\"InternalIP\"\)].address}
-        # und dann eine der Adressen auswählen
-        
-        # get_node_addr
-        master_ip = "" # TODO: how? maybe use direct Python Kuberentes API?
-        
-        
-        
-        etcd_pod = 'etcd-master-1-%s' % cluster_name
-        
         LOGGER.debug("Extract current etcd cluster state...")
-        cmd = ('kubectl exec -it %s -n kube-system '
-               '--kubeconfig=%s-admin.conf -- /bin/sh -c "ETCDCTL_API=3 '
-               'etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt '
-               '--cert /etc/kubernetes/pki/etcd/peer.crt '
-               '--key /etc/kubernetes/pki/etcd/peer.key '
-               '--endpoints=https://%s:2379 member list -w json" '
-               '| jq -r -M --compact-output \'[.members | .[] '
-               '| .name + "=" + .clientURLs[0]] | join("=")\'') % (
-                etcd_pod,
-                cluster_name,
-                master_ip
-               )
-        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        stdout, stderr = kctl.communicate()
-        lines = stdout.decode().strip().splitlines()
-        
-        if len(lines) != 1:
-            pass
-        else:
-            res = lines[0]
-            
-        LOGGER.debug("CURRENT_CLUSTER is set to %s" % res)
 
-        LOGGER.info("Waiting a minute for SSH to on %s ..." % new_master_name)
+        LOGGER.debug("cluster name %s", cluster_name)
+
+        LOGGER.info("Waiting a minute for SSH to on %s ...", new_master_name)
         time.sleep(MASTER_ADDER_WAIT_SSH_SECONDS)
-        
+
         LOGGER.info("Executing adder script on current master node...")
         cmd = ('kubectl exec -it master-adder -n kube-system -- /bin/bash -c '
                '"/usr/local/bin/add-master-script '
