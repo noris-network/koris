@@ -132,8 +132,7 @@ class K8S:
 
     def add_all_masters_to_loadbalancer(self,
                                         n_masters,
-                                        lb_inst,
-                                        neutron_client
+                                        lb_inst
                                         ):
         """
         If we find at least one node that has no Ready: True, return False.
@@ -145,7 +144,7 @@ class K8S:
                     if 'master' in item.metadata.name:
                         address = item.status.addresses[0].address
                         if address not in lb_inst.members:
-                            lb_inst.add_member(neutron_client, lb_inst.pool,
+                            lb_inst.add_member(lb_inst.pool,
                                                address)
                             LOGGER.info(
                                 "Added member no. %d %s to the loadbalancer",
