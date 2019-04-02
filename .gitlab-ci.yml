@@ -36,7 +36,7 @@ wait-for-resources:
 
 bare-metal-build:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.3
+  image: oz123/koris-alpine:0.1.4
   script:
    - apk add openssh
    - pip install python-openstackclient python-octaviaclient
@@ -50,7 +50,7 @@ bare-metal-build:
 
 bare-metal-integration:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.3
+  image: oz123/koris-alpine:0.1.4
   script:
    - apk add openssh
    - pip install python-openstackclient python-octaviaclient
@@ -213,7 +213,7 @@ compliance-checks:
 
 cleanup:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.3
+  image: oz123/koris-alpine:0.1.4
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -229,7 +229,7 @@ cleanup:
 
 clean-bare-metal:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.3
+  image: oz123/koris-alpine:0.1.4
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
