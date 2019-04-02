@@ -2,9 +2,9 @@
 
 # pylint: disable=invalid-name,missing-docstring
 
-from unittest.mock import MagicMock
 from munch import Munch
 
+from koris.constants import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 CONFIG = {
     "n-nodes": 3,
@@ -31,10 +31,66 @@ CONFIG = {
 }
 
 
-def default_lb():
+def mock_listener():
+    out = Munch()
+    out.id = 'ada8c529-55c1-43b6-94ca-8730a118d459'
+    out.name = MASTER_LISTENER_NAME
+    out.default_pool_id = 'f349fc6b-f1f3-4d6b-8f21-5499abf1c0d5'
+    out.load_balancer_ids = [{'id': '6a1aa11d-9f0a-488f-ae74-a35d54a8f3c6'}]
+    return out
+
+
+def mock_pool():
+    out = Munch()
+    out.id = 'dbc23401-f7d9-4e24-9dc1-8c68805997b9'
+    out.members = [{'id': 'f96e2bac-8381-4280-a305-28c29331e993'},
+                   {'id': 'eacc5d5e-1316-4b77-8205-e39eecb42f27'},
+                   {'id': '6d7e77af-fc7c-4019-b60e-071a78b34002'}]
+    out.name = MASTER_POOL_NAME
+    return out
+
+
+def mock_pool_info():
+    return {
+        'name': MASTER_POOL_NAME,
+        'id': 'dbc23401-f7d9-4e24-9dc1-8c68805997b9',
+        'members': [
+            {
+                'id': 'f96e2bac-8381-4280-a305-28c29331e993',
+                'address': '192.168.0.103',
+            },
+            {
+                'id': 'eacc5d5e-1316-4b77-8205-e39eecb42f27',
+                'address': '192.168.0.104'
+            },
+            {
+                'id': '6d7e77af-fc7c-4019-b60e-071a78b34002',
+                'address': '192.168.0.105',
+            },
+        ]
+    }
+
+
+def mock_member(nr=1):
+    out = Munch()
+    out.name = ''
+    if nr == 1:
+        out.id = 'f96e2bac-8381-4280-a305-28c29331e993'
+        out.address = '192.168.0.103'
+    elif nr == 2:
+        out.id = 'eacc5d5e-1316-4b77-8205-e39eecb42f27'
+        out.address = '192.168.0.104'
+    else:
+        out.id = '6d7e77af-fc7c-4019-b60e-071a78b34002'
+        out.address = '192.168.0.105'
+
+    return out
+
+
+def default_data():
     """A default LoadBlaancer Object as returned from the OpenStack SDK"""
 
-    LB = MagicMock()
+    LB = Munch()
     LB.provider = "amphora"
     LB.description = "test"
     LB.admin_state_up = True
@@ -58,6 +114,7 @@ def default_lb():
     LB.operating_status = "ONLINE"
     LB.name = "test-lb"
     LB.location = default_location()
+    return LB
 
 
 def default_project():
@@ -66,7 +123,6 @@ def default_project():
     PR.name = "test-project"
     PR.domain_id = None
     PR.domain_name = None
-
     return PR
 
 
@@ -76,5 +132,4 @@ def default_location():
     LOC.region_name = "de-nbg6-1"
     LOC.zone = None
     LOC.project = default_project()
-
     return LOC

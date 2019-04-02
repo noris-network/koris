@@ -36,6 +36,7 @@ from koris.util.hue import (red, info, yellow,  # pylint: disable=no-name-in-mod
                             bad, lightcyan as cyan)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
+from koris.constants import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
@@ -238,15 +239,161 @@ class LoadBalancer:
         self.name = "%s-lb" % config['cluster-name']
         self.subnet = config.get('private_net')['subnet'].get('name')
         # these attributes are set after creation
-        self.pool = None
         self._id = None
         self._subnet_id = None
         self._data = None
         self._existing_floating_ip = None
-        self.members = []
         self.conn = conn
 
-    async def configure(self, master_ips, name="master"):
+    @property
+    def master_listener(self):
+        """Returns the listener of name MASTER_LISTENER_NAME, including additional info.
+
+        Returns:
+            A dict containing all necessary information of the master listener. Type:
+            {
+                'name': '<listener.name:str>',
+                'id': '<listener.id:str>',
+                'pool': {
+                    'name': '<pool.name:str>',
+                    'id': '<pool.id:str>',
+                        'members': [
+                            {
+                                'id': '<pool.members[i].id:str>',
+                                'name': '<member.name:str>',
+                                'address': '<member.address:str>',
+                            },
+                            {...}
+                        ]
+                    },
+                }
+            }
+        """
+
+        listener = self._get_master_listener
+        if not listener:
+            return None
+
+        if listener.name != MASTER_LISTENER_NAME:
+            LOGGER.error("Listener '%s' (%s) should be named (%s)",
+                         listener.name, listener.id, MASTER_LISTENER_NAME)
+            return None
+
+        pool = self._pool_info(listener.default_pool_id)
+
+        out = {}
+        out['name'] = listener.name
+        out['id'] = listener.id
+        out['pool'] = pool
+
+        return out
+
+    @property
+    def _get_master_listener(self):  # pylint: disable=too-many-return-statements
+        """Returns the Listener with name MASTER_LISTENER_NAME associated to the LB."""
+
+        # LB isn't configured yet
+        if not self._id or not self._data:
+            LOGGER.error("LoadBalancer not configured yet")
+            return None
+
+        # Get our LB from OpenStack
+        lb = self.conn.load_balancer.find_load_balancer(self._id)
+        if not lb:
+            LOGGER.error("Unable to find LoadBalancer '%s' (%s)", self.name, self._id)
+            return None
+
+        # Check if LB has listeners
+        if not lb.listeners:
+            LOGGER.error("LoadBalancer '%s' (%s) has no listeners", self.name, self._id)
+            return None
+
+        # Iterate over Listeners associated with LB...
+        master_listeners = []
+        for li in lb.listeners:
+            # Check if single Listener has name MASTER_LISTENER_NAME
+            try:
+                listener = self.conn.load_balancer.find_listener(li['id'])
+            except (TypeError, KeyError) as exc:
+                LOGGER.error("Unable to access LoadBalancer.listeners: %s", exc)
+                return None
+
+            # Not this one, check next
+            if not listener:
+                continue
+
+            # This one is good, append to list
+            if listener.name == MASTER_LISTENER_NAME:
+                LOGGER.debug("Found Listener '%s' with name '%s'",
+                             listener.id, MASTER_LISTENER_NAME)
+                master_listeners.append(listener)
+
+        if not master_listeners:
+            LOGGER.error("Unable to find Listener with name '%s'", MASTER_LISTENER_NAME)
+            return None
+
+        if len(master_listeners) > 1:
+            LOGGER.error("Found more than one Listener found with name '%s'",
+                         MASTER_LISTENER_NAME)
+            return None
+
+        return master_listeners[0]
+
+    def _pool_info(self, pool_id):
+        """A list with Pool Information of a Listener.
+
+        Args:
+            listener (:class:`OpenStackAPI.network.Listener`): An OpenStack Listener
+                Object
+
+        Returns:
+            A dict which is of the following structure:
+                {
+                    'name': '<pool.name:str>',
+                    'id': '<pool.id:str>',
+                        'members': [
+                            {
+                                'id': '<pool.members[i].id:str>',
+                                'name': '<member.name:str>',
+                                'address': '<member.address:str>',
+                            },
+                            {...}
+                        ]
+                    },
+                }
+        """
+
+        pool = self.conn.load_balancer.find_pool(pool_id)
+        if not pool:
+            LOGGER.debug("Unable to find pool '%s'", pool_id)
+            return None
+
+        # Get information about every member in the pool
+        members = []
+        for mem in pool.members:
+            mem_id = mem['id']
+
+            member = self.conn.load_balancer.find_member(mem_id, pool)
+            if not member:
+                LOGGER.debug("Unable to find member '%s' in pool '%s' (%s)",
+                             mem_id, pool.name, pool_id)
+                continue
+
+            members.append({
+                'id': mem_id,
+                'name': member.name,
+                'address': member.address
+            })
+
+        pool = {
+            'name': pool.name,
+            'id': pool.id,
+            'members': members
+        }
+
+        return pool
+
+    async def configure(self, master_ips):
         """
         Configure a load balancer created in earlier step
 
@@ -256,14 +403,14 @@ class LoadBalancer:
 
         # If not present, add listener
         if not self._data.listeners:
-            listener = self.add_listener(name=f"{name}-listener")
+            listener = self.add_listener(name=MASTER_LISTENER_NAME)
             listener_id = listener.id
         else:
             LOGGER.info("Reusing listener %s", self._data.listeners[0].id)
             listener_id = self._data.listeners[0].id
 
         if not self._data.pools:
-            pool = self.add_pool(listener_id, name=f"{name}-pool")
+            pool = self.add_pool(listener_id, name=MASTER_POOL_NAME)
         else:
             LOGGER.info("Reusing pool, removing all members ...")
             # (aknipping) This should be handled differently. If there are multiple
@@ -272,8 +419,6 @@ class LoadBalancer:
             pool = self.conn.network.find_pool(self._data.pools[0]['id'])
             for member_id in [list(x.values())[0] for x in pool.members]:
                 self._del_member(member_id, pool.id)
-
-        self.pool = pool.id
 
         for member in master_ips:
             LOGGER.info("Adding member %s ...", member)
@@ -291,10 +436,6 @@ class LoadBalancer:
             self._id = lb.id
             self._subnet_id = lb.vip_subnet_id
             self._data = lb
-            try:
-                self.pool = lb.pools[0]['id']
-            except (IndexError, KeyError):
-                self.pool = None
 
         return lb
 
@@ -313,7 +454,6 @@ class LoadBalancer:
             self._id = lb.id
             self._subnet_id = lb.vip_subnet_id
             self._data = lb
-            self.pool = lb.pools[0]['id'] if lb.pools else None
 
         return lb, fip_addr
 
@@ -476,8 +616,6 @@ class LoadBalancer:
             LOGGER.error("Unable to add pool '%s' to listener %s", name, listener_id)
             return None
 
-        self.pool = pool
-
         LOGGER.info("Added %s pool '%s' (%s) with %s to listener %s", protocol, name,
                     pool.id, lb_algorithm, listener_id)
         return pool
@@ -520,7 +658,6 @@ class LoadBalancer:
             LOGGER.error("Unable to add member '%s' to pool %s", ip_addr, pool_id)
             return None
 
-        self.members.append(ip_addr)
         LOGGER.info("Added member '%s' (%s) to pool %s on port %i", ip_addr,
                     member.id, pool_id, protocol_port)
 

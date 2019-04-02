@@ -50,7 +50,7 @@ def create_and_configure():
 
     configure_lb_task = loop.create_task(LB.configure(master_ips))
 
-    #  WORK: Dex testing
+    #  Dex testing
     print("Configuring the LoadBalancer for Dex ...")
     dex_task = loop.create_task(create_dex(LB, members=master_ips))
     oauth_task = loop.create_task(create_oauth2(LB, members=node_ips))
