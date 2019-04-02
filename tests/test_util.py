@@ -30,14 +30,14 @@ def test_version_is_the_same():
     with unittest.mock.patch('sys.stdout', new_callable=io.StringIO) as p1:
         KorisVersionCheck(phtml).check_is_latest("0.9.2")
         val = p1.getvalue()
-        assert val is ""
+        assert val == ""
 
 
 def test_version_is_newer():
     with unittest.mock.patch('sys.stdout', new_callable=io.StringIO) as p1:
         KorisVersionCheck(phtml).check_is_latest("0.9.3.dev57")
         val = p1.getvalue()
-        assert val is ""
+        assert val == ""
 
 
 def test_web_site_is_not_avail():

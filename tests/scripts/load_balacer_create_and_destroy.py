@@ -6,18 +6,31 @@ in OpenStack
 import asyncio
 import os
 
+from koris.cloud import OpenStackAPI
 from koris.cloud.builder import get_clients
-from koris.cloud.openstack import LoadBalancer
+from koris.cloud.openstack import LoadBalancer, OSNetwork, OSSubnet, OSRouter
 from koris.deploy.dex import create_dex, create_oauth2
 
 _, CLIENT, _ = get_clients()
 
 lb_name = os.getenv('LOADBALANCER_NAME', 'test')
 lb_name = lb_name.split('-lb')[0]
+config = {
+    'cluster-name': lb_name,
+    'private_net': {
+        'name': 'koris-test-net',
+        'subnet': {
+            'name': 'test-subnet',
+            'cidr': '192.168.0.0/16'
+        }
+    }
+}
 
-config = {'cluster-name': lb_name, "private_net": {'subnet': {}}}
-
-LB = LoadBalancer(config)
+CONN = OpenStackAPI.connect()
+NET = OSNetwork(config, CONN).get_or_create()
+SUBNET = OSSubnet(CLIENT, NET['id'], config).get_or_create()
+OSRouter(CLIENT, NET['id'], SUBNET, config).get_or_create()
+LB = LoadBalancer(config, CONN)
 
 
 def create_and_configure():
@@ -25,18 +38,19 @@ def create_and_configure():
     create and configure a load-balancer in oneshot, in real life
     we postpone the configuration to a later stage.
     """
+
     loop = asyncio.get_event_loop()
-    LB.create(CLIENT)
+    LB.create()
 
     master_ips = ['192.168.0.103', '192.168.0.104', '192.168.0.105']
     node_ips = ['192.168.0.120', '192.168.0.121']
 
-    configure_lb_task = loop.create_task(LB.configure(CLIENT, master_ips))
+    configure_lb_task = loop.create_task(LB.configure(master_ips))
 
     #  WORK: Dex testing
     print("Configuring the LoadBalancer for Dex ...")
-    dex_task = loop.create_task(create_dex(CLIENT, LB, members=master_ips))
-    oauth_task = loop.create_task(create_oauth2(CLIENT, LB, members=node_ips))
+    dex_task = loop.create_task(create_dex(LB, members=master_ips))
+    oauth_task = loop.create_task(create_oauth2(LB, members=node_ips))
 
     tasks = [configure_lb_task, dex_task, oauth_task]
 
@@ -56,11 +70,11 @@ if __name__ == '__main__':
         create_and_configure()
         sys.exit(0)
     if action == 1:
-        LB.delete(CLIENT)
+        LB.delete()
         sys.exit(0)
     if action == 2:
         create_and_configure()
-        LB.delete(CLIENT)
+        LB.delete()
         sys.exit(0)
     else:
         print("You must run this script with an action")

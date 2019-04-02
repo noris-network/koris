@@ -11,6 +11,7 @@ from koris.cloud.openstack import OSClusterInfo, OSSubnet
 from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
 from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
 
+from .testdata import CONFIG
 
 DUMMYPORT = {"port": {"admin_state_up": True,
                       "network_id": 'acedfr3c4223ee21',
@@ -61,29 +62,7 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 NOVA = mock.Mock()
 NEUTRON = mock.Mock()
 CINDER = mock.Mock()
-CONFIG = {
-    "n-nodes": 3,
-    "n-masters": 3,
-    "keypair": "otiram",
-    "availibility-zones": ['nbg6-1a', 'nbg6-1b'],
-    "cluster-name": "test",
-    'private_net': {
-        'name': 'test-net',
-        'router': {
-            'name': 'myrouter1',
-            'network': 'ext02'
-        },
-        'subnet': {
-            'name': 'foobar',
-            'cidr': '192.168.0.0/24'
-        }
-    },
-    "security_group": "test-group",
-    "image": "ubuntu 16.04",
-    "node_flavor": "ECS.C1.2-4",
-    "master_flavor": "ECS.C1.4-8",
-    'storage_class': "TestStorageClass"
-}
+
 
 CONFIG2 = {
     "private_net": {},
@@ -170,6 +149,10 @@ SUBNETS = {
 }
 
 
+def dummy_create_network(*args, **kwargs):
+    return {"id": "asdfadsfdasf"}
+
+
 @pytest.fixture
 def dummy_server():  # pylint: disable=redefined-outer-name
     """ dummy server"""
@@ -186,11 +169,16 @@ def os_info():  # pylint disable=redefined-outer-name
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG)
+
+    conn = mock.Mock()
+    conn.get_network = dummy_create_network
+    conn.create_network = dummy_create_network
+    osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG, conn)
     return osinfo
 
 
-def test_create_network_settings_from_config():
+@mock.patch('koris.cloud.OpenStackAPI')
+def test_create_network_settings_from_config(patch):
     """test create network from config"""
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
@@ -201,7 +189,8 @@ def test_create_network_settings_from_config():
     assert 'cidr' in subs
 
 
-def test_create_network_settings_not_in_config():
+@mock.patch('koris.cloud.OpenStackAPI')
+def test_create_network_settings_not_in_config(*args):
     """test create network no settings in config"""
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
@@ -212,7 +201,9 @@ def test_create_network_settings_not_in_config():
     assert 'cidr' in subs
 
 
-def test_node_builder(os_info, dummy_server):  # pylint disable=redefined-outer-name
+@mock.patch('koris.cloud.OpenStackAPI')
+# pylint disable=redefined-outer-name
+def test_node_builder(patch, os_info, dummy_server):
     """ test the node builder class """
     NOVA.servers.find = mock.MagicMock(return_value=dummy_server)
     nb = NodeBuilder(CONFIG, os_info)

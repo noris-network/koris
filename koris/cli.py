@@ -10,6 +10,8 @@ Don't use directly
 import asyncio
 import sys
 
+from cinderclient.exceptions import BadRequest, NotFound
+
 from koris.util.hue import red, yellow  # pylint: disable=no-name-in-module
 from koris.cloud.openstack import OSClusterInfo, LoadBalancer
 from koris.cloud import OpenStackAPI
@@ -19,8 +21,7 @@ LOGGER = get_logger(__name__)
 
 
 def delete_cluster(config, nova, neutron, cinder, force=False):
-    """
-    completly delete a cluster from openstack.
+    """Completly delete a cluster from openstack.
 
     This function removes all compute instance, volume, loadbalancer,
     security groups rules and security groups
@@ -39,9 +40,8 @@ def delete_cluster(config, nova, neutron, cinder, force=False):
 
 def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,
                      client_cert, client_key):
-    """
-    Write a kubeconfig file to the filesystem
-    """
+    """Write a kubeconfig file to the filesystem"""
+
     path = None
     master_uri = "https://" + lb_ip + ":" + lb_port
     username = "admin"
@@ -59,9 +59,8 @@ def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,
 
 
 def remove_cluster(config, nova, neutron, cinder):
-    """
-    Delete a cluster from OpenStack
-    """
+    """Delete a cluster from OpenStack"""
+
     cluster_info = OSClusterInfo(nova, neutron, cinder, config)
     cp_hosts = cluster_info.distribute_management()
     workers = cluster_info.distribute_nodes()
@@ -70,8 +69,9 @@ def remove_cluster(config, nova, neutron, cinder):
     tasks += [host.delete(neutron) for host in workers]
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
-    LoadBalancer(config, neutron).delete()
+
     connection = OpenStackAPI.connect()
+    LoadBalancer(config, connection).delete()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})
     if secg:
@@ -85,12 +85,17 @@ def remove_cluster(config, nova, neutron, cinder):
     connection.delete_security_group(
         '%s-sec-group' % config['cluster-name'])
 
-    # delete volumes
-
+    # Delete volumes
     loop.close()
+
+    # This needs to be replaced with OpenStackAPI in the future
     for vol in cinder.volumes.list():
         try:
             if config['cluster-name'] in vol.name and vol.status != 'in-use':
-                vol.delete()
+                try:
+                    vol.delete()
+                except (BadRequest, NotFound):
+                    pass
+
         except TypeError:
             continue
