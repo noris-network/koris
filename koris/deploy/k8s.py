@@ -52,7 +52,7 @@ MASTER_ADDER_POD = {
     {"labels": {"k8s-app": "master-adder"},
      "name": "master-adder", "namespace": "kube-system"},
     "spec": {"containers":
-             [{"name": "mastrer-adder",
+             [{"name": "master-adder",
                "image": "oz123/koris-etcd:0.1",
                "command": ["sleep"], "args": ["86400"],
                "volumeMounts": [
@@ -98,8 +98,6 @@ MASTER_ADDER_POD = {
                    {"name": "front-proxy-ca",
                     "mountPath": "/etc/kubernetes/pki/front-proxy-ca.crt",
                     "subPath": "tls.crt"}],
-               "envFrom": [{"configMapRef": {"name": "korisenv"}},
-                           {"configMapRef": {"name": "current-cluster"}}],
                "env": [
                    {"name": "SSHOPTS",
                     "value": ("-i /etc/ssh/ssh_host_rsa_key "
@@ -132,8 +130,6 @@ MASTER_ADDER_POD = {
                   "secret": {"secretName": "cluster-ca"}},
                  {"name": "front-proxy",
                   "secret": {"secretName": "front-proxy"}},
-                 {"name": "koris-conf",
-                  "configMap": {"name": "koris.conf", "defaultMode": 420}},
                  {"name": "etcd-peer",
                   "secret": {"secretName": "etcd-peer"}},
                  {"name": "etcd-peer-key",
@@ -288,21 +284,49 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         # replace this with proper Python API call
         kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
         kctl.communicate(json.dumps(MASTER_ADDER_POD).encode())
+        if kctl.returncode != os.EX_OK:
+            raise ValueError("Could not apply master adder pod!")
 
+        LOGGER.info("Waiting for the pod to run ...")
         result = self.api.list_namespaced_pod(
             "kube-system",
             label_selector='k8s-app=master-adder')
 
-        print("Waiting for the pod to run ...")
         while result.items[0].status.phase != "Running":
             time.sleep(1)
             result = self.api.list_namespaced_pod(
                 "kube-system",
                 label_selector='k8s-app=master-adder')
 
-        LOGGER.debug("Extract current etcd cluster state...")
+        LOGGER.info("Extract current etcd cluster state...")
+        etcd_pod = 'etcd-master-1-%s' % cluster_name
+        cmd = ('kubectl exec -it %s -n kube-system '
+               '--kubeconfig=%s-admin.conf -- /bin/sh -c "ETCDCTL_API=3 '
+               'etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt '
+               '--cert /etc/kubernetes/pki/etcd/peer.crt '
+               '--key /etc/kubernetes/pki/etcd/peer.key '
+               '--endpoints=https://%s:2380 member list -w json" '
+               '| jq -r -M --compact-output \'[.members | .[] '
+               '| .name + "=" + .clientURLs[0]] | join(",")\'') % (etcd_pod,
+                                                                   cluster_name,
+                                                                   master_ip)
+                                                                   
+        import pdb; pdb.set_trace()
+        
+        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE)
+        stdout, _ = kctl.communicate()
+        if kctl.returncode != os.EX_OK:
+            raise ValueError("Could not extract current etcd cluster state!")
 
-        LOGGER.debug("cluster name %s", cluster_name)
+        lines = stdout.decode().strip().splitlines()
+        if len(lines) != 1:
+            LOGGER.error("etcd cluster state in unexcepted format %s", lines)
+            return
+
+        etcd_cluster = lines[0]
+        LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
+
+        import pdb; pdb.set_trace()
 
         LOGGER.info("Waiting a minute for SSH to on %s ...", new_master_name)
         time.sleep(MASTER_ADDER_WAIT_SSH_SECONDS)
@@ -310,8 +334,9 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.info("Executing adder script on current master node...")
         cmd = ('kubectl exec -it master-adder -n kube-system -- /bin/bash -c '
                '"/usr/local/bin/add-master-script '
-               '%s %s ${CURRENT_CLUSTER} %s %s"' % (
-                   new_master_name, new_master_ip,
-                   master_name, master_ip))
+               '%s %s %s %s %s"' % (new_master_name, new_master_ip,
+                                    etcd_cluster, master_name, master_ip))
         kctl = sp.Popen(cmd, shell=True)
         kctl.communicate()
+        if kctl.returncode != os.EX_OK:
+            raise ValueError("Could execute the adder script in the adder pod!")

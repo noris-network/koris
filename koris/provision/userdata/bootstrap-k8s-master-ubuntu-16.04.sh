@@ -182,9 +182,15 @@ function make_secrets(){
     kubectl ${del_args} cloud.config
     kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
     
+    # TODO: can we remove this, I think it is not needed?
     # shellcheck disable=SC2086
-    kubectl delete --kubeconfig=/etc/kubernetes/admin.conf  --ignore-not-found=true -n kube-system configmap koris.conf
-    kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.conf --from-file=/etc/kubernetes/koris.conf
+    # kubectl delete --kubeconfig=/etc/kubernetes/admin.conf  --ignore-not-found=true -n kube-system configmap koris.conf
+    # kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.conf --from-file=/etc/kubernetes/koris.conf
+    
+    # TODO: can we remove this, I think it is not needed?
+    # shellcheck disable=SC2086
+    # kubectl delete --kubeconfig=/etc/kubernetes/admin.conf  --ignore-not-found=true -n kube-system configmap koris.env
+    # kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.env --from-file=/etc/kubernetes/koris.env
 }
 
 
@@ -196,8 +202,11 @@ function add_master_script_config_map() {
     { echo "#!/bin/bash" ;
       echo "set -e";
       echo "export KUBE_VERSION=${KUBE_VERSION}";
-      echo "touch /etc/kubernetes/koris.env";
-      echo "touch /etc/kubernetes/koris.conf";
+      
+      # TODO: can we remove this, I think it is not needed?
+      # echo "touch /etc/kubernetes/koris.env";
+      # echo "touch /etc/kubernetes/koris.conf";
+      
       # shellcheck disable=SC2034
       typeset -f copy_keys;
       # shellcheck disable=SC2034
@@ -209,12 +218,17 @@ function add_master_script_config_map() {
       # shellcheck disable=SC2034
       typeset -f add_master;
       echo "apk add openssh";
+
       echo "HOST_NAME=\$1";
-      echo "HOST_IP=\$2" ;
+      echo "HOST_IP=\$2";
+      echo "CURRENT_CLUSTER=\$3";
+      echo "ETCD_HOST=\$4";
+      echo "ETCD_IP=\$5";
+
       echo "ssh \${SSHOPTS} ubuntu@\${HOST_NAME} sudo kubeadm reset -f" ;
-      echo "copy_keys \$2";
+      echo "copy_keys \$HOST_NAME";
       echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
-      echo "add_master \$1 \$2 \$CURRENT_CLUSTER \$4 \$5";
+      echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
     } >> add_master_script.sh
 
       kubectl --kubeconfig=/etc/kubernetes/admin.conf create -n kube-system configmap add-master-script.sh --from-file=add_master_script.sh
@@ -537,6 +551,7 @@ function main() {
     bootstrap_first_master "${first_master}" "${first_master_ip}"
     wait_for_etcd "${first_master}"
     make_secrets
+    add_master_script_config_map
 
     wait $pid_get_net_plugin
     apply_net_plugin

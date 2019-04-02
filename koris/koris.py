@@ -79,7 +79,7 @@ def add_node(cloud_config,
 
 
 @mach1()
-class Koris:  # pylint: disable=no-self-use
+class Koris:  # pylint: disable=no-self-use,too-many-locals
     """
     The main entry point for the program. This class does the CLI parsing
     and descides which action shoud be taken
@@ -164,7 +164,8 @@ class Koris:  # pylint: disable=no-self-use
 
         k8s = K8S(os.getenv("KUBECONFIG"))
 
-        os_cluster_info = OSClusterInfo(self.nova, self.neutron, self.cinder, config_dict)
+        os_cluster_info = OSClusterInfo(self.nova, self.neutron, self.cinder,
+                                        config_dict)
         try:
             subnet = self.neutron.find_resource('subnet', config_dict['subnet'])
         except KeyError:
@@ -177,12 +178,22 @@ class Koris:  # pylint: disable=no-self-use
                 cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
                 config_dict)
             update_config(config_dict, config, amount)
+
         elif role == 'master':
             builder = ControlPlaneBuilder(config_dict, os_cluster_info,
                                           cloud_config)
             master = builder.add_master(zone, flavor)
-            k8s.launch_master_adder(config_dict["cluster-name"], master.name,
-                                    master.ip_address)
+
+            try:
+                k8s.launch_master_adder(config_dict["cluster-name"], master.name,
+                                        master.ip_address)
+            except ValueError as error:
+                print(red("Error encoutered ... ", error))
+                print(red("You may want to remove the newly created Openstack "
+                          "instance manually..."))
+                return
+
+            # Since everything seems to be fine, update the local config
             update_config(config_dict, config, 1, role='masters')
         else:
             print("Unknown role")
