@@ -111,12 +111,14 @@ MASTER_ADDER_POD = {
                     "value": "1"},
                    {"name": "KUBE_VERSION",
                     "value": KUBE_VERSION},
-                   {"name": "ETCDCTL_CA_FILE",
+                   {"name": "ETCDCTL_CA",
                     "value": "/etc/kubernetes/pki/etcd/ca.crt"},
-                   {"name": "ETCDCTL_CERT_FILE",
+                   {"name": "ETCDCTL_CACERT",
                     "value": "/etc/kubernetes/pki/etcd/peer.crt"},
-                   {"name": "ETCDCTL_KEY_FILE",
-                    "value": "/etc/kubernetes/pki/etcd/peer.key"}]}],
+                   {"name": "ETCDCTL_KEY",
+                    "value": "/etc/kubernetes/pki/etcd/peer.key"},
+                   {"name": "ETCDCTL_API",
+                    "value": "3"}]}],
              "volumes": [
                  {"name": "add-master-script",
                   "configMap": {"name":
