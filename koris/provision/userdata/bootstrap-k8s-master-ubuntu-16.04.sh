@@ -221,8 +221,8 @@ function add_master_script_config_map() {
       typeset -f get_kubeadm;
       # shellcheck disable=SC2034
       typeset -f add_master;
-      echo "apk update && apk add openssh";
-
+      echo "mkdir -p /etch/kubernetes/"
+      echo "touch /etc/kubernetes/koris.env"
       echo "HOST_NAME=\$1";
       echo "HOST_IP=\$2";
       echo "CURRENT_CLUSTER=\$3";

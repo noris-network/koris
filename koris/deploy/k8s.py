@@ -57,7 +57,7 @@ MASTER_ADDER_POD = {
      "name": "master-adder", "namespace": "kube-system"},
     "spec": {"containers":
              [{"name": "master-adder",
-               "image": "oz123/koris-etcd:0.1",
+               "image": "oz123/koris-etcd:0.2",
                "command": ["sleep"], "args": ["86400"],
                "volumeMounts": [
                    {"name": "add-master-script",
