@@ -228,7 +228,7 @@ function add_master_script_config_map() {
       echo "CURRENT_CLUSTER=\$3";
       echo "ETCD_HOST=\$4";
       echo "ETCD_IP=\$5";
-      echo "\$HOST_IP \$HOST_NAME >> /etc/hosts"
+      echo "echo \$HOST_IP \$HOST_NAME >> /etc/hosts"
       echo "ssh \${SSHOPTS} -l ubuntu \${HOST_IP} sudo kubeadm reset -f" ;
       echo "copy_keys \$HOST_NAME";
       echo "export LOAD_BALANCER_DNS=${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
