@@ -152,52 +152,52 @@ fi
 function make_secrets(){
     local del_args="--kubeconfig=/etc/kubernetes/admin.conf -n kube-system --ignore-not-found=true delete secret"
     local args="--kubeconfig=/etc/kubernetes/admin.conf create secret -n kube-system"
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} ssh-key
+    # shellcheck disable=SC2086
     kubectl ${args} generic ssh-key --from-file=/etc/ssh/ssh_host_rsa_key
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} "cluster-ca"
+    # shellcheck disable=SC2086
     kubectl ${args} tls "cluster-ca" --key /etc/kubernetes/pki/ca.key --cert /etc/kubernetes/pki/ca.crt
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} "front-proxy"
+    # shellcheck disable=SC2086
     kubectl ${args} tls "front-proxy" --key /etc/kubernetes/pki/front-proxy-ca.key --cert /etc/kubernetes/pki/front-proxy-ca.crt
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} "etcd-ca"
+    # shellcheck disable=SC2086
     kubectl ${args} tls "etcd-ca" --key /etc/kubernetes/pki/etcd/ca.key --cert /etc/kubernetes/pki/etcd/ca.crt
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} "etcd-peer"
+    # shellcheck disable=SC2086
     kubectl ${args} tls "etcd-peer" --key /etc/kubernetes/pki/etcd/peer.key --cert /etc/kubernetes/pki/etcd/peer.crt
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} "sa-pub"
+    # shellcheck disable=SC2086
     kubectl ${args} generic "sa-pub" --from-file=/etc/kubernetes/pki/sa.pub
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} "sa-key"
+    # shellcheck disable=SC2086
     kubectl ${args} generic "sa-key" --from-file=/etc/kubernetes/pki/sa.key
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} admin.conf
+    # shellcheck disable=SC2086
     kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
-    
+
     # shellcheck disable=SC2086
     kubectl ${del_args} cloud.config
+    # shellcheck disable=SC2086
     kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
-    
-    # TODO: can we remove this, I think it is not needed?
-    # shellcheck disable=SC2086
-    # kubectl delete --kubeconfig=/etc/kubernetes/admin.conf  --ignore-not-found=true -n kube-system configmap koris.conf
-    # kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.conf --from-file=/etc/kubernetes/koris.conf
-    
-    # TODO: can we remove this, I think it is not needed?
-    # shellcheck disable=SC2086
-    # kubectl delete --kubeconfig=/etc/kubernetes/admin.conf  --ignore-not-found=true -n kube-system configmap koris.env
-    # kubectl create --kubeconfig=/etc/kubernetes/admin.conf -n kube-system configmap koris.env --from-file=/etc/kubernetes/koris.env
+
 }
 
 
@@ -209,11 +209,7 @@ function add_master_script_config_map() {
     { echo "#!/bin/bash" ;
       echo "set -e";
       echo "export KUBE_VERSION=${KUBE_VERSION}";
-      
-      # TODO: can we remove this, I think it is not needed?
-      # echo "touch /etc/kubernetes/koris.env";
-      # echo "touch /etc/kubernetes/koris.conf";
-      
+
       # shellcheck disable=SC2034
       typeset -f copy_keys;
       # shellcheck disable=SC2034
