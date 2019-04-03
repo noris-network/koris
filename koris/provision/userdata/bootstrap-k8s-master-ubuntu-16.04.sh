@@ -230,6 +230,11 @@ function add_master_script_config_map() {
       echo "\$HOST_IP \$HOST_NAME >> /etc/hosts"
       echo "ssh \${SSHOPTS} -l ubuntu \${HOST_IP} sudo kubeadm reset -f" ;
       echo "copy_keys \$HOST_NAME";
+      echo "export LOAD_BALANCER_DNS=${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
+      echo "export LOAD_BALANCER_PORT=${LOAD_BALANCER_PORT}"
+      echo "export OIDC_CLIENT_ID=${OIDC_CLIENT_ID}"
+      echo "export ADDTOKEN=0"
+      echo "export OPENSTACK=${OPENSTACK} POD_SUBNET=${POD_SUBNET}"
       echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
       echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
     } >> add_master_script.sh
