@@ -54,6 +54,7 @@ LOGLEVEL=4
 V=${LOGLEVEL}
 
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
+SFTPOPTS="${SSHOPTS}"
 
 # create a configuration file for kubeadm
 # this function excpects CURRENT_CLUSTER, HOST_IP and HOST_NAME
