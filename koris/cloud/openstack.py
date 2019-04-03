@@ -324,8 +324,6 @@ class LoadBalancer:
 
             # This one is good, append to list
             if listener.name == MASTER_LISTENER_NAME:
-                LOGGER.debug("Found Listener '%s' with name '%s'",
-                             listener.id, MASTER_LISTENER_NAME)
                 master_listeners.append(listener)
 
         if not master_listeners:

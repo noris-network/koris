@@ -18,6 +18,8 @@ from kubernetes import (client as k8sclient, config as k8sconfig)
 
 from koris.ssl import read_cert, discovery_hash
 from koris.util.util import get_logger
+from koris.util.hue import red, bad
+from koris.constants import MASTER_LISTENER_NAME
 
 if getattr(sys, 'frozen', False):
     MANIFESTSPATH = os.path.join(
@@ -138,14 +140,30 @@ class K8S:
         If we find at least one node that has no Ready: True, return False.
         """
         cond = {'Ready': 'True'}
-        while len(lb_inst.members) < n_masters:
+        master_listener = lb_inst.master_listener
+        if not master_listener:
+            LOGGER.error(bad(red(f"No {MASTER_LISTENER_NAME} found, aborting")))
+            sys.exit(1)
+
+        try:
+            listener_name = master_listener['name']
+            _ = master_listener['pool']['members']
+            pool_id = master_listener['pool']['id']
+        except KeyError as exc:
+            LOGGER.error(bad(red(f"Unable to extract info of {MASTER_LISTENER_NAME}: {exc}")))
+            sys.exit(1)
+
+        while len(lb_inst.master_listener['pool']['members']) < n_masters:
+            print(lb_inst.master_listener['pool']['members'])
             for item in self.api.list_node(pretty=True).items:
                 if cond in [{c.type: c.status} for c in item.status.conditions]:
                     if 'master' in item.metadata.name:
-                        address = item.status.addresses[0].address
-                        if address not in lb_inst.members:
-                            lb_inst.add_member(lb_inst.pool,
-                                               address)
-                            LOGGER.info(
-                                "Added member no. %d %s to the loadbalancer",
-                                len(lb_inst.members), address)
+                        addr_to_add = item.status.addresses[0].address
+                        addr_present = [x['address'] for x in
+                                        lb_inst.master_listener['pool']['members']]
+                        if addr_to_add not in addr_present:
+                            LOGGER.debug("Adding %s to pool '%s' (%s) ...", addr_to_add,
+                                         listener_name, pool_id)
+                            lb_inst.add_member(pool_id,
+                                               addr_to_add)
+
