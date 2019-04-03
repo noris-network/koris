@@ -220,15 +220,15 @@ function add_master_script_config_map() {
       typeset -f get_kubeadm;
       # shellcheck disable=SC2034
       typeset -f add_master;
-      echo "apk add openssh";
+      echo "apk update && apk add openssh";
 
       echo "HOST_NAME=\$1";
       echo "HOST_IP=\$2";
       echo "CURRENT_CLUSTER=\$3";
       echo "ETCD_HOST=\$4";
       echo "ETCD_IP=\$5";
-
-      echo "ssh \${SSHOPTS} ubuntu@\${HOST_NAME} sudo kubeadm reset -f" ;
+      echo "\$HOST_IP \$HOST_NAME >> /etc/hosts"
+      echo "ssh \${SSHOPTS} -l ubuntu \${HOST_IP} sudo kubeadm reset -f" ;
       echo "copy_keys \$HOST_NAME";
       echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
       echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
