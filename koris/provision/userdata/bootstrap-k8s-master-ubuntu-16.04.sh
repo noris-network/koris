@@ -47,6 +47,7 @@ export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
 export OPENSTACK=${OPENSTACK:-1}
 export K8SNODES=${K8SNODES:-""}
+export OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
 export ADDTOKEN=1
 
 LOGLEVEL=4
@@ -122,7 +123,7 @@ TMPL
 fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
-if [[ -n ${OIDC_CLIENT_ID+x} ]]; then
+if [[ -n ${OIDC_CLIENT_ID} ]]; then
 cat <<TMPL > dex.tmpl
   oidc-issuer-url: "${OIDC_ISSUER_URL}"
   oidc-client-id: ${OIDC_CLIENT_ID}
@@ -404,7 +405,7 @@ function get_calico(){
         curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
     done
 
-    sed -i "s@192.168.0.0/16@"${POD_SUBNET}"@g" calico.yaml
+    sed -i 's@192.168.0.0/16@'"${POD_SUBNET}"'@g' calico.yaml
 }
 
 
