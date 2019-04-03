@@ -341,5 +341,5 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                                     etcd_cluster, master_name, master_ip))
         kctl = sp.Popen(cmd, shell=True)
         kctl.communicate()
-        if kctl.returncode != os.EX_OK:
+        if kctl.returncode:
             raise ValueError("Could execute the adder script in the adder pod!")
