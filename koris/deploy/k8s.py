@@ -18,7 +18,7 @@ from kubernetes import (client as k8sclient, config as k8sconfig)
 
 from koris.ssl import read_cert, discovery_hash
 from koris.util.util import get_logger
-from koris.util.hue import red, bad
+from koris.util.hue import red, bad  # pylint: disable=no-name-in-module
 from koris.constants import MASTER_LISTENER_NAME
 
 if getattr(sys, 'frozen', False):
@@ -166,4 +166,3 @@ class K8S:
                                          listener_name, pool_id)
                             lb_inst.add_member(pool_id,
                                                addr_to_add)
-
