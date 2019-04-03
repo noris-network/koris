@@ -47,6 +47,8 @@ export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
 export OPENSTACK=${OPENSTACK:-1}
 export K8SNODES=${K8SNODES:-""}
+export ADDTOKEN=1
+
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -92,14 +94,6 @@ networking:
 #  allow-privileged: "true"
 #  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
 #  feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
-bootstrapTokens:
-- groups:
-  - system:bootstrappers:kubeadm:default-node-token
-  token: "${BOOTSTRAP_TOKEN}"
-  ttl: 24h0m0s
-  usages:
-  - signing
-  - authentication
 controllerManagerExtraArgs:
   allocate-node-cidrs: "true"
   cluster-cidr: ${POD_SUBNET}
@@ -137,6 +131,19 @@ cat <<TMPL > dex.tmpl
   oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
 TMPL
     cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
+fi
+
+if [[ ADDTOKEN -eq 1 ]]; then
+cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: "${BOOTSTRAP_TOKEN}"
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+TOKEN
 fi
 }
 
