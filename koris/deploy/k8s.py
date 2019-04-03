@@ -45,6 +45,10 @@ def get_node_addr(addresses, addr_type):
 
 
 KUBE_VERSION = "1.12.5"
+SFTPOPTS = ["-i /etc/ssh/ssh_host_rsa_key ",
+            "-o StrictHostKeyChecking=no ",
+            "-o ConnectTimeout=60"]
+SSHOPTS = ["-l ubuntu "] + SFTPOPTS
 
 MASTER_ADDER_WAIT_SSH_SECONDS = 60
 MASTER_ADDER_POD = {
@@ -99,10 +103,10 @@ MASTER_ADDER_POD = {
                     "mountPath": "/etc/kubernetes/pki/front-proxy-ca.crt",
                     "subPath": "tls.crt"}],
                "env": [
+                   {"name": "SFTPOPTS",
+                    "value": "".join(SFTPOPTS)},
                    {"name": "SSHOPTS",
-                    "value": ("-i /etc/ssh/ssh_host_rsa_key "
-                              "-o StrictHostKeyChecking=no "
-                              "-o ConnectTimeout=60")},
+                    "value": "".join(SSHOPTS)},
                    {"name": "TRIMKUBEADM",
                     "value": "1"},
                    {"name": "KUBE_VERSION",

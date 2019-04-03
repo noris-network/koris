@@ -263,7 +263,7 @@ function copy_keys() {
 
     # copy over everything PKI related, copy to temporary directory with
     # non-root write access
-    sftp ${SSHOPTS} ${USER}@$host << EOF
+    sftp ${SFTPOPTS} ${USER}@$host << EOF
 	put /etc/kubernetes/pki/ca.crt /home/${USER}/kubernetes/pki/
 	put /etc/kubernetes/pki/ca.key /home/${USER}/kubernetes/pki/
 	put /etc/kubernetes/pki/sa.key /home/${USER}/kubernetes/pki/
@@ -277,7 +277,7 @@ function copy_keys() {
 	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
 EOF
     if [[ OPENSTACK -eq 1 ]]; then
-        sftp ${SSHOPTS} ${USER}@$host << EOF
+        sftp ${SFTPOPTS} ${USER}@$host << EOF
 	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
 	chmod 0600 /home/${USER}/kubernetes/cloud.config
 EOF
@@ -369,7 +369,7 @@ function add_master {
         bootstrap_deps_node $1
     fi
 
-    scp ${SSHOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
+    scp ${SFTPOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config "${CONFIG}"
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config "${CONFIG}"
