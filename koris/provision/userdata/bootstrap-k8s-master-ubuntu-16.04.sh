@@ -598,7 +598,7 @@ function main() {
 
 # when building bare metal cluster or vSphere clusters this is used to
 # install dependencies on each host and join the host to the cluster
-join_all_hosts() {
+function join_all_hosts() {
    export DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
                            openssl rsa -pubin -outform der 2>/dev/null | \
                            openssl dgst -sha256 -hex | sed 's/^.* //')

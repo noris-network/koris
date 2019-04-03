@@ -111,9 +111,9 @@ MASTER_ADDER_POD = {
                     "value": "1"},
                    {"name": "KUBE_VERSION",
                     "value": KUBE_VERSION},
-                   {"name": "ETCDCTL_CA",
-                    "value": "/etc/kubernetes/pki/etcd/ca.crt"},
                    {"name": "ETCDCTL_CACERT",
+                    "value": "/etc/kubernetes/pki/etcd/ca.crt"},
+                   {"name": "ETCDCTL_CERT",
                     "value": "/etc/kubernetes/pki/etcd/peer.crt"},
                    {"name": "ETCDCTL_KEY",
                     "value": "/etc/kubernetes/pki/etcd/peer.key"},
@@ -280,9 +280,15 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_name (str) - the new master's name
             new_master_ip (str) - the new master's IP address
         """
-        nodes = self.api.list_node(pretty=True)
-        nodes = [node for node in nodes.items if
-                 'node-role.kubernetes.io/master' in node.metadata.labels]
+        try:
+            nodes = self.api.list_node(pretty=True)
+            nodes = [node for node in nodes.items if
+                     'node-role.kubernetes.io/master' in node.metadata.labels]
+        except urllib3.exceptions.MaxRetryError:
+            LOGGER.warning(
+                "Connection failed! Are you using the correct kubernetes context?")
+            sys.exit(1)
+
         addresses = nodes[0].status.addresses
         master_ip = get_node_addr(addresses, "InternalIP")
         master_name = get_node_addr(addresses, "Hostname")
@@ -306,21 +312,19 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                 label_selector='k8s-app=master-adder')
 
         LOGGER.info("Extract current etcd cluster state...")
-        etcd_pod = 'etcd-master-1-%s' % cluster_name
-        cmd = ("kubectl exec -it %s -n kube-system "
-               "--kubeconfig=%s-admin.conf -- /bin/sh -c 'ETCDCTL_API=3 "
-               "etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt "
-               "--cert /etc/kubernetes/pki/etcd/peer.crt "
-               "--key /etc/kubernetes/pki/etcd/peer.key "
-               "--endpoints=https://%s:2379 member list -w json' "
-               "| jq -r -M --compact-output '[.members | .[] "
-               "| .name + \"=\" + .clientURLs[0]] | join(\",\")'") % (etcd_pod,
-                                                                      cluster_name,
-                                                                      master_ip)
-        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE)
-        stdout, _ = kctl.communicate()
+
+        cmd = ("kubectl exec -it master-adder -n kube-system "
+               "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
+               "--endpoints=https://%s:2379 member list -w json\" "
+               "| jq -r -M --compact-output '[.members | .[] | "
+               ".name + \"=\" + .clientURLs[0]] | join(\"=\")'" % (master_ip))  # noqa
+
+        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        stdout, stderr = kctl.communicate()
 
         if kctl.returncode:
+            LOGGER.info(stderr)
+            LOGGER.info(stdout)
             raise ValueError("Could not extract current etcd cluster state!")
 
         lines = stdout.decode().strip().splitlines()
