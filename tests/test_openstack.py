@@ -6,7 +6,7 @@ from koris.cloud.openstack import (OSNetwork, get_connection, LoadBalancer)
 from koris.cloud import OpenStackAPI
 from .testdata import (CONFIG, default_data, mock_listener,
                        mock_pool, mock_member, mock_pool_info)
-from koris.constants import MASTER_LISTENER_NAME, MASTER_POOL_NAME
+from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 
 class Network:

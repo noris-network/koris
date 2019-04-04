@@ -36,7 +36,7 @@ from koris.util.hue import (red, info, yellow,  # pylint: disable=no-name-in-mod
                             bad, lightcyan as cyan)  # pylint: disable=no-name-in-module
 from koris.util.util import (get_logger, host_names,
                              retry)
-from koris.constants import MASTER_LISTENER_NAME, MASTER_POOL_NAME
+from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 

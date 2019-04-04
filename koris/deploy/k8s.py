@@ -19,7 +19,7 @@ from kubernetes import (client as k8sclient, config as k8sconfig)
 from koris.ssl import read_cert, discovery_hash
 from koris.util.util import get_logger
 from koris.util.hue import red, bad  # pylint: disable=no-name-in-module
-from koris.constants import MASTER_LISTENER_NAME
+from koris import MASTER_LISTENER_NAME
 
 if getattr(sys, 'frozen', False):
     MANIFESTSPATH = os.path.join(
@@ -147,14 +147,14 @@ class K8S:
 
         try:
             listener_name = master_listener['name']
-            _ = master_listener['pool']['members']
+            mem = master_listener['pool']['members']  # noqa #  pylint: disable=unused-variable
             pool_id = master_listener['pool']['id']
         except KeyError as exc:
-            LOGGER.error(bad(red(f"Unable to extract info of {MASTER_LISTENER_NAME}: {exc}")))
+            err = f"Unable to extract info of {MASTER_LISTENER_NAME}: {exc}"
+            LOGGER.error(bad(red(err)))
             sys.exit(1)
 
         while len(lb_inst.master_listener['pool']['members']) < n_masters:
-            print(lb_inst.master_listener['pool']['members'])
             for item in self.api.list_node(pretty=True).items:
                 if cond in [{c.type: c.status} for c in item.status.conditions]:
                     if 'master' in item.metadata.name:

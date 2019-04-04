@@ -4,7 +4,7 @@
 
 from munch import Munch
 
-from koris.constants import MASTER_LISTENER_NAME, MASTER_POOL_NAME
+from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 CONFIG = {
     "n-nodes": 3,
