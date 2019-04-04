@@ -99,3 +99,6 @@ def remove_cluster(config, nova, neutron, cinder):
 
         except TypeError:
             continue
+
+    # delete the cluster key pair
+    connection.delete_keypair(config['cluster-name'])

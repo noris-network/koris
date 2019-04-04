@@ -314,8 +314,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         pub_key = NOVA.keypairs.find(name=self._info.name)
 
-        userdata = str(NthMasterInit(cloud_config, pub_key.public_key))
-
+        init = NthMasterInit(cloud_config, pub_key.public_key)
+        userdata = str(init)
         task = loop.create_task(master.create(
             self._info.master_flavor, self._info.secgroups, self._info.keypair,
             userdata))

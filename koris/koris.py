@@ -180,13 +180,13 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             update_config(config_dict, config, amount)
 
         elif role == 'master':
+            k8s.validate_context(os_cluster_info.conn)
             builder = ControlPlaneBuilder(config_dict, os_cluster_info,
                                           cloud_config)
             master = builder.add_master(zone, flavor)
 
             try:
-                k8s.launch_master_adder(config_dict["cluster-name"], master.name,
-                                        master.ip_address)
+                k8s.launch_master_adder(master.name, master.ip_address)
             except ValueError as error:
                 print(red("Error encoutered ... ", error))
                 print(red("You may want to remove the newly created Openstack "

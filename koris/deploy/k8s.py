@@ -20,7 +20,7 @@ from pkg_resources import resource_filename, Requirement
 from kubernetes import (client as k8sclient, config as k8sconfig)
 
 from koris.ssl import read_cert, discovery_hash
-from koris.util.util import get_logger
+from koris.util.util import get_logger, retry
 
 if getattr(sys, 'frozen', False):
     MANIFESTSPATH = os.path.join(
@@ -270,12 +270,13 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                                 "Added member no. %d %s to the loadbalancer",
                                 len(lb_inst.members), address)
 
-    def launch_master_adder(self, cluster_name, new_master_name, new_master_ip):
+    def run_add_script(self, new_master_name, new_master_ip):
+        pass
+
+    def launch_master_adder(self, new_master_name, new_master_ip):
         """
         launch the add_master_pod and run it.
 
-        TODO: the Popen calls in this section could be replaced by proper
-              Kubernetes Python API calls for higher code quality.
         Args:
             new_master_name (str) - the new master's name
             new_master_ip (str) - the new master's IP address
@@ -294,6 +295,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         master_name = get_node_addr(addresses, "Hostname")
 
         # replace this with proper Python API call
+        result = self.api.list_namespaced_pod(
+            "kube-system",
+            label_selector='k8s-app=master-adder')
+
         kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
         kctl.communicate(json.dumps(MASTER_ADDER_POD).encode())
 
@@ -313,28 +318,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         LOGGER.info("Extract current etcd cluster state...")
 
-        cmd = ("kubectl exec -it master-adder -n kube-system "
-               "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
-               "--endpoints=https://%s:2379 member list -w json\" "
-               "| jq -r -M --compact-output '[.members | .[] | "
-               ".name + \"=\" + .clientURLs[0]] | join(\"=\")'" % (master_ip))  # noqa
-
-        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        stdout, stderr = kctl.communicate()
-
-        if kctl.returncode:
-            LOGGER.info(stderr)
-            LOGGER.info(stdout)
-            raise ValueError("Could not extract current etcd cluster state!")
-
-        lines = stdout.decode().strip().splitlines()
-        if len(lines) != 1:
-            LOGGER.error("etcd cluster state in unexcepted format %s", lines)
-            return
-
-        etcd_cluster = lines[0]
-        LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
-
+        etcd_cluster = self.etcd_cluster_status(master_ip)
         LOGGER.info("Waiting a minute for SSH to on %s ...", new_master_name)
         time.sleep(MASTER_ADDER_WAIT_SSH_SECONDS)
 
@@ -347,3 +331,50 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         kctl.communicate()
         if kctl.returncode:
             raise ValueError("Could execute the adder script in the adder pod!")
+
+    def validate_context(self, cloud_client):
+        """
+        validate that server that we are talking to via K8S API
+        is also the cloud context we are using.
+
+        Args:
+            host (str): a load balancer or server name found the k8s context
+            cloud_client (obj): an object capable of querying the cloud for the
+               presence of host
+
+        Return:
+            bool
+        """
+        for item in cloud_client.load_balancer.load_balancers():
+            if item.vip_address == self.host:
+                return True
+
+        return False
+
+    @staticmethod
+    @retry(ValueError)
+    def etcd_cluster_status(master_ip):
+        """Query etcd cluster for the status string"""
+        cmd = ("kubectl exec -it master-adder -n kube-system "
+               "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
+               "--endpoints=https://%s:2379 member list -w json\" "
+               "| jq -r -M --compact-output '[.members | .[] | "
+               ".name + \"=\" + .clientURLs[0]] | join(\"=\")'" % (master_ip))
+
+        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        stdout, stderr = kctl.communicate()
+
+        if kctl.returncode:
+            LOGGER.info(stderr)
+            LOGGER.info(stdout)
+            raise ValueError("Could not extract current etcd cluster state!")
+
+        lines = stdout.decode().strip().splitlines()
+        if len(lines) != 1:
+            LOGGER.error("etcd cluster state in unexcepted format %s", lines)
+            raise ValueError
+
+        etcd_cluster = lines[0]
+        LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
+
+        return etcd_cluster

@@ -39,7 +39,7 @@ export CLUSTER_STATE=""
 
 
 #### Versions for Kube 1.12.5
-export KUBE_VERSION=1.12.5
+export KUBE_VERSION=1.12.7
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
@@ -230,7 +230,7 @@ function add_master_script_config_map() {
       echo "ETCD_HOST=\$4";
       echo "ETCD_IP=\$5";
       echo "echo \$HOST_IP \$HOST_NAME >> /etc/hosts"
-      echo "ssh \${SSHOPTS} -l ubuntu \${HOST_IP} sudo kubeadm reset -f" ;
+	  echo "until ssh \${SSHOPTS} \${HOST_IP} which kubeadm; do sleep 2; done"
       echo "copy_keys \$HOST_NAME";
       echo "export LOAD_BALANCER_DNS=${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
       echo "export LOAD_BALANCER_PORT=${LOAD_BALANCER_PORT}"
@@ -238,11 +238,17 @@ function add_master_script_config_map() {
       echo "export ADDTOKEN=0 BOOTSTRAP_NODES=${BOOTSTRAP_NODES}"
       echo "export OPENSTACK=${OPENSTACK} POD_SUBNET=${POD_SUBNET}"
       echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
+	  echo ""
       echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
+	  echo "sed -i '/'\${HOST_NAME}'/d' /etc/hosts"
     } >> add_master_script.sh
 
       kubectl --kubeconfig=/etc/kubernetes/admin.conf create -n kube-system configmap add-master-script.sh --from-file=add_master_script.sh
 }
+# NOTE: we append to /etc/hosts because sometime DNS from openstack is not reliable
+# this breaks ssh ...
+# This is a log message example from coredns
+# master-6-am.noriscloud. A: unreachable backend: read udp 10.233.0.3:55264->10.32.192.2:53: i/o timeout
 
 
 # distributes configuration file and certificates to a master node
@@ -379,11 +385,14 @@ function add_master {
     ssh ${SSHOPTS} ${USER}@$1 sudo systemctl start kubelet
 
     # join the etcd host to the cluster, this is executed on local node!
-    kubectl --kubeconfig=/etc/kubernetes/admin.conf exec -n kube-system etcd-${ETCD_HOST} -- etcdctl \
+    until kubectl --kubeconfig=/etc/kubernetes/admin.conf exec -n kube-system etcd-${ETCD_HOST} -- etcdctl \
         --ca-file /etc/kubernetes/pki/etcd/ca.crt \
         --cert-file /etc/kubernetes/pki/etcd/peer.crt \
         --key-file /etc/kubernetes/pki/etcd/peer.key \
-        --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380
+        --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380; do \
+	    sleep 2; \
+	done
+
 
     # launch etcd
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config "${CONFIG}"
