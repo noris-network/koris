@@ -35,9 +35,7 @@ preferences: {}
 users: []
 EOF
 
-# config for 1.12.3
-if [ "$KUBE_VERSION" = "1.12.3" ]; then
-  cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
+cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
 ---
 apiVersion: kubeadm.k8s.io/v1alpha2
 clusterName: kubernetes
@@ -50,7 +48,6 @@ nodeRegistration:
   name: $(hostname -s)
 tlsBootstrapToken: "${BOOTSTRAP_TOKEN}"
 EOF
-fi
 
 function fetch_all() {
     apt-get update
