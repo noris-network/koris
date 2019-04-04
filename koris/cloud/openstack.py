@@ -486,7 +486,10 @@ class LoadBalancer:
             self._existing_floating_ip = floatingips[0].floating_ip_address
             fip_addr = self._existing_floating_ip
         else:
-            fip_addr = self.associate_floating_ip(lb)
+            if isinstance(self.floatingip, str):
+                fip_addr = self.associate_floating_ip(lb)
+            else:
+                fip_addr = None
         return fip_addr
 
     def create(self):
