@@ -5,36 +5,100 @@ Addons
 Dex
 ---
 
+.. note::
+  This feature is currently in beta; your mileage may vary and documentation is expected to change.
+
 `Dex <https://github.com/dexidp/dex>`_ is an identity service that uses
 `OpenID Connect <https://openid.net/connect/>`_ to drive authentication for other apps. It can
 be used to authenticate against `OAuth2 <https://oauth.net/2/>`_ compatible apps such as Gitlab or
 LDAP and then use this for further authentication, for example against the Kubernetes API.
 This tutorial explains how to deploy Dex with koris on OpenStack.
 
+From the `dex documentation <https://github.com/dexidp/dex#connectors>`_:
+
+  When a user logs in through dex, the user's identity is usually stored in another user-management system:
+  a LDAP directory, a GitHub org, etc. Dex acts as a shim between a client app and the upstream identity provider.
+  The client only needs to understand OpenID Connect to query dex, while dex implements an array of protocols for
+  querying other user-management systems.
+
+  .. image:: static/_imgs/dex-flow.png
+    :align: center
+    :scale: 60%
+    :alt: Dex flow as described on in the official documentation
+
+For more information on how Dex works with OpenID Connect and OAuth2,
+see: `"An overview of OpenID Connect" <https://github.com/dexidp/dex/blob/master/Documentation/openid-connect.md>`_
+
+In this tutorial we will use Gitlab to authenticate our user against a koris cluster:
+
+1. Setup Gitlab OAuth Authentication
+2. Configure koris to use dex
+3. Deploy & configure a Kubernetes cluster with koris
+4. Deploy Dex and a client application for authentication against the cluster.
+
 Prerequisites
 ^^^^^^^^^^^^^
+
+General
+=======
 
 Before starting, make sure koris is installed (see :doc:`installation`) and OpenStack is configured properly
 (see :ref:`prepare-openstack`). Most importantly, you will need to deploy your cluster in a network that is
 able to reach your identity provider.
 
+Additionally, create a *Floating IP* in OpenStack. This will be the address to reach your cluster. In the following
+tutorial there will be values marked as ``%%FLOATING_IP%%``. **When you see this placeholder in this tutorial,
+substitute it with the Floating IP that you created in OpenStack.**
+
+Gitlab
+======
+
+This tutorial will use Gitlab as an Identity Provider, but it should work with any
+`compatible connector <https://github.com/dexidp/dex/tree/master/Documentation/connectors>`_. Before getting started with
+Dex, set up a *Application ID* and *Secret* on Gitlab:
+
+1. Go to your **Gitlab User Settings** and click on **Applications**
+2. Create a new Application with the following parameters:
+
+============  ====================================
+Parameter     Value
+============  ====================================
+Name          dex
+Redirect URI  ``https://%%FLOATING_IP%%/callback``
+read_user     set
+openid        set
+============  ====================================
+
+Example:
+
+.. image:: static/_imgs/gl_oauth.png
+
+3. After clicking **Save application**,  the *Application ID* and *Secret* are visible, which will be further referenced
+as ``%%APP_ID%%`` and ``%%APP_SECRET%%``. **When you see either of those placeholders in this tutorial, substitute them
+with the value provided from Gitlab.**
+
+Example:
+
+.. image:: static/_imgs/gl_oauth2.png
+
 Configuration
 ^^^^^^^^^^^^^
 
-First create your koris config under ``configs/test-dex.yml``:
+Next create your koris config under the name ``test-dex.yml``:
 
 .. code-block:: yaml
 
     master_flavor: 'ECS.GP1.2-8'
-    node_flavor: 'ECS.C1.4-8'
-    # Adjust this according to your environment
+    node_flavor: 'ECS.GP1.2-8'
+
+    # Adjust below according to your environment
     private_net:
       name: 'your-net'
       subnet:
         name: 'your-subnet'
         cidr: '10.32.192.0/24'
         router:
-        name: 'your-router'
+          name: 'your-router'
 
     cluster-name: 'test-dex'
     availibility-zones:
@@ -42,96 +106,113 @@ First create your koris config under ``configs/test-dex.yml``:
     - de-nbg6-1a
     n-masters: 1
     n-nodes: 1
-    keypair: 'your-keypair'
     user_data: 'cloud-init-parts/generic'
-    image: "your-image"
+
+    # Substitute with the name of your keypair in OpenStack.
+    keypair: 'your-keypair'
+
+    # Substitute with the latest koris image available.
+    image: "koris-2019-04-04"
+
     loadbalancer:
-    # Dex needs an IP or DNS name for its issuer, if you set this option to
-    # 'false', one will be assigned from the pool
-      floatingip: 10.36.60.232
+      # Substitute here
+      floatingip: "%%FLOATING_IP%%"
+
     certificates:
       expriry: 8760h
-    storage_class: "PI-Storage-Class"
+    storage_class: "BSS-Performance-Storage"
     pod_subnet: "10.233.0.0/16"
     pod_network: "CALICO"
-    # Configuration block for Dex
+
     addons:
       dex:
         username_claim: email
         groups_claim: groups
-        # LB-Listener and K8s-Service ports for Dex
         ports:
           listener: 32000
           service: 32000
-        # Configuration parameters for an OAuth2 application that is
-        # deployed into the cluster
         client:
           id: example-app
-          # LB-Listener and K8s-Service ports for the OAuth2 application
-        ports:
-            listener: 5555
-            service: 32555
+          ports:
+              listener: 5555
+              service: 32555
 
-In this example we will use the IP **10.36.60.232** for our LoadBalancer.
-When this IP shows up from now on, substitute it with
-your IP. Dex will then be reachable on port **32000** and the Dex
-`example-app <https://github.com/obitech/dex-example-app>`_
-reachable on port **5555**.
-Clients can contact the example-app which will request an OIDC token from Dex.
+In order to facilitate the Dex authentication flow, two Deployments will have to be created inside our Kubernetes cluster: one for Dex
+and one for a client application. The ``addons.dex`` block will define the basic configuration that is required in order to prepare
+a cluster to use Dex.
 
-As an example we will be using Gitlab as an identity provider, but any other
-compatible provider will work as well (for more info on how to configure Dex
-for other connectors, please consult the
-`official documentation <https://github.com/dexidp/dex/tree/master/Documentation/connectors>`_).
-Head to Gitlab under**Settings -> Applications**
-and create a new application with the following settings and scopes:
+`Claims <https://en.wikipedia.org/wiki/Claims-based_identity>`_ are specific attributes about
+a user that the identity provider returns to the client application - in this case the Email and Groups the user
+belongs to.
 
-============  =======================================
-Parameter     Value
-============  =======================================
-Name          dex
-Redirect URI  ``https://10.36.60.232:32000/callback``
-read_user     set
-openid        set
-============  =======================================
+``addons.dex.ports`` defines the ``listener`` port on which the LoadBalancer on OpenStack listens to, and the
+``service`` port on the Dex Kubernetes Service listens on.
 
-After saving, Gitlab will provide you with an **Application ID**
-(its value followingly known as **app-id**) and **Secret**
-(its value followingly known as **app-secret**).
-Make sure to copy those for later.
+The block ``addons.dex.client`` defines information about the client application that requests authentication from Dex. In
+this tutorial, the official `example-app <https://github.com/obitech/dex-example-app>`_ is used, which has to be registered
+with Dex. *There can only be a single client application registered with Dex*, however
+`cross-client trust <https://github.com/dexidp/dex/blob/master/Documentation/custom-scopes-claims-clients.md#cross-client-trust-and-authorized-party>`_
+is possible.
+
+Similar to the enclosing block, ``addons.dex.client.ports`` defines the value for the LoadBalancer ``listener`` port of the client
+application, as well as the Kubernetes ``service`` port.
 
 Deployment
 ^^^^^^^^^^
 
-Next, deploy your cluster, wait for it to be created and then source your
-kubeconfig:
+Next, deploy your cluster:
 
 .. code:: shell
 
-    $ koris apply configs/test-dex.yml
-    # ...
+    $ koris apply test-dex.yml
+
+Once it's ready, source your kubeconfig:
+
+.. code:: shell
+
     $ export KUBECONFIG=test-dex-admin.conf
 
-Before configuring Dex, deploy the certificates as secrets into the cluster:
+Dex *needs* to run on HTTPS, which requires a valid SSL certificate that is issued on ``%%FLOATING_IP%%``.
+Dex uses this certificate to sign ID Tokens it sends to the client application, which in turn are used by the user in order to
+authenticate against the Kubernetes API Server. The Kubernetes API Server has access to the
+Public Key the ID Token has been signed with, so it can verify that it was indeed Dex that signed it. All necessary
+certificate files are generated in the folder ``certs-test-dex`` (following the syntax ``certs-<cluster-name>``).
+
+The serving certificates have to be deployed into the cluster:
 
 .. code:: shell
 
     $ kubectl create secret tls dex.tls \
-    >    --cert=certs-test-dex/dex-client.pem \
-    >    --key=certs-test-dex/dex-client-key.pem
+        --cert=certs-test-dex/dex-client.pem \
+        --key=certs-test-dex/dex-client-key.pem \
+        --namespace=kube-system
     $ kubectl create secret generic dex.root-ca \
-    >    --from-file=certs-test-dex/dex-ca.pem
+        --from-file=certs-test-dex/dex-ca.pem \
+        --namespace=kube-system
 
-Then deploy the **app-id** and **app-secret** as secrets into the cluster
-(make sure to substitute):
+Next we have to deploy the *Application ID* and *Secret* from Gitlab as Kubernetes secrets, **make sure to substitute
+the placeholders below with your own**:
+
+a25928a322ae8e74d3f126fefde28391d0e67857caae69dc01383433cd039a87
+90c04e32427e541866c263d8dcc716c14ac5efc9b2f8c8d3cf39d4f214b114ad
 
 .. code:: shell
 
     $ kubectl create secret generic gitlab-client \
-    >    --from-literal=client-id=app-id \
-    >    --from-literal=client-secret=app-secret
+        --from-literal=client-id="%%APP_ID%%" \
+        --from-literal=client-secret="%%APP_SECRET%%" \
+        --namespace=kube-system
 
-Afterwards adjust the Dex deployment in ``addons/dex/00-dex.yaml``:
+Afterwards we can create the deployments for Dex and the client application. All files are located in ``addons/dex`` and include
+numbered comments that refer to this tutorial. **Look for those comments inside the manifests and adjust the values accordingly**.
+Before, let's create a local copy from the template files:
+
+.. code:: shell
+
+    $ mkdir -p manifests/
+    $ cp -r addons/dex manifests
+
+With local copies, let's edit ``manifests/dex/00-dex.yaml`` first. We go through the numbered comments in order:
 
 .. code-block:: yaml
 
