@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -114,15 +114,15 @@ def test_master_listener_unitialized_lb(get_os):
     conn, lb = get_os
     lb._data = None
     lb._id = "test"
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
     lb._id = None
     lb._data = MagicMock()
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
     lb._id = None
     lb._data = None
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
 
 def test_get_master_listener_lb_not_found(get_os):
@@ -134,7 +134,7 @@ def test_get_master_listener_lb_not_found(get_os):
     conn, lb = get_os
 
     conn.load_balancer.find_load_balancer.return_value = None
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
 
 def test_get_master_listener_no_listener_ids(get_os):
@@ -145,10 +145,10 @@ def test_get_master_listener_no_listener_ids(get_os):
     mock_lb = default_data()
     mock_lb.listeners = []
     conn.load_balancer.find_load_balancer.return_value = mock_lb
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
     mock_lb.listeners = None
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
 
 def test_get_master_listener_invalid_listeners(get_os):
@@ -158,16 +158,16 @@ def test_get_master_listener_invalid_listeners(get_os):
     mock_lb = default_data()
     mock_lb.listeners = ["a", "b", "c"]
     conn.load_balancer.find_load_balancer.return_value = mock_lb
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
     mock_lb.listeners = "test"
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
     mock_lb.listeners = {}
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
     mock_lb.listeners = None
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
 
 def test_get_master_listener_no_master_listener(get_os):
@@ -176,7 +176,7 @@ def test_get_master_listener_no_master_listener(get_os):
     conn, lb = get_os
     conn.load_balancer.find_load_balancer.return_value = default_data()
     conn.load_balancer.find_listener.return_value = None
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
 
 def test_get_master_listener_multiple_master_listeners(get_os):
@@ -190,7 +190,7 @@ def test_get_master_listener_multiple_master_listeners(get_os):
     conn.load_balancer.find_listener.side_effect = [mock_listener(),
                                                     mock_listener(),
                                                     mock_listener()]
-    assert lb._get_master_listener is None
+    assert lb._get_master_listener() is None
 
 
 def test_get_master_listener_found_master_listener(get_os):
@@ -203,7 +203,7 @@ def test_get_master_listener_found_master_listener(get_os):
 
     conn.load_balancer.find_load_balancer.return_value = default_data()
     conn.load_balancer.find_listener.side_effect = [l1, l2, l3]
-    assert lb._get_master_listener is not None
+    assert lb._get_master_listener() is not None
     assert l1.default_pool_id is not None
     assert l2.default_pool_id is not None
     assert l3.default_pool_id is not None
@@ -285,80 +285,67 @@ def test_pool_all_members(get_os):
 
 
 def test_master_listener_no_listener(get_os):
-    with patch('koris.cloud.openstack.LoadBalancer._get_master_listener',
-               new_callable=PropertyMock) as mock_get_ml:
-        mock_get_ml.return_value = None
-        _, lb = get_os
+    _, lb = get_os
+    lb._get_master_listener = MagicMock(return_value=None)
 
-        assert lb.master_listener is None
+    assert lb.master_listener is None
 
 
 def test_master_listener_no_pool(get_os):
-    with patch('koris.cloud.openstack.LoadBalancer._get_master_listener',
-               new_callable=PropertyMock) as mock_fn_get_ml:
-        mock_fn_get_ml.return_value = mock_listener()
-        conn, lb = get_os
-        lb._pool_info = MagicMock(return_value=None)
-        master_listener = lb.master_listener
+    conn, lb = get_os
+    lb._get_master_listener = MagicMock(return_value=mock_listener())
+    lb._pool_info = MagicMock(return_value=None)
+    master_listener = lb.master_listener
 
-        assert master_listener is not None
-        assert isinstance(master_listener, dict)
-        assert master_listener['pool'] is None
+    assert master_listener is not None
+    assert isinstance(master_listener, dict)
+    assert master_listener['pool'] is None
 
 
 def test_master_listener_wrong_listener_name(get_os):
-    with patch('koris.cloud.openstack.LoadBalancer._get_master_listener',
-               new_callable=PropertyMock) as mock_fn_get_ml:
-        ml = mock_listener()
-        ml.name = "test"
-        mock_fn_get_ml.return_value = ml
-        conn, lb = get_os
-
-        assert lb.master_listener is None
+    ml = mock_listener()
+    ml.name = "test"
+    conn, lb = get_os
+    lb._get_master_listener = MagicMock(return_value=ml)
+    assert lb.master_listener is None
 
 
 def test_master_listener_single_member(get_os):
-    with patch('koris.cloud.openstack.LoadBalancer._get_master_listener',
-               new_callable=PropertyMock) as mock_fn_get_ml:
-        mock_fn_get_ml.return_value = mock_listener()
-        conn, lb = get_os
+    conn, lb = get_os
+    lb._get_master_listener = MagicMock(return_value=mock_listener())
+    pool_info = mock_pool_info()
+    pool_info['members'] = [pool_info['members'][0]]
+    lb._pool_info = MagicMock(return_value=pool_info)
+    master_listener = lb.master_listener
 
-        pool_info = mock_pool_info()
-        pool_info['members'] = [pool_info['members'][0]]
-        lb._pool_info = MagicMock(return_value=pool_info)
-        master_listener = lb.master_listener
-
-        assert master_listener is not None
-        assert isinstance(master_listener, dict)
-        assert isinstance(master_listener['pool'], dict)
-        assert isinstance(master_listener['pool']['members'], list)
-        assert len(master_listener['pool']['members']) == 1
-        assert master_listener['pool']['members'][0]['address'] == pool_info['members'][0]['address'] # noqa
-        assert master_listener['pool']['members'][0]['id'] == pool_info['members'][0]['id'] # noqa
-        assert master_listener['name'] == MASTER_LISTENER_NAME
-        assert master_listener['pool']['name'] == MASTER_POOL_NAME
+    assert master_listener is not None
+    assert isinstance(master_listener, dict)
+    assert isinstance(master_listener['pool'], dict)
+    assert isinstance(master_listener['pool']['members'], list)
+    assert len(master_listener['pool']['members']) == 1
+    assert master_listener['pool']['members'][0]['address'] == pool_info['members'][0]['address'] # noqa
+    assert master_listener['pool']['members'][0]['id'] == pool_info['members'][0]['id'] # noqa
+    assert master_listener['name'] == MASTER_LISTENER_NAME
+    assert master_listener['pool']['name'] == MASTER_POOL_NAME
 
 
 def test_master_multiple_members(get_os):
     """This is the default case: a master-listener with multiple members"""
+    conn, lb = get_os
 
-    with patch('koris.cloud.openstack.LoadBalancer._get_master_listener',
-               new_callable=PropertyMock) as mock_fn_get_ml:
-        mock_fn_get_ml.return_value = mock_listener()
-        conn, lb = get_os
+    mpi = mock_pool_info()
+    lb._get_master_listener = MagicMock(return_value=mock_listener())
+    lb._pool_info = MagicMock(return_value=mpi)
+    master_listener = lb.master_listener
 
-        mpi = mock_pool_info()
-        lb._pool_info = MagicMock(return_value=mpi)
-        master_listener = lb.master_listener
+    assert master_listener is not None
+    assert isinstance(master_listener, dict)
+    assert isinstance(master_listener['pool'], dict)
+    assert isinstance(master_listener['pool']['members'], list)
+    assert len(master_listener['pool']['members']) == len(mpi['members'])
+    assert master_listener['name'] == MASTER_LISTENER_NAME
+    assert master_listener['pool']['name'] == MASTER_POOL_NAME
 
-        assert master_listener is not None
-        assert isinstance(master_listener, dict)
-        assert isinstance(master_listener['pool'], dict)
-        assert isinstance(master_listener['pool']['members'], list)
-        assert len(master_listener['pool']['members']) == len(mpi['members'])
-        assert master_listener['name'] == MASTER_LISTENER_NAME
-        assert master_listener['pool']['name'] == MASTER_POOL_NAME
-
-        for i in range(len(mpi['members'])):
+    for i in range(len(mpi['members'])):
             assert master_listener['pool']['members'][i]['address'] == mpi['members'][i]['address'] # noqa
             assert master_listener['pool']['members'][i]['id'] == mpi['members'][i]['id']

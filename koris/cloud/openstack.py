@@ -270,7 +270,7 @@ class LoadBalancer:
             }
         """
 
-        listener = self._get_master_listener
+        listener = self._get_master_listener()
         if not listener:
             return None
 
@@ -288,7 +288,6 @@ class LoadBalancer:
 
         return out
 
-    @property
     def _get_master_listener(self):  # pylint: disable=too-many-return-statements
         """Returns the Listener with name MASTER_LISTENER_NAME associated to the LB."""
 
