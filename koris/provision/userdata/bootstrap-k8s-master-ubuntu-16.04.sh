@@ -195,11 +195,12 @@ function make_secrets(){
     # shellcheck disable=SC2086
     kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
 
-    # shellcheck disable=SC2086
-    kubectl ${del_args} cloud.config
-    # shellcheck disable=SC2086
-    kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
-
+	if [[ OPENSTACK -eq 1 ]]; then
+        # shellcheck disable=SC2086
+        kubectl ${del_args} cloud.config
+        # shellcheck disable=SC2086
+        kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
+    fi
 }
 
 
