@@ -187,39 +187,39 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                                         config_dict)
         k8s.validate_context(os_cluster_info.conn)
 
-        if not bootstrap_only:
-            try:
-                subnet = self.neutron.find_resource(
-                    'subnet', config_dict['private_net']['subnet']['name'])
-            except KeyError:
-                subnet = self.neutron.list_subnets()['subnets'][-1]
-
-            cloud_config = OSCloudConfig(subnet['id'])
-
-            if role == 'node':
-                add_node(
-                    cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
-                    config_dict)
-                update_config(config_dict, config, amount)
-
-            elif role == 'master':
-                builder = ControlPlaneBuilder(config_dict, os_cluster_info,
-                                              cloud_config)
-                master = builder.add_master(zone, flavor)
-
-                name, ip_address = master.name, master.ip_address
-                update_config(config_dict, config, 1, role='masters')
-            else:
-                print("Unknown role")
-
         try:
-            k8s.add_master(name, ip_address)
-        except ValueError as error:
-            print(red("Error encoutered ... ", error))
-            print(red("You may want to remove the newly created Openstack "
-                      "instance manually..."))
-            return
-            # Since everything seems to be fine, update the local config
+            subnet = self.neutron.find_resource(
+                'subnet', config_dict['private_net']['subnet']['name'])
+        except KeyError:
+            subnet = self.neutron.list_subnets()['subnets'][-1]
+
+        cloud_config = OSCloudConfig(subnet['id'])
+
+        if role == 'node':
+            add_node(
+                cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
+                config_dict)
+            update_config(config_dict, config, amount)
+
+        elif role == 'master':
+            builder = ControlPlaneBuilder(config_dict, os_cluster_info,
+                                          cloud_config)
+            master = builder.add_master(zone, flavor)
+
+            name, ip_address = master.name, master.ip_address
+            update_config(config_dict, config, 1, role='masters')
+
+            if not bootstrap_only:
+                try:
+                    k8s.add_master(name, ip_address)
+                except ValueError as error:
+                    print(red("Error encoutered ... ", error))
+                    print(red("You may want to remove the newly created Openstack "
+                              "instance manually..."))
+                    return
+                    # Since everything seems to be fine, update the local config
+        else:
+            print("Unknown role")
 
 
 def main():
