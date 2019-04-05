@@ -144,59 +144,82 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             print(red("Certificates {} already deleted".format(certs_location)))
         sys.exit(0)
 
-    def add(self, config: str, flavor: str, zone: str,
-            role: str = 'node', amount: int = 1):
+    def add(self, config: str, flavor: str = None, zone: str = None,
+            role: str = 'node', amount: int = 1, ip_address: str = None,
+            name: str = None):
         """
         Add a worker node or master node to the cluster.
 
         config - configuration file
         flavor - the machine flavor
+        zone - the availablity zone
         role - one of node or master
         amount - the number of worker nodes to add (masters are not supported)
-        zone - the availablity zone
+        address - the IP address of the host to bootstrap
+        hostname - the hostname to bootstrap
         ---
-        Add a node to the current active context in your KUBECONFIG.
+        Add a node or a master to the current active context in your KUBECONFIG.
         You can specify any other configuration file by overriding the
         KUBECONFIG environment variable.
+        If you specify a name and IP address the program will only try to join
+        it to the cluster without trying to create the host in the cloud first.
         """
+        bootstrap_only = list(filter(None, [name, ip_address]))
+
+        if bootstrap_only:
+            if len(bootstrap_only) != 2:
+                print("To bootstarp a node you must specify both name and IP")
+                sys.exit(1)
+            print(
+                "Bootstraping host {} with address {}, "
+                "assuming it's present".format(name, ip_address))
+
+        elif len(list(filter(None, [flavor, zone]))) < 2:
+            print("You must specify both flavor and zone if you want to create"
+                  " an instance")
+            sys.exit(1)
+
         with open(config, 'r') as stream:
             config_dict = yaml.safe_load(stream)
 
         k8s = K8S(os.getenv("KUBECONFIG"))
-
         os_cluster_info = OSClusterInfo(self.nova, self.neutron, self.cinder,
                                         config_dict)
-        try:
-            subnet = self.neutron.find_resource('subnet', config_dict['subnet'])
-        except KeyError:
-            subnet = self.neutron.list_subnets()['subnets'][-1]
+        k8s.validate_context(os_cluster_info.conn)
 
-        cloud_config = OSCloudConfig(subnet['id'])
-
-        if role == 'node':
-            add_node(
-                cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
-                config_dict)
-            update_config(config_dict, config, amount)
-
-        elif role == 'master':
-            k8s.validate_context(os_cluster_info.conn)
-            builder = ControlPlaneBuilder(config_dict, os_cluster_info,
-                                          cloud_config)
-            master = builder.add_master(zone, flavor)
-
+        if not bootstrap_only:
             try:
-                k8s.launch_master_adder(master.name, master.ip_address)
-            except ValueError as error:
-                print(red("Error encoutered ... ", error))
-                print(red("You may want to remove the newly created Openstack "
-                          "instance manually..."))
-                return
+                subnet = self.neutron.find_resource(
+                    'subnet', config_dict['private_net']['subnet']['name'])
+            except KeyError:
+                subnet = self.neutron.list_subnets()['subnets'][-1]
 
+            cloud_config = OSCloudConfig(subnet['id'])
+
+            if role == 'node':
+                add_node(
+                    cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
+                    config_dict)
+                update_config(config_dict, config, amount)
+
+            elif role == 'master':
+                builder = ControlPlaneBuilder(config_dict, os_cluster_info,
+                                              cloud_config)
+                master = builder.add_master(zone, flavor)
+
+                name, ip_address = master.name, master.ip_address
+                update_config(config_dict, config, 1, role='masters')
+            else:
+                print("Unknown role")
+
+        try:
+            k8s.add_master(name, ip_address)
+        except ValueError as error:
+            print(red("Error encoutered ... ", error))
+            print(red("You may want to remove the newly created Openstack "
+                      "instance manually..."))
+            return
             # Since everything seems to be fine, update the local config
-            update_config(config_dict, config, 1, role='masters')
-        else:
-            print("Unknown role")
 
 
 def main():

@@ -53,7 +53,7 @@ export ADDTOKEN=1
 LOGLEVEL=4
 V=${LOGLEVEL}
 
-SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
+SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60 -o ConnectionAttempts=1000"
 SFTPOPTS="${SSHOPTS}"
 
 # create a configuration file for kubeadm
@@ -222,6 +222,7 @@ function add_master_script_config_map() {
       typeset -f get_kubeadm;
       # shellcheck disable=SC2034
       typeset -f add_master;
+      echo "if [ ! -z \${DEBUGADDMASTER} ]; then set -x; fi"
       echo "mkdir -p /etch/kubernetes/"
       echo "touch /etc/kubernetes/koris.env"
       echo "HOST_NAME=\$1";
@@ -231,6 +232,7 @@ function add_master_script_config_map() {
       echo "ETCD_IP=\$5";
       echo "echo \$HOST_IP \$HOST_NAME >> /etc/hosts"
 	  echo "until ssh \${SSHOPTS} \${HOST_IP} which kubeadm; do sleep 2; done"
+      echo "ssh \${SSHOPTS} \${HOST_IP} sudo kubeadm reset -f"
       echo "copy_keys \$HOST_NAME";
       echo "export LOAD_BALANCER_DNS=${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
       echo "export LOAD_BALANCER_PORT=${LOAD_BALANCER_PORT}"
@@ -240,7 +242,6 @@ function add_master_script_config_map() {
       echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
 	  echo ""
       echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
-	  echo "sed -i '/'\${HOST_NAME}'/d' /etc/hosts"
     } >> add_master_script.sh
 
       kubectl --kubeconfig=/etc/kubernetes/admin.conf create -n kube-system configmap add-master-script.sh --from-file=add_master_script.sh
