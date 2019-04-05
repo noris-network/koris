@@ -150,7 +150,7 @@ launch-cluster: update-config
 
 add-nodes: FLAVOR ?= ECS.UC1.4-4
 add-nodes:
-	KUBECONFIG=${KUBECONFIG} koris add --amount 2 de-nbg6-1a $(FLAVOR) tests/koris_test.yml
+	KUBECONFIG=${KUBECONFIG} koris add --amount 2 --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the 2 nodes to join.
 	# assert cluster has now 5 nodes
 	echo "waiting for nodes to join"; \
