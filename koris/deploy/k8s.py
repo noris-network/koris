@@ -289,7 +289,6 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.info("Extract current etcd cluster state...")
 
         etcd_cluster = self.etcd_cluster_status(pod, master_ip)
-        LOGGER.info("Executing adder script on current master node...")
         cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
                '"/usr/local/bin/add-master-script '
                '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
@@ -314,6 +313,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         master_ip = get_node_addr(addresses, "InternalIP")
         master_name = get_node_addr(addresses, "Hostname")
         podname = self.launch_master_adder()
+        LOGGER.info("Executing adder script on new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
                             new_master_ip)
 
