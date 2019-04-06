@@ -101,6 +101,17 @@ add-nodes:
       - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
       - $SKIP_E2E
 
+add-master:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.4
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make add-master"
+  - "make assert-masters NUM=4"
+
 check-dns:
   stage: integration-test
   image: oz123/koris-alpine:0.1.4

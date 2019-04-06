@@ -160,6 +160,16 @@ add-nodes:
 	done
 	@echo "all nodes successfully joined!"
 
+add-master: FLAVOR ?= ECS.UC1.4-4
+add-master:
+	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
+	# wait for the master to join.
+	@echo "added master successfully!"
+
+assert-masters: NUM ?= 4
+assert-masters:  ##
+	if [ $$(kubectl get nodes -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; then echo "can't find $(NUM) masters"; exit 1; else echo "all masters are fine"; fi
+
 show-nodes:
 	@echo "Waiting for nodes to join ..."
 	for i in `seq 1 5`; do \
