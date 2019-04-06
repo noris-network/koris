@@ -111,6 +111,14 @@ add-master:
   - "pip3 install -q -e ."
   - "make add-master"
   - "make assert-masters NUM=4"
+  artifacts:
+    paths:
+      - "tests/koris_test.master.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
 
 check-dns:
   stage: integration-test

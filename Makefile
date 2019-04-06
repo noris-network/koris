@@ -166,6 +166,7 @@ add-master:
 	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the master to join.
 	@echo "added master successfully!"
+	@mv tests/koris_test.updated.yml tests/koris_test.master.yml
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
@@ -298,6 +299,9 @@ clean-cluster: update-config
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
 		mv -v tests/koris_test.updated.yml tests/koris_test.yml; \
+		if [ -r tests/koris_test.master.yml ]; then \
+			sed -i 's/n-masters:\ 3/n-masters:\ 4/' tests/koris_test.yml; \
+		fi; \
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
