@@ -48,6 +48,7 @@ export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
 export OPENSTACK=${OPENSTACK:-1}
 export K8SNODES=${K8SNODES:-""}
 export OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
+export OIDC_CA_FILE=${OIDC_CA_FILE:-""}
 export ADDTOKEN=1
 
 LOGLEVEL=4
@@ -201,6 +202,14 @@ function make_secrets(){
         # shellcheck disable=SC2086
         kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
     fi
+
+	if [[ -n ${OIDC_CA_FILE} ]]; then
+        kubectl ${del_args} oidc-ca
+        # shellcheck disable=SC2086
+        kubectl ${args} generic oidc-ca --from-file="${OIDC_CA_FILE}"
+
+	fi
+
 }
 
 # create a config map with a script to add a master
@@ -284,18 +293,31 @@ function copy_keys() {
 	chmod 0600 /etc/kubernetes/admin.conf
 	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
 EOF
-    if [[ OPENSTACK -eq 1 ]]; then
+    if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
 	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
 	chmod 0600 /home/${USER}/kubernetes/cloud.config
 EOF
     fi
 
-   # move back to /etc on remote machine
-   ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
-   ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+	if [ ! -z "${OIDC_CA_FILE}" ]; then
+        local DESTDIR=$(dirname "${OIDC_CA_FILE}")
+		ssh ${SSHOPTS} "${USER}@$host" mkdir -pv /home/"${USER}"/"${DESTDIR}"
+        sftp ${SFTPOPTS} ${USER}@$host << EOF
 
-   echo "done distributing keys to $host";
+	put ${OIDC_CA_FILE} /home/${USER}/${DESTDIR}
+	chmod 0600 /home/${USER}/${OIDC_CA_FILE}
+EOF
+
+    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/${OIDC_CA_FILE} ${DESTDIR}
+
+	fi
+
+    # move back to /etc on remote machine
+    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
+    ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+
+    echo "done distributing keys to $host";
 }
 
 
