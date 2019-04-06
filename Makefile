@@ -126,6 +126,7 @@ integration-test: \
 	reset-config \
 	launch-cluster \
 	add-nodes \
+	add-master \
 	integration-run \
 	integration-wait \
 	integration-patch-wait \
@@ -168,7 +169,7 @@ add-master:
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
-	if [ $$(kubectl get nodes -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; then echo "can't find $(NUM) masters"; exit 1; else echo "all masters are fine"; fi
+	if [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; then echo "can't find $(NUM) masters"exit 1; else echo "all masters are fine"; fi
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."
@@ -212,7 +213,7 @@ integration-patch:
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
-	@kubectl kubectl delete svc nginx-deployment 2>/dev/null || echo "No such service"
+	@kubectl --kubeconfig=${KUBECONFIG} delete svc nginx-deployment 2>/dev/null || echo "No such service"
 	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
 
