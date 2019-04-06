@@ -195,15 +195,13 @@ function make_secrets(){
     # shellcheck disable=SC2086
     kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
 
-	if [[ OPENSTACK -eq 1 ]]; then
+    if [[ OPENSTACK -eq 1 ]]; then
         # shellcheck disable=SC2086
         kubectl ${del_args} cloud.config
         # shellcheck disable=SC2086
         kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
     fi
-
-        envsubst  < init.tmpl > kubeadm-${HOST_NAME}.yaml
-    done
+}
 
 # create a config map with a script to add a master
 function add_master_script_config_map() {

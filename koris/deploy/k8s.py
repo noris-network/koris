@@ -299,7 +299,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                                          listener_name, pool_id)
                             lb_inst.add_member(pool_id,
                                                addr_to_add)
-    
+
     def run_add_script(self, pod, master_name, master_ip,
                        new_master_name, new_master_ip):
         """Execute the adding of a master inside a pod"""
