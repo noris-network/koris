@@ -286,7 +286,7 @@ security-checks-nodes:
 	@kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 
 update-config: KEY ?= kube  ## create a test configuration file
-update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-[[:digit:]]' | head -n 1 | tr -d '[:space:]')
+update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-[[:digit:]]' | head -n 1)
 update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" tests/koris_test.yml
