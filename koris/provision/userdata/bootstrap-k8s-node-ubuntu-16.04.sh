@@ -7,7 +7,7 @@
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 # MAKE SURE THIS MATCHED THE MASTER K8S VERSION
-export KUBE_VERSION=1.12.5
+export KUBE_VERSION=1.12.7
 export DOCKER_VERSION=18.06
 
 iptables -P FORWARD ACCEPT
@@ -35,9 +35,8 @@ preferences: {}
 users: []
 EOF
 
-# config for 1.12.5
-if [ "$KUBE_VERSION" = "1.12.5" ]; then
-  cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
+# config for 1.12.7
+cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
 ---
 apiVersion: kubeadm.k8s.io/v1alpha2
 clusterName: kubernetes
@@ -50,7 +49,6 @@ nodeRegistration:
   name: $(hostname -s)
 tlsBootstrapToken: "${BOOTSTRAP_TOKEN}"
 EOF
-fi
 
 function fetch_all() {
     apt-get update
