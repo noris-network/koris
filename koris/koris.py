@@ -170,12 +170,13 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             if len(bootstrap_only) != 2:
                 print("To bootstarp a node you must specify both name and IP")
                 sys.exit(1)
+
             print(
                 "Bootstraping host {} with address {}, "
                 "assuming it's present".format(name, ip_address))
 
         elif len(list(filter(None, [flavor, zone]))) < 2:
-            print("You must specify both flavor and zone if you want to create"
+            print("You  must specify both flavor and zone if you want to create"
                   " an instance")
             sys.exit(1)
 
@@ -194,7 +195,6 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             subnet = self.neutron.list_subnets()['subnets'][-1]
 
         cloud_config = OSCloudConfig(subnet['id'])
-
         if role == 'node':
             add_node(
                 cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
@@ -204,20 +204,20 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         elif role == 'master':
             builder = ControlPlaneBuilder(config_dict, os_cluster_info,
                                           cloud_config)
-            master = builder.add_master(zone, flavor)
-
-            name, ip_address = master.name, master.ip_address
-            update_config(config_dict, config, 1, role='masters')
 
             if not bootstrap_only:
-                try:
-                    k8s.add_master(name, ip_address)
-                except ValueError as error:
-                    print(red("Error encoutered ... ", error))
-                    print(red("You may want to remove the newly created Openstack "
-                              "instance manually..."))
-                    return
-                    # Since everything seems to be fine, update the local config
+                master = builder.add_master(zone, flavor)
+                name, ip_address = master.name, master.ip_address
+                update_config(config_dict, config, 1, role='masters')
+
+            try:
+                k8s.add_master(name, ip_address)
+            except ValueError as error:
+                print(red("Error encoutered ... ", error))
+                print(red("You may want to remove the newly created Openstack "
+                          "instance manually..."))
+                return
+                # Since everything seems to be fine, update the local config
         else:
             print("Unknown role")
 
