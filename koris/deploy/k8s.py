@@ -76,6 +76,9 @@ MASTER_ADDER_DEPLOYMENT = {
                 }
             },
             "spec": {
+                "nodeSelector": {"node-role.kubernetes.io/master": ""},
+                "tolerations": [{"key": "node-role.kubernetes.io/master",
+                                 "effect": "NoSchedule"}],
                 "containers": [
                     {"name": "master-adder",
                      "image": "oz123/koris-etcd:0.2",
