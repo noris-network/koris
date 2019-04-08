@@ -199,6 +199,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             add_node(
                 cloud_config, os_cluster_info, role, zone, amount, flavor, k8s,
                 config_dict)
+            # Since everything seems to be fine, update the local config
             update_config(config_dict, config, amount)
 
         elif role == 'master':
@@ -217,7 +218,6 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                 print(red("You may want to remove the newly created Openstack "
                           "instance manually..."))
                 return
-                # Since everything seems to be fine, update the local config
         else:
             print("Unknown role")
 

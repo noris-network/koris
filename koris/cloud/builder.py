@@ -279,7 +279,15 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                           flavor=None,
                           ):
         """
-        add additional nodes
+        Creates a new instance in OpenStack and labels it as a K8s master
+
+        Args:
+            zone (str): The noris.cloud availability zone to create the master in.
+            flavor (str): The noris.cloude instance flavor of the master.
+
+        Returns:
+            An instance of `:class:koris.cloud.openstack.Instance` which
+            represents the added master.
         """
         role = 'master'
         master_number = next(iter(
@@ -372,10 +380,17 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         return CertBundle(_key, _ca)
 
     def create_ssh_keypair(self):
-        """generate ssh key pair for first master node. It is used to connect
-        to the other nodes so that they can join the cluster.
-        The public key is uploaded to openstack.
+        """Generates a keypair for the first master node.
+
+        The master node needs a keypair which is uploaded to OpenStack. This
+        keypair is then used for adding master nodes to the cluster.
+
+        This key pair is also added as a secret to the master-adder-pod.
+
+        Returns:
+            An OpenStack keypair.
         """
+
         ssh_key = create_key()
         pub_key_ascii = ssh_key.public_key().public_bytes(
             serialization.Encoding.OpenSSH,

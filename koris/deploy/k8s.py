@@ -52,6 +52,8 @@ SFTPOPTS = ["-i /etc/ssh/ssh_host_rsa_key ",
             "-o ConnectTimeout=60"]
 SSHOPTS = ["-l ubuntu "] + SFTPOPTS
 
+# The deployment configuration of the master-adder operator.
+# This pod runs inside a cluster and waits for requests to bootstrap new masters
 MASTER_ADDER_DEPLOYMENT = {
     "apiVersion": "apps/v1",
     "kind": "Deployment",
@@ -319,7 +321,18 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             raise ValueError("Could execute the adder script in the adder pod!")
 
     def add_master(self, new_master_name, new_master_ip):
-        """adds a master to the cluster"""
+        """
+        Executes a script inside the master-adder operator.
+
+        This function simply takes the required arguments for the
+        ``add-master-script`` shell function
+        from the bootstrap script and runs it inside the master-adder
+        operator pod.
+
+        Args:
+            new_master_name (str): the host name to provision
+            new_master_ip (str): the IP address of the master to provision
+        """
         try:
             nodes = self.api.list_node(pretty=True)
             nodes = [node for node in nodes.items if
@@ -330,6 +343,9 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             sys.exit(1)
 
         addresses = nodes[0].status.addresses
+
+        # master_ip and master_name are the hostname and IP of an existing
+        # master, where an etcd instance is already running.
         master_ip = get_node_addr(addresses, "InternalIP")
         master_name = get_node_addr(addresses, "Hostname")
         podname = self.launch_master_adder()
