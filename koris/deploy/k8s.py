@@ -399,12 +399,30 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
     @staticmethod
     @retry(ValueError)
     def etcd_cluster_status(podname, master_ip):
-        """Query etcd cluster for the status string"""
+        """Checks the current etcd cluster state.
+
+        This function calls etcdctl inside a pod in order to obtain the
+        current state of the etcd cluster before a new member can be added
+        to it.
+
+        Right now, etcdctl offers no convenient way to format the output so
+        the URLs from the masters can be extracted, which is why jq is used here.
+
+        Args:
+            podname (str): The name of the pod where the etcdctl command
+                should be sent from. Needs to be inside the kube-system namespace.
+            master_ip (str)
+
+        Returns:
+            The status of the etcd as a string
+            (e.g.master-1=192.168.1.102,master-2=192.168.1.103)
+        """
+
         cmd = ("kubectl exec -it %s -n kube-system "
                "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
                "--endpoints=https://%s:2379 member list -w json\" "
                "| jq -r -M --compact-output '[.members | .[] | "
-               ".name + \"=\" + .peerURLs[0]] | join(\"=\")'" % (podname,
+               ".name + \"=\" + .peerURLs[0]] | join(\",\")'" % (podname,
                                                                  master_ip))
 
         kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
