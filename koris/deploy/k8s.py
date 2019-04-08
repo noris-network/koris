@@ -333,14 +333,9 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_name (str): the host name to provision
             new_master_ip (str): the IP address of the master to provision
         """
-        try:
-            nodes = self.api.list_node(pretty=True)
-            nodes = [node for node in nodes.items if
-                     'node-role.kubernetes.io/master' in node.metadata.labels]
-        except urllib3.exceptions.MaxRetryError:
-            LOGGER.warning(
-                "Connection failed! Are you using the correct kubernetes context?")
-            sys.exit(1)
+        nodes = self.api.list_node(pretty=True)
+        nodes = [node for node in nodes.items if
+                 'node-role.kubernetes.io/master' in node.metadata.labels]
 
         addresses = nodes[0].status.addresses
 

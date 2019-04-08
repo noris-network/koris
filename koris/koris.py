@@ -14,6 +14,7 @@ import ssl
 import sys
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
+import urllib3
 import yaml
 
 
@@ -203,10 +204,9 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             update_config(config_dict, config, amount)
 
         elif role == 'master':
-            builder = ControlPlaneBuilder(config_dict, os_cluster_info,
-                                          cloud_config)
-
             if not bootstrap_only:
+                builder = ControlPlaneBuilder(config_dict, os_cluster_info,
+                                              cloud_config)
                 master = builder.add_master(zone, flavor)
                 name, ip_address = master.name, master.ip_address
                 update_config(config_dict, config, 1, role='masters')
@@ -217,7 +217,12 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                 print(red("Error encoutered ... ", error))
                 print(red("You may want to remove the newly created Openstack "
                           "instance manually..."))
-                return
+                sys.exit(1)
+            except urllib3.exceptions.MaxRetryError:
+                LOGGER.warning(
+                    red("Connection failed! Are you using the correct "
+                        "kubernetes context?"))
+                sys.exit(1)
         else:
             print("Unknown role")
 
