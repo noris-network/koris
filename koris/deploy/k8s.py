@@ -307,7 +307,20 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
     def run_add_script(self, pod, master_name, master_ip,
                        new_master_name, new_master_ip):
-        """Execute the adding of a master inside a pod"""
+        """
+        Executes a script inside the master-adder operator.
+
+        This function simply takes the required arguments for the
+        ``add-master-script`` shell function
+        from the bootstrap script and runs it inside the master-adder
+        operator pod.
+
+        Args:
+            master_name (str): an existing master host where and etcd member is
+            master_ip (str): the IP address of an existing etcd member
+            new_master_name (str): the host name to provision
+            new_master_ip (str): the IP address of the master to provision
+        """
         LOGGER.info("Extract current etcd cluster state...")
 
         etcd_cluster = self.etcd_cluster_status(pod, master_ip)
@@ -322,16 +335,14 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
     def add_master(self, new_master_name, new_master_ip):
         """
-        Executes a script inside the master-adder operator.
+        Run the steps required to bootstrap a new master.
+        These are:
+            1. Find all existing masters
+            2. Get the hostname and the IP address of one
+            3. Get the current etcd cluster status.
+            4. Runs the add-master-script.
 
-        This function simply takes the required arguments for the
-        ``add-master-script`` shell function
-        from the bootstrap script and runs it inside the master-adder
-        operator pod.
-
-        Args:
-            new_master_name (str): the host name to provision
-            new_master_ip (str): the IP address of the master to provision
+        Steps 3 and 4 are done in run_add_script.
         """
         nodes = self.api.list_node(pretty=True)
         nodes = [node for node in nodes.items if
@@ -416,7 +427,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         Returns:
             The status of the etcd as a string
             (e.g.master-1=192.168.1.102,master-2=192.168.1.103)
-        """
+            """
 
         cmd = ("kubectl exec -it %s -n kube-system "
                "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
