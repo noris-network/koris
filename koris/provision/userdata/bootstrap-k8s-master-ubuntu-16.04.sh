@@ -231,7 +231,7 @@ function add_master_script_config_map() {
       typeset -f get_kubeadm;
       # shellcheck disable=SC2034
       typeset -f add_master;
-      echo "if [ ! -z \${DEBUGADDMASTER} ]; then set -x; fi"
+      echo "if [ -n \${DEBUGADDMASTER} ]; then set -x; fi"
       echo "mkdir -p /etch/kubernetes/"
       echo "touch /etc/kubernetes/koris.env"
       echo "HOST_NAME=\$1";
@@ -300,10 +300,11 @@ EOF
 EOF
     fi
 
-	if [ ! -z "${OIDC_CA_FILE}" ]; then
-        local DESTDIR=$(dirname "${OIDC_CA_FILE}")
+	if [ -n "${OIDC_CA_FILE}" ]; then
+		local DESTDIR
+		DESTDIR="$(dirname "${OIDC_CA_FILE}")"
 		ssh ${SSHOPTS} "${USER}@$host" mkdir -pv /home/"${USER}"/"${DESTDIR}"
-        sftp ${SFTPOPTS} ${USER}@$host << EOF
+		sftp ${SFTPOPTS} ${USER}@$host << EOF
 
 	put ${OIDC_CA_FILE} /home/${USER}/${DESTDIR}
 	chmod 0600 /home/${USER}/${OIDC_CA_FILE}
