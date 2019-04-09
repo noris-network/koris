@@ -310,13 +310,17 @@ EOF
 	chmod 0600 /home/${USER}/${OIDC_CA_FILE}
 EOF
 
-    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/${OIDC_CA_FILE} ${DESTDIR}
-
-	fi
+    if [[ ${OPENSTACK} -eq 1 ]]; then
+        sftp ${SFTPOPTS} ${USER}@$host << EOF
+	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
+	chmod 0600 /home/${USER}/kubernetes/cloud.config
+EOF
+    fi
 
     # move back to /etc on remote machine
     ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
     ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+    ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
 
     echo "done distributing keys to $host";
 }
