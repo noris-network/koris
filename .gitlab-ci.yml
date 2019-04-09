@@ -15,6 +15,7 @@ static-analysis:
   image: oz123/koris-alpine:0.1.4
   script:
     - make lint
+    - make test-bash
 
 unittest:
   stage: unittest
@@ -22,7 +23,6 @@ unittest:
   script:
     - pip3 install -q -e .
     - make coverage PY=python3
-    - make test-bash
 
 wait-for-resources:
   stage: wait-for-resources
@@ -188,7 +188,7 @@ assert-control-plane:
   script:
   - "pip3 install -q -e ."
   - "make assert-masters NUM=3"
-  - "make assert control-plane NUM=3"
+  - "make assert-control-plane NUM=3"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
