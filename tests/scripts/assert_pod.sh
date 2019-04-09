@@ -15,13 +15,14 @@ for (( i=1; i<=${NUM}; i++ )); do
             echo "-- OK"
             break
         fi
-        # sleep 15
+        sleep 15
         echo -n "."
         CURR=$(expr ${CURR} + 1)
     done
 
     if [ "${CURR}" -eq ${MAX} ]; then
-        echo "\nPod not ready, dumping debug information"
+        echo
+        echo "Pod not ready, dumping debug information"
         kubectl --kubeconfig=${KUBECONFIG} -n ${NAMESPACE} describe pod/${TO_CHECK}
         kubectl --kubeconfig=${KUBECONFIG} -n ${NAMESPACE} logs ${TO_CHECK}
         exit 1

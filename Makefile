@@ -85,7 +85,7 @@ test-python: ## run tests quickly with the default Python
 
 test-bash:
 	@echo "Checking bash script syntax ..."
-	find koris/provision/userdata -name "*.sh" -exec bash -n {} \;
+	find koris/provision/userdata -name "*.sh" -print0 | xargs -0L1 bash -n
 
 coverage: ## check code coverage quickly with the default Python
 	$(PY) -m pytest -vv --cov .
