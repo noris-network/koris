@@ -35,7 +35,7 @@ else:
 LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
-def get_node_addr(addresses, addr_type):
+def _get_node_addr(addresses, addr_type):
     """
     Parse the address of the node
 
@@ -333,7 +333,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if kctl.returncode:
             raise ValueError("Could execute the adder script in the adder pod!")
 
-    def add_master(self, new_master_name, new_master_ip):
+    def bootstrap_master(self, new_master_name, new_master_ip):
         """
         Run the steps required to bootstrap a new master.
         These are:
@@ -352,8 +352,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         # master_ip and master_name are the hostname and IP of an existing
         # master, where an etcd instance is already running.
-        master_ip = get_node_addr(addresses, "InternalIP")
-        master_name = get_node_addr(addresses, "Hostname")
+        master_ip = _get_node_addr(addresses, "InternalIP")
+        master_name = _get_node_addr(addresses, "Hostname")
         podname = self.launch_master_adder()
         LOGGER.info("Executing adder script on new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
