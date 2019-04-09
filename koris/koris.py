@@ -63,7 +63,23 @@ def add_node(cloud_config,
              flavor,
              k8s,
              config_dict):
-    """the actual logic of adding a node"""
+    """Create a new host(s) in OpenStack which will join the cluster as a node(s)
+
+    This hosts boots with all paramerters required for it to join the cluster
+    with a cloud-init.
+
+    Args:
+        cloud_config (``koris.cloud.openstack.OSClusterInfo``): the content
+           cloud.conf file
+        os_cluster_info (``koris.cloud.openstack.OSClusterInfo``)
+        role (str): the host role currently only "node" is supported here.
+        zone (str): the AZ in OpenStack in which the hosts are created
+        amount (int): the number of instance to create
+        flavour (str): the flavor in OpenStack to create
+        k8s (``koris.deploy.K8S``): an instance which creates a bootstrap token.
+        config_dict (dict): the koris configuration yaml as ``dict``
+
+    """
     node_builder = NodeBuilder(
         config_dict,
         os_cluster_info,
