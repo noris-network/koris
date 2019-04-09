@@ -222,6 +222,10 @@ assert-kube-scheduler:
 	POD_NAME="kube-scheduler-master" \
 	./tests/scripts/assert_pod.sh
 
+assert-members: NUM ?= 4
+assert-members:
+	./tests/scripts/assert_members.sh $(NUM) $(CLUSTER_NAME)
+
 show-nodes:
 	@echo "Waiting for nodes to join ..."
 	for i in `seq 1 5`; do \

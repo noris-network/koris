@@ -110,6 +110,7 @@ add-master:
   script:
   - "pip3 install -q -e ."
   - "make add-master"
+  - "make assert-members NUM=4"
   - "make assert-masters NUM=4"
   - "make assert-control-plane NUM=4"
   artifacts:
