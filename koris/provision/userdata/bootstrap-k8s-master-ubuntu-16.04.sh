@@ -54,13 +54,8 @@ export ADDTOKEN=1
 LOGLEVEL=4
 V=${LOGLEVEL}
 
-SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60 -o ConnectionAttempts=1000"
-SFTPOPTS="${SSHOPTS}"
-
-# create a configuration file for kubeadm
-# this function excpects CURRENT_CLUSTER, HOST_IP and HOST_NAME
-# to be defined as global variables
-function create_kubeadm_config () {
+SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
+SFTPOPTS=${SSHOPTS}
 
     HOST_NAME=$1
     HOST_IP=$2
