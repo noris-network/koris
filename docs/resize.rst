@@ -52,6 +52,13 @@ The machines will now boot in OpenStack, and join the cluster. Notice that,
 an updated configuration file was written to the disk. It contains an update
 number of worker nodes.
 
+Here we used `koris add` without the role. The flag `--role` defaults to node.
+You can also use the command in the following way:
+
+.. code::
+
+   koris add --role node --amount 2 --zone de-nbg6-1a --flavor ECS.UC1.4-4 add-m.yml
+
 .. code:: shell
 
    $ diff add-m.yml add-m.updated.yml  | grep nodes
