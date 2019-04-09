@@ -370,6 +370,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         Return:
             str: the pod name
         """
+        # if self.api.list_namespaced_config_map("kube-system", # noqa
+        #   field_selector="metadata.name=dex-config"): # noqa
+        # pass
+
         kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
         kctl.communicate(json.dumps(MASTER_ADDER_DEPLOYMENT).encode())
 

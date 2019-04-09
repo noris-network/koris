@@ -126,7 +126,7 @@ TMPL
 fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
-if [[ -n ${OIDC_CLIENT_ID} ]]; then
+if [[ ! -z ${OIDC_CLIENT_ID} ]]; then
 cat <<TMPL > dex.tmpl
   oidc-issuer-url: "${OIDC_ISSUER_URL}"
   oidc-client-id: ${OIDC_CLIENT_ID}
@@ -155,8 +155,9 @@ fi
 # create secrets and config maps
 # these are used by the master pod which we call from the CLI
 function make_secrets() {
-    local del_args="--kubeconfig=/etc/kubernetes/admin.conf -n kube-system --ignore-not-found=true delete secret"
-    local args="--kubeconfig=/etc/kubernetes/admin.conf create secret -n kube-system"
+    local k8senv="--kubeconfig=/etc/kubernetes/admin.conf -n kube-system"
+    local del_args="${k8senv} --ignore-not-found=true delete secret"
+    local args="${k8senv} create secret"
 
     # shellcheck disable=SC2086
     kubectl ${del_args} ssh-key
@@ -205,10 +206,14 @@ function make_secrets() {
         kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
     fi
 
-	if [[ -n ${OIDC_CA_FILE} ]]; then
+	if [[ ! -z ${OIDC_CA_FILE} ]]; then
         kubectl ${del_args} oidc-ca
         # shellcheck disable=SC2086
         kubectl ${args} generic oidc-ca --from-file="${OIDC_CA_FILE}"
+        # shellcheck disable=SC2086
+        kubectl ${k8senv} delete configmap dex-config --ignore-not-found=true
+        # shellcheck disable=SC2086
+        kubectl ${k8senv} create configmap dex-config --from-file="dex.tmpl"
 	fi
 }
 
@@ -242,7 +247,6 @@ function add_master_script_config_map() {
       echo "echo \$HOST_IP \$HOST_NAME >> /etc/hosts"
 	  echo "until ssh \${SSHOPTS} \${HOST_IP} which kubeadm; do sleep 2; done"
       echo "ssh \${SSHOPTS} \${HOST_IP} sudo kubeadm reset -f"
-      echo "copy_keys \$HOST_NAME";
       echo "export LOAD_BALANCER_DNS=${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
       echo "export LOAD_BALANCER_PORT=${LOAD_BALANCER_PORT}"
       echo "export OIDC_CLIENT_ID=${OIDC_CLIENT_ID}"
@@ -250,6 +254,7 @@ function add_master_script_config_map() {
       echo "export OPENSTACK=${OPENSTACK} POD_SUBNET=${POD_SUBNET}"
       echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
 	  echo ""
+      echo "copy_keys \$HOST_NAME";
       echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
     } >> add_master_script.sh
 
@@ -290,7 +295,7 @@ function copy_keys() {
 	put /etc/kubernetes/pki/etcd/ca.crt /home/${USER}/kubernetes/pki/etcd/
 	put /etc/kubernetes/pki/etcd/ca.key /home/${USER}/kubernetes/pki/etcd/
 	put /etc/kubernetes/admin.conf /home/${USER}/kubernetes/
-	chmod 0600 /etc/kubernetes/admin.conf
+	chmod 0600 /home/${USER}/kubernetes/admin.conf
 	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
 EOF
     if [[ ${OPENSTACK} -eq 1 ]]; then
@@ -300,7 +305,7 @@ EOF
 EOF
     fi
 
-	if [ -n "${OIDC_CA_FILE}" ]; then
+	if [ ! -z "${OIDC_CA_FILE}" ]; then
 		local DESTDIR
 		DESTDIR="$(dirname "${OIDC_CA_FILE}")"
 		ssh ${SSHOPTS} "${USER}@$host" mkdir -pv /home/"${USER}"/"${DESTDIR}"

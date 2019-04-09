@@ -32,7 +32,7 @@ from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
-from .cloud.openstack import OSClusterInfo
+from .cloud.openstack import OSClusterInfo, get_connection, LoadBalancer
 
 # pylint: disable=protected-access
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -161,6 +161,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             print(red("Certificates {} already deleted".format(certs_location)))
         sys.exit(0)
 
+    # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
             role: str = 'node', amount: int = 1, ip_address: str = None,
             name: str = None):
@@ -239,6 +240,21 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                     red("Connection failed! Are you using the correct "
                         "kubernetes context?"))
                 sys.exit(1)
+
+            # Adding master to LB
+            conn = get_connection()
+            lb = LoadBalancer(config_dict, conn)
+            lbinst = lb.get()
+            if not lbinst:
+                red("No LoadBalancer found")
+                sys.exit(1)
+            try:
+                master_pool = lb.master_listener['pool']['id']
+            except KeyError as exc:
+                red(f"Unable to obtain master-pool: {exc}")
+                sys.exit(1)
+            lb.add_member(master_pool, master.ip_address)
+
         else:
             print("Unknown role")
 

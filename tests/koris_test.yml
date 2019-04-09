@@ -44,15 +44,16 @@ pod_network: "CALICO"
 #pod_subnet: "10.244.0.0/16"
 #pod_network: "FLANNEL"
 
-addons:
-  dex:
-    username_claim: email
-    groups_claim: groups
-    ports:
-      listener: 32000
-      service: 32000
-    client:
-      id: example-app
-      ports:
-        listener: 5555
-        service: 32555
+# (aknipping) Deactivating Dex testing until the feature is refactored
+# addons:
+#   dex:
+#     username_claim: email
+#     groups_claim: groups
+#     ports:
+#       listener: 32000
+#       service: 32000
+#     client:
+#       id: example-app
+#       ports:
+#         listener: 5555
+#         service: 32555
