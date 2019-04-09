@@ -330,7 +330,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         loop = asyncio.get_event_loop()
 
-        key = self._info.conn.compute.find_keypair(name=self._info.name)
+        key = self._info.conn.compute.find_keypair(self._info.name)
 
         init = NthMasterInit(cloud_config, key.public_key)
         userdata = str(init)

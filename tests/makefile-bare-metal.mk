@@ -112,7 +112,7 @@ clean-masters:
 	for host in {1..3}; do openstack server delete $(CLUSTERNAME)-master-$${host} || echo "No server found " $(CLUSTERNAME)-master-$${host} ; done
 
 clean-nodes:
-	openstack server delete $(CLUSTERNAME)-node-1
+	openstack server delete $(CLUSTERNAME)-node-1 || exit 0
 
 clean-volumes-masters:
 	for host in {1..3}; do \
