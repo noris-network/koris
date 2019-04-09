@@ -57,6 +57,12 @@ V=${LOGLEVEL}
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 SFTPOPTS=${SSHOPTS}
 
+
+# create a configuration file for kubeadm
+# this function excpects CURRENT_CLUSTER, HOST_IP and HOST_NAME
+# to be defined as global variables
+function create_kubeadm_config () {
+
     HOST_NAME=$1
     HOST_IP=$2
     CURRENT_CLUSTER=$3
@@ -131,7 +137,7 @@ TMPL
     cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
 fi
 
-if [[ ADDTOKEN -eq 1 ]]; then
+if [[ ${ADDTOKEN} -eq 1 ]]; then
 cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
 bootstrapTokens:
 - groups:
@@ -144,6 +150,7 @@ bootstrapTokens:
 TOKEN
 fi
 }
+
 
 # create secrets and config maps
 # these are used by the master pod which we call from the CLI
