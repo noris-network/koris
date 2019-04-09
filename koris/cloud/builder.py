@@ -330,9 +330,9 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         loop = asyncio.get_event_loop()
 
-        pub_key = NOVA.keypairs.find(name=self._info.name)
+        key = self._info.conn.compute.find_keypair(name=self._info.name)
 
-        init = NthMasterInit(cloud_config, pub_key.public_key)
+        init = NthMasterInit(cloud_config, key.public_key)
         userdata = str(init)
         task = loop.create_task(master.create(
             self._info.master_flavor, self._info.secgroups, self._info.keypair,
@@ -406,11 +406,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             serialization.Encoding.OpenSSH,
             serialization.PublicFormat.OpenSSH).decode()
         try:
-            self.info.conn.compute.create_keypair(self.info.name,
+            self.info.conn.compute.create_keypair(name=self.info.name,
                                                   public_key=pub_key_ascii)
         except openstack.exceptions.ConflictException:
             self.info.conn.compute.delete_keypair(self.info.name)
-            self.info.conn.compute.create_keypair(self.info.name,
+            self.info.conn.compute.create_keypair(name=self.info.name,
                                                   public_key=pub_key_ascii)
 
         return ssh_key
