@@ -34,8 +34,8 @@ PY ?= python3
 REV ?= HEAD
 BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
 REV_NUMBER = $(shell git rev-parse --short ${REV})
-CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
-KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
+CLUSTER_NAME = koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
+KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
@@ -338,7 +338,7 @@ security-checks-nodes:
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-[[:digit:]]' | head -n 1)
 update-config:
-	@sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
+	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" tests/koris_test.yml
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" tests/koris_test.yml
 	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
 	@cat tests/koris_test.yml
@@ -358,7 +358,7 @@ clean-all:
 	@koris destroy tests/koris_test.yml --force
 	@git checkout tests/koris_test.yml
 	@rm -fv ${KUBECONFIG}
-	@rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
+	@rm -vfR certs-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
