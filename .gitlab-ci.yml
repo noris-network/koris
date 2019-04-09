@@ -180,6 +180,21 @@ check-node-labels:
       - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
       - $SKIP_E2E
 
+check-members:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.4
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-members NUM=3"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
+
 assert-control-plane:
   stage: integration-test
   image: oz123/koris-alpine:0.1.4
