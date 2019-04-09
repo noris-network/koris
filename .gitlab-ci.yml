@@ -182,7 +182,7 @@ check-node-labels:
 
 check-members:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
