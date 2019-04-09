@@ -102,7 +102,7 @@ controllerManagerExtraArgs:
   cluster-cidr: ${POD_SUBNET}
 TMPL
 # if On baremetal we don't need all OpenStack cloud provider flags
-if [[ OPENSTACK -eq 1 ]]; then
+if [[ ${OPENSTACK} -eq 1 ]]; then
 cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
