@@ -11,8 +11,8 @@ import sys
 import time
 import urllib
 
+import openstack
 from cryptography.hazmat.primitives import serialization
-from novaclient.exceptions import Conflict as NovaConflict
 
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
@@ -406,12 +406,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             serialization.Encoding.OpenSSH,
             serialization.PublicFormat.OpenSSH).decode()
         try:
-            NOVA.keypairs.create(self.info.name, pub_key_ascii)
-        except NovaConflict:
-            NOVA.keypairs.delete(self.info.name)
-            # This should be fixed , we need to get the ssh key from k8s
-            # the secret name ssh-key
-            NOVA.keypairs.create(self.info.name, pub_key_ascii)
+            self.info.conn.compute.create_keypair(self.info.name,
+                                                  public_key=pub_key_ascii)
+        except openstack.exceptions.ConflictException:
+            self.info.conn.compute.delete_keypair(self.info.name)
+            self.info.conn.compute.create_keypair(self.info.name,
+                                                  public_key=pub_key_ascii)
 
         return ssh_key
 
