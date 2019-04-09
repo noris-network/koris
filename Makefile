@@ -77,8 +77,15 @@ pylint: ## check style with pylint
 flake8: ## check style with flake8
 	flake8 koris tests
 
-test: ## run tests quickly with the default Python
+test: test-python test-bash
+
+test-python: ## run tests quickly with the default Python
+	@echo "Running Python Unit tests ..."
 	py.test
+
+test-bash:
+	@echo "Checking bash script syntax ..."
+	find koris/provision/userdata -name "*.sh" -exec bash -n {} \;
 
 coverage: ## check code coverage quickly with the default Python
 	$(PY) -m pytest -vv --cov .
@@ -162,7 +169,7 @@ add-nodes:
 	@echo "all nodes successfully joined!"
 
 add-master: FLAVOR ?= ECS.UC1.4-4
-add-master:
+add-master:`
 	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the master to join.
 	@echo "added master successfully!"
@@ -171,6 +178,49 @@ add-master:
 assert-masters: NUM ?= 4
 assert-masters:  ##
 	if [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; then echo "can't find $(NUM) masters"exit 1; else echo "all masters are fine"; fi
+
+assert-control-plane: NUM ?= 4
+assert-control-plane: \
+	assert-kube-apiservers \
+	assert-etcd \
+	assert-kube-controller-manager \
+	assert-kube-scheduler
+
+assert-kube-apiservers: NUM ?= 4
+assert-kube-apiservers:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="kube-apiserver-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-etcd: NUM ?= 4
+assert-etcd:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="etcd-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-kube-controller-manager: NUM ?= 4
+assert-kube-controller-manager:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="kube-controller-manager-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-kube-scheduler: NUM ?= 4
+assert-kube-scheduler:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="kube-scheduler-master" \
+	./tests/scripts/assert_pod.sh
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."

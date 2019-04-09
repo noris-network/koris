@@ -152,7 +152,7 @@ fi
 
 # create secrets and config maps
 # these are used by the master pod which we call from the CLI
-function make_secrets(){
+function make_secrets() {
     local del_args="--kubeconfig=/etc/kubernetes/admin.conf -n kube-system --ignore-not-found=true delete secret"
     local args="--kubeconfig=/etc/kubernetes/admin.conf create secret -n kube-system"
 
@@ -207,9 +207,7 @@ function make_secrets(){
         kubectl ${del_args} oidc-ca
         # shellcheck disable=SC2086
         kubectl ${args} generic oidc-ca --from-file="${OIDC_CA_FILE}"
-
 	fi
-
 }
 
 # create a config map with a script to add a master
@@ -309,6 +307,7 @@ EOF
 	put ${OIDC_CA_FILE} /home/${USER}/${DESTDIR}
 	chmod 0600 /home/${USER}/${OIDC_CA_FILE}
 EOF
+    fi
 
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
