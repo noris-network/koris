@@ -72,8 +72,8 @@ build-cluster:
   - make show-nodes
   artifacts:
     paths:
-      - "certs-koris-pipe-line-*"
-      - "koris-pipe-line-*-admin.conf"
+      - "certs-*"
+      - "*-admin.conf"
       - "tests/koris_test.yml"
     expire_in: 1 week
   except:
@@ -154,8 +154,8 @@ integration-test:
   - "make clean-lb-after-integration-test"
   artifacts:
     paths:
-      - "certs-koris-pipe-line-*"
-      - "koris-pipe-line-*-admin.conf"
+      - "certs-*"
+      - "*-admin.conf"
       - "tests/koris_test.yml"
     expire_in: 1 week
   except:
