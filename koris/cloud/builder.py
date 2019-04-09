@@ -312,9 +312,19 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
         return master
 
     def add_master(self, zone, flavor):
+        """Adds a new instance in OpenStack which will be provisioned as master.
+
+        - Create a new machine
+        - Grab the public key from OpenStack so the master-add-pod can SSH to it.
+
+        Args:
+          zone (str): The noris.cloud availability zone to create the master in.
+          flavor (str): The noris.cloud instance flavor of the master.
+
+        Returns:
+          The results of the asyncio task.
         """
-        To add a master we need to know the public key. We can get it from OpenStack.
-        """
+
         cloud_config = self.cloud_config
         master = self.create_new_master(zone, flavor)
 
