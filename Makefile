@@ -169,7 +169,7 @@ add-nodes:
 	@echo "all nodes successfully joined!"
 
 add-master: FLAVOR ?= ECS.UC1.4-4
-add-master:`
+add-master:
 	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the master to join.
 	@echo "added master successfully!"

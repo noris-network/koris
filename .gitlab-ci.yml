@@ -22,6 +22,7 @@ unittest:
   script:
     - pip3 install -q -e .
     - make coverage PY=python3
+    - make test-bash
 
 wait-for-resources:
   stage: wait-for-resources
@@ -57,7 +58,6 @@ bare-metal-integration:
    - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
    - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
    - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
-  allow_failure: true
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -111,6 +111,7 @@ add-master:
   - "pip3 install -q -e ."
   - "make add-master"
   - "make assert-masters NUM=4"
+  - "make assert-control-plane NUM=4"
   artifacts:
     paths:
       - "tests/koris_test.master.yml"
@@ -172,6 +173,22 @@ check-node-labels:
   script:
   - "pip3 install -q -e ."
   - "make assert-node-labels"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
+
+assert-control-plane:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.4
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-masters NUM=3"
+  - "make assert control-plane NUM=3"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -310,3 +327,4 @@ build:
   only:
     - tags
     - master
+    - dev
