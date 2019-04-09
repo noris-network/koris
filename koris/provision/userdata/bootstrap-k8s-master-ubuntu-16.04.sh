@@ -99,7 +99,7 @@ controllerManagerExtraArgs:
   cluster-cidr: ${POD_SUBNET}
 TMPL
 # if On baremetal we don't need all OpenStack cloud provider flags
-if [[ OPENSTACK -eq 1 ]]; then
+if [[ ${OPENSTACK}  -eq 1 ]]; then
 cat <<TMPL >> init.tmpl
   cloud-provider: "openstack"
   cloud-config: /etc/kubernetes/cloud.config
@@ -182,12 +182,19 @@ function copy_keys() {
 	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
 EOF
 
-   # move back to /etc on remote machine
-   ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
-   ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
-   ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+    if [[ ${OPENSTACK} -eq 1 ]]; then
+        sftp ${SFTPOPTS} ${USER}@$host << EOF
+	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
+	chmod 0600 /home/${USER}/kubernetes/cloud.config
+EOF
+    fi
 
-   echo "done distributing keys to $host";
+    # move back to /etc on remote machine
+    ssh ${SSHOPTS} ${USER}@$host sudo mv -v /home/${USER}/kubernetes /etc/
+    ssh ${SSHOPTS} ${USER}@$host sudo chown root:root -vR /etc/kubernetes
+    ssh ${SSHOPTS} ${USER}@$host sudo chmod 0600 -vR /etc/kubernetes/admin.conf
+
+    echo "done distributing keys to $host";
 }
 
 
