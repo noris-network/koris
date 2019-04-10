@@ -151,38 +151,39 @@ hood, adding master and worker nodes take very different code paths.
 
 When we add a worker node the following happens:
 
- 1. A bootstrap token is created in kuberenetes.
- 2. This bootstrap token is fetched and injected to cloud-init script, which
-     also includes all the information required to join the cluster.
- 3. An instance in OpenStack is created with that cloud-init
+ 1. A bootstrap token is created in Kuberenetes.
+ 2. This bootstrap token is fetched and injected into a cloud-init script, which
+    also includes all the information required for a node to join the cluster.
+ 3. An instance in OpenStack is created with that cloud-init script.
  4. Once the instance has completed the boot process, cloud-init will run and
-     call `kubeadm join` with the cluster information and the bootstrap token.
+    call ``kubeadm join`` with the cluster information and the bootstrap token.
  5. Kuberenetes authorizes the token, delivers the required information needed
-     to perform the node bootstrap.
+    to perform the node bootstrap.
  6. The node become part of the cluster.
 
 
 When we add a master node the following happens:
 
- 1. A deployment with a single pod responsible for the master bootstrap is created.
-     This happens only once.
- 2. An instance is created in OpenStack. It has a very minimal cloud init and
-     no knowledge of the cluster.
- 3. A call to query etcd cluster status is perfomed, the all etcd members are
-     retrieved and formatted as required for booting a new etcd node.
- 4. The master adder pod will launch with all required information to join
-     a master to cluster. This information includes SSH key which is allowed to
-     connect to the new instance, certificates and keys required to and a new
-     Kubernetes worker, certificates and keys required to create a new etcd
-     member.
- 5. Once the instance in OpenStack is running the master adder pod will SSH
-     into this host, and perform a series of command to create a new master and
-     add a new member to the etcd cluster.
-     This is done by:
+ 1. A deployment with a single pod (*master-adder*) responsible for the master bootstrap is created.
+    This happens only once.
+ 2. An instance is created in OpenStack. It gets provisioned with  a very minimal
+    cloud-init script and has no knowledge of the cluster.
+ 3. Etcd gets queried in order to retrieve all etcd master members. This output is
+     formatted, as it's required for adding the new master to the etcd cluster.
+ 4. The *master-adder* pod will launch with all required information to join
+    a new master tothe  cluster. This information includes an SSH key allowing to
+    connect to the new instance, certificates and keys required to add a new
+    Kubernetes master, as well as certificates and keys required to create a new etcd
+    member.
+ 5. Once the instance is running in OpenStack, the *master-adder* pod will SSH
+    into the new instance and perform a series of commands to create a new master and
+    add a new member to the etcd cluster.
 
+    This is done by:
      * Copying all the keys and certificates using sftp (and other
          configuration files if needed).
-     * Creating a configuration file for `kubeadm`
-     * Calling all of `kubeadm` explicitely until creation of etcd.
-     * Adding a member to the exisiting etcd cluster
-     * Continuing with all the other steps need to complete `kubeadm init`.
+     * Creating a configuration file for ``kubeadm``
+     * Calling all necessary commands of ``kubeadm`` explicitily up until the instance needs
+        to join the etcd cluster.
+     * Adding the instance as a new member to the exisiting etcd cluster.
+     * Continuing with all the other steps need to complete ``kubeadm init``.
