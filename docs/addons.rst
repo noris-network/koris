@@ -252,61 +252,18 @@ We should verify everything is running as intended:
     NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
     deployment.apps/dex   1         1         1            1           86s
 
-
-Then configure the example-app via ``addons/dex/01-example-app.yml``:
+Next we can edit the example-app in ``manifests/dex/01-example-app.yml``. Again, **substitute the Floating IP value
+accordingly**:
 
 .. code:: yaml
 
-    kind: Service
-    apiVersion: v1
-    metadata:
-      name:  dex-example-app
-      labels:
-        app: dex-example-app
-    spec:
-      selector:
-        app:  dex-example-app
-      type:  NodePort
-      ports:
-      - name: callback
-        port:  5555
-        nodePort: 32555
-        targetPort:  http
-    ---
-    apiVersion: extensions/v1beta1
-    kind: Deployment
-    metadata:
-      labels:
-        app: dex-example-app
-      name: dex-example-app
-    spec:
-      replicas: 1
-      template:
-        metadata:
-          labels:
-            app: dex-example-app
-        spec:
-          containers:
-          - name: dex-example-app
-            image: obitech/dex-example-app
-            # Enter your IP here for issuer and redirect
-            args: ["--issuer", "https://10.36.60.232:32000",
-              "--issuer-root-ca", "/etc/dex/tls/dex-ca.pem",
-              "--listen", "http://0.0.0.0:5555",
-              "--redirect-uri", "http://10.36.60.232:5555/callback"]
-            ports:
-            - name: http
-              containerPort: 5555
-            volumeMounts:
-            - name: root-ca
-              mountPath: /etc/dex/tls
-          volumes:
-          - name: root-ca
-            secret:
-              # The secret that was just created
-              secretName: dex.root-ca
+      # 1. Set the Dex issuer and redirect URI
+      args: ["--issuer", "https://%%FLOATING_IP%%:32000",
+        "--issuer-root-ca", "/etc/dex/tls/dex-ca.pem",
+        "--listen", "http://0.0.0.0:5555",
+        "--redirect-uri", "http://%%FLOATING_IP%%:5555/callback"]
 
-And deploy it:
+Now deploy it:
 
 .. code:: shell
 
