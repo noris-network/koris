@@ -1,17 +1,12 @@
 [[source]]
-
 url = "https://pypi.python.org/simple"
 verify_ssl = true
 name = "pypi"
 
-
 [requires]
-
 python_version = "3.6"
 
-
 [packages]
-
 python-novaclient = "==10.1.0"
 python-neutronclient = "==6.8.0"
 python-cinderclient = "==3.5.0"
@@ -65,7 +60,6 @@ python-octaviaclient = "*"
 openstacksdk = "==0.26.0"
 
 [dev-packages]
-
 pylint = "*"
 "flake8" = ">=3.5.0"
 coverage = ">=4.5.1"
@@ -134,3 +128,4 @@ stevedore = "==1.28.0"
 wcwidth = "==0.1.7"
 websocket-client = "==0.53.0"
 wrapt = "==1.10.11"
+pyinstaller = "*"
