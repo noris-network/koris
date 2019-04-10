@@ -143,3 +143,46 @@ A couple of minutes later, the new master will become ready:
    node-2-am     Ready    <none>   12m     v1.12.7
    node-3-am     Ready    <none>   12m     v1.12.7
 
+What happens under the hood
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Although one subcommand `add` is used for adding masters and nodes, under the
+hood, adding master and worker nodes take very different code paths.
+
+When we add a worker node the following happens:
+
+ 1. A bootstrap token is created in kuberenetes.
+ 2. This bootstrap token is fetched and injected to cloud-init script, which
+     also includes all the information required to join the cluster.
+ 3. An instance in OpenStack is created with that cloud-init
+ 4. Once the instance has completed the boot process, cloud-init will run and
+     call `kubeadm join` with the cluster information and the bootstrap token.
+ 5. Kuberenetes authorizes the token, delivers the required information needed
+     to perform the node bootstrap.
+ 6. The node become part of the cluster.
+
+
+When we add a master node the following happens:
+
+ 1. A deployment with a single pod responsible for the master bootstrap is created.
+     This happens only once.
+ 2. An instance is created in OpenStack. It has a very minimal cloud init and
+     no knowledge of the cluster.
+ 3. A call to query etcd cluster status is perfomed, the all etcd members are
+     retrieved and formatted as required for booting a new etcd node.
+ 4. The master adder pod will launch with all required information to join
+     a master to cluster. This information includes SSH key which is allowed to
+     connect to the new instance, certificates and keys required to and a new
+     Kubernetes worker, certificates and keys required to create a new etcd
+     member.
+ 5. Once the instance in OpenStack is running the master adder pod will SSH
+     into this host, and perform a series of command to create a new master and
+     add a new member to the etcd cluster.
+     This is done by:
+
+     * Copying all the keys and certificates using sftp (and other
+         configuration files if needed).
+     * Creating a configuration file for `kubeadm`
+     * Calling all of `kubeadm` explicitely until creation of etcd.
+     * Adding a member to the exisiting etcd cluster
+     * Continuing with all the other steps need to complete `kubeadm init`.
