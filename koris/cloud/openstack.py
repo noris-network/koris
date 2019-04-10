@@ -250,24 +250,25 @@ class LoadBalancer:
         """Returns the listener of name MASTER_LISTENER_NAME, including additional info.
 
         Returns:
-            A dict containing all necessary information of the master listener. Type:
-            {
-                'name': '<listener.name:str>',
-                'id': '<listener.id:str>',
-                'pool': {
-                    'name': '<pool.name:str>',
-                    'id': '<pool.id:str>',
-                        'members': [
-                            {
-                                'id': '<pool.members[i].id:str>',
-                                'name': '<member.name:str>',
-                                'address': '<member.address:str>',
-                            },
-                            {...}
-                        ]
-                    },
+            A dict containing all necessary information of the master listener::
+
+                {
+                    'name': '<listener.name:str>',
+                    'id': '<listener.id:str>',
+                    'pool': {
+                        'name': '<pool.name:str>',
+                        'id': '<pool.id:str>',
+                            'members': [
+                                {
+                                    'id': '<pool.members[i].id:str>',
+                                    'name': '<member.name:str>',
+                                    'address': '<member.address:str>',
+                                },
+                                {...}
+                            ]
+                        },
+                    }
                 }
-            }
         """
 
         listener = self._get_master_listener()

@@ -137,16 +137,17 @@ Next create your koris config under the name ``test-dex.yml``:
               listener: 5555
               service: 32555
 
-In order to facilitate the Dex authentication flow, two Deployments will have to be created inside our Kubernetes cluster: one for Dex
-and one for a client application. The ``addons.dex`` block will define the basic configuration that is required in order to prepare
-a cluster to use Dex.
+In order to facilitate the Dex authentication flow, two Deployments will have to be created inside our Kubernetes cluster:
+one for Dex and one for a client application. In the configuration file, the ``addons.dex`` block will define the basic
+configuration that is required in order to prepare a cluster to use Dex.
 
 `Claims <https://en.wikipedia.org/wiki/Claims-based_identity>`_ are specific attributes about
 a user that the identity provider returns to the client application - in this case the Email and Groups the user
 belongs to.
 
 ``addons.dex.ports`` defines the ``listener`` port on which the LoadBalancer on OpenStack listens to, and the
-``service`` port on the Dex Kubernetes Service listens on.
+``service`` port on the Dex Kubernetes Service listens on. The OpenStack LoadBalancer will then forward any traffic that
+comes in on ``%%FLOATING_IP%%:32000`` to ``node_ip:32000``.
 
 The block ``addons.dex.client`` defines information about the client application that requests authentication from Dex. In
 this tutorial, the official `example-app <https://github.com/obitech/dex-example-app>`_ is used, which has to be registered
@@ -172,13 +173,14 @@ Once it's ready, source your kubeconfig:
 
     $ export KUBECONFIG=test-dex-admin.conf
 
-Dex *needs* to run on HTTPS, which requires a valid SSL certificate that is issued on ``%%FLOATING_IP%%``.
-Dex uses this certificate to sign ID Tokens it sends to the client application, which in turn are used by the user in order to
-authenticate against the Kubernetes API Server. The Kubernetes API Server has access to the
-Public Key the ID Token has been signed with, so it can verify that it was indeed Dex that signed it. All necessary
-certificate files are generated in the folder ``certs-test-dex`` (following the syntax ``certs-<cluster-name>``).
+Before we deploy any resources, the SSL infrastructure has to be set up. Dex *needs* to run on HTTPS, which requires
+a valid SSL certificate that is issued on ``%%FLOATING_IP%%``. Dex uses this certificate to sign ID Tokens it sends
+to the client application, which in turn are used by the user in order to authenticate against the Kubernetes API Server.
+The Kubernetes API Server has access to the Public Key the ID Token has been signed with, so it can verify that it was
+indeed Dex that signed it. All necessary certificate files are generated in the folder ``certs-test-dex``
+(following the syntax ``certs-<cluster-name>``).
 
-The serving certificates have to be deployed into the cluster:
+We take those certificates, and deploy them as secrets into our cluster:
 
 .. code:: shell
 
@@ -190,92 +192,66 @@ The serving certificates have to be deployed into the cluster:
         --from-file=certs-test-dex/dex-ca.pem \
         --namespace=kube-system
 
-Next we have to deploy the *Application ID* and *Secret* from Gitlab as Kubernetes secrets, **make sure to substitute
+Next we have to deploy the *Application ID* and *Secret* from Gitlab as Kubernetes secrets too. For easier copying,
+we can export them as environment variables first. **Make sure to substitute
 the placeholders below with your own**:
 
-a25928a322ae8e74d3f126fefde28391d0e67857caae69dc01383433cd039a87
-90c04e32427e541866c263d8dcc716c14ac5efc9b2f8c8d3cf39d4f214b114ad
+.. code:: shell
+
+    $ export APP_ID="%%APP_ID%%"
+    $ export APP_SECRET="%%APP_SECRET%%"
+
+Then we can deploy it as a secret:
 
 .. code:: shell
 
     $ kubectl create secret generic gitlab-client \
-        --from-literal=client-id="%%APP_ID%%" \
-        --from-literal=client-secret="%%APP_SECRET%%" \
+        --from-literal=client-id=$APP_ID \
+        --from-literal=client-secret=$APP_SECRET \
         --namespace=kube-system
 
-Afterwards we can create the deployments for Dex and the client application. All files are located in ``addons/dex`` and include
-numbered comments that refer to this tutorial. **Look for those comments inside the manifests and adjust the values accordingly**.
-Before, let's create a local copy from the template files:
+Afterwards we can create the deployments for Dex and the client application. All files are located in
+``addons/dex`` and include numbered comments that refer to this tutorial. Before we edit those, Before, let's
+create a local copy from the template files:
 
 .. code:: shell
 
     $ mkdir -p manifests/
     $ cp -r addons/dex manifests
 
-With local copies, let's edit ``manifests/dex/00-dex.yaml`` first. We go through the numbered comments in order:
+With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We go through the numbered comments in order:
 
 .. code-block:: yaml
 
-    kind: ConfigMap
-    apiVersion: v1
-    metadata:
-      name: dex
-    data:
-      config.yaml: |
-        # Enter your IP here
-        issuer: https://10.36.60.232:32000
-        storage:
-          type: kubernetes
-          config:
-            inCluster: true
-        web:
-          https: 0.0.0.0:5556
-          tlsCert: /etc/dex/tls/tls.crt
-          tlsKey: /etc/dex/tls/tls.key
-        connectors:
-          - type: gitlab
-            id: gitlab
-            name: Gitlab
-            config:
-              baseURL: https://gitlab.com
-              # Enter your app-id and app-secret
-              clientID: $GITLAB_CLIENT_ID
-              clientSecret: $GITLAB_CLIENT_SECRET
-              # Enter your IP here
-              redirectURI: https://10.36.60.232:32000/callback
-        oauth2:
-          skipApprovalScreen: true
-        staticClients:
-        - id: example-app
-          redirectURIs:
-          # Enter your IP here
-          - 'http://10.36.60.232:5555/callback'
-          name: 'Example App'
-          secret: ZXhhbXBsZS1hcHAtc2VjcmV0
-        enablePasswordDB: true
-    ---
-    apiVersion: v1
-    kind: Service
-    metadata:
-      name: dex
-    spec:
-      type: NodePort
-      ports:
-      - name: dex
-        port: 5556
-        protocol: TCP
-        targetPort: 5556
-        nodePort: 32000
-      selector:
-        app: dex
-    ---
-    # ...
+     # 1.1 Substitute this with your Floating IP
+    issuer: https://%%FLOATING_IP%%:32000
 
-Deploy Dex into the cluster:
+    # 1.2 (Optional): Enter the URL of your Gitlab instance
+    baseURL: https://gitlab.com
+
+    # 1.3 he URL Gitlab redirects to. Substitute with with your Floating IP
+    redirectURI: https://%%FLOATING_IP%%:32000/callback
+
+    # 1.4 The URL where Dex redirects to. Substitute with with your Floating IP
+    - 'http://%%FLOATING_IP%%:5555/callback'
+
+With the manifest present, we can deploy Dex into the cluster:
 
 .. code:: shell
 
     $ kubectl create -f addons/00-dex.yaml
+
+We should verify everything is running as intended:
+
+.. code:: shell
+
+    $ kubectl get all -n kube-system -l k8s-app=dex
+    NAME          TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+    service/dex   NodePort   10.99.212.63   <none>        5556:32000/TCP   86s
+
+    NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+    deployment.apps/dex   1         1         1            1           86s
+
 
 Then configure the example-app via ``addons/dex/01-example-app.yml``:
 

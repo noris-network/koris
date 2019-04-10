@@ -10,7 +10,7 @@ spec:
   template:
     metadata:
       labels:
-        app: dex
+        k8s-app: dex
     spec:
       serviceAccountName: dex # This is created below
       containers:
@@ -60,7 +60,7 @@ metadata:
     k8s-app: dex
 data:
   config.yaml: |
-    # 1.1 Substitute with with your Floating IP
+    # 1.1 Substitute this with your Floating IP
     issuer: https://%%FLOATING_IP%%:32000
     storage:
       type: kubernetes
@@ -79,7 +79,7 @@ data:
           baseURL: https://gitlab.com
           clientID: $GITLAB_CLIENT_ID
           clientSecret: $GITLAB_CLIENT_SECRET
-          # 1.3 Substitute with with your Floating IP
+          # 1.3 The URL Gitlab redirects to. Substitute with with your Floating IP
           redirectURI: https://%%FLOATING_IP%%:32000/callback
     oauth2:
       skipApprovalScreen: true
@@ -87,7 +87,7 @@ data:
     staticClients:
     - id: example-app
       redirectURIs:
-      # 1.4 Substitute with with your Floating IP
+      # 1.4 The URL Dex redirects to. Substitute with with your Floating IP
       - 'http://%%FLOATING_IP%%:5555/callback'
       name: 'Example App'
       # base64 for 'example-app-secret'
