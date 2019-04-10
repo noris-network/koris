@@ -1,43 +1,43 @@
 """The dex module manages a dex (https://github.com/dexidp/dex) installation.
 
-    The workflow is the following:
+The workflow is the following:
 
-    1. Create certificates for Dex (via :class:`.DexSSL`)
+1. Create certificates for Dex (via :class:`.DexSSL`)
 
-    2. In :class:`koris.provision.cloud_init.FirstMasterInit` deploy the previously
-    created CA to the first Master that is created. Additionally, create the extra
-    arguments for the apiserver as environment variables in the ``koris.env`` file.
+2. In :class:`koris.provision.cloud_init.FirstMasterInit` deploy the previously
+created CA to the first Master that is created. Additionally, create the extra
+arguments for the apiserver as environment variables in the ``koris.env`` file.
 
-    3. In ``koris/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
-    variables from ``koris.env`` and add their values as extra arguments to kubeadm's
-    ``init.tmpl``.
+3. In ``koris/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
+variables from ``koris.env`` and add their values as extra arguments to kubeadm's
+``init.tmpl``.
 
-    4. Take the main LoadBalancer and add two new Listeners to it: one for the Dex service
-    (via :meth:`create_dex`) and one for an OAuth2 client app
-    (via :meth:`create_oauth2`) that will be requesting tokens from Dex.
+4. Take the main LoadBalancer and add two new Listeners to it: one for the Dex service
+(via :meth:`create_dex`) and one for an OAuth2 client app
+(via :meth:`create_oauth2`) that will be requesting tokens from Dex.
 
-    Example:
-        >>> dex_ssl = DexSSL("certs/", "dex.example.org")
-        >>> dex_ssl.save_certs()
-        >>> dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
-        >>> master_tasks = master_builder.create_masters_tasks(..., dex=dex_conf)
-        >>> # Execute master_tasks
-        >>> dex_listener = dex_conf['ports']['listener']
-        >>> dex_service = dex_conf['ports']['service']
-        >>> dex_members = master_ips
-        >>> dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
-        ...                                        listener_port=dex_listener,
-        ...                                        pool_port=dex_service,
-        ...                                        members=dex_members))
-        >>> client_listener = dex_conf['client']['ports']['listener']
-        >>> client_service = dex_conf['client']['ports']['service']
-        >>> client_members = node_ips
-        >>> oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
-        ...                                             listener_port=client_listener,
-        ...                                             pool_port=client_service,
-        ...                                             members=client_members))
-        >>> tasks = [dex_task, oauth_task]
-        >>> loop.run_until_complete(asyncio.gather(*tasks))
+Example:
+    >>> dex_ssl = DexSSL("certs/", "dex.example.org")
+    >>> dex_ssl.save_certs()
+    >>> dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
+    >>> master_tasks = master_builder.create_masters_tasks(..., dex=dex_conf)
+    >>> # Execute master_tasks
+    >>> dex_listener = dex_conf['ports']['listener']
+    >>> dex_service = dex_conf['ports']['service']
+    >>> dex_members = master_ips
+    >>> dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
+    ...                                        listener_port=dex_listener,
+    ...                                        pool_port=dex_service,
+    ...                                        members=dex_members))
+    >>> client_listener = dex_conf['client']['ports']['listener']
+    >>> client_service = dex_conf['client']['ports']['service']
+    >>> client_members = node_ips
+    >>> oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
+    ...                                             listener_port=client_listener,
+    ...                                             pool_port=client_service,
+    ...                                             members=client_members))
+    >>> tasks = [dex_task, oauth_task]
+    >>> loop.run_until_complete(asyncio.gather(*tasks))
 """
 
 from netaddr import valid_ipv4, valid_ipv6

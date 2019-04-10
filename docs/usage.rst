@@ -5,6 +5,7 @@ Usage
    :maxdepth: 1
 
    openstack
+   resize
    baremetal
 
 

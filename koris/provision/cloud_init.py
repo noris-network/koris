@@ -90,9 +90,12 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
         """
         ssh_key istance of ``cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey``
         """
-        keyline = ssh_key.public_key().public_bytes(
-            serialization.Encoding.OpenSSH,
-            serialization.PublicFormat.OpenSSH).decode()
+        if isinstance(ssh_key, str):
+            keyline = ssh_key
+        else:
+            keyline = ssh_key.public_key().public_bytes(
+                serialization.Encoding.OpenSSH,
+                serialization.PublicFormat.OpenSSH).decode()
 
         self._cloud_config_data["ssh_authorized_keys"] = []
         self._cloud_config_data["ssh_authorized_keys"].append(keyline)

@@ -11,6 +11,9 @@ import sys
 import time
 import urllib
 
+import openstack
+from cryptography.hazmat.primitives import serialization
+
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
@@ -26,6 +29,7 @@ from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (get_clients, Instance,
                         OSCloudConfig, LoadBalancer, get_connection,
                         )
+
 
 LOGGER = get_logger(__name__)
 
@@ -209,16 +213,17 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     configure the control plane services.
 
     Args:
-        nova (nova client instance) - to create a volume and a machine
-        neutron (neutron client instance) - to create a network interface
         config (dict) - the parsed configuration file
+        osinfo (OSClusterInfo) - information about the currect cluster
+        cloud_config (OSCloudConfig) - the cloud config generator
     """
 
-    def __init__(self, config, osinfo):
+    def __init__(self, config, osinfo, cloud_config=None):
         LOGGER.info(info(cyan(
             "Gathering control plane information from OpenStack ...")))
         self._config = config
         self._info = osinfo
+        self.cloud_config = cloud_config
 
     def get_masters(self):
         """
@@ -269,6 +274,74 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         return tasks
 
+    def create_new_master(self,
+                          zone=None,
+                          flavor=None,
+                          ):
+        """
+        Creates a new instance in OpenStack and labels it as a K8s master
+
+        Args:
+            zone (str): The noris.cloud availability zone to create the master in.
+            flavor (str): The noris.cloude instance flavor of the master.
+
+        Returns:
+            An instance of `:class:koris.cloud.openstack.Instance` which
+            represents the added master.
+        """
+        role = 'master'
+        master_number = next(iter(
+            get_server_range(self._info.compute_client.servers.list(),
+                             self._config['cluster-name'],
+                             role,
+                             1)))
+
+        master = Instance(self._info.storage_client,
+                          self._info.compute_client,
+                          '%s-%s-%s' % (role, master_number,
+                                        self._config['cluster-name']),
+                          self._info.net,
+                          zone,
+                          role,
+                          {'image': self._info.image,
+                           'class': self._info.storage_class},
+                          flavor
+                          )
+        master.attach_port(self._info.netclient, self._info.net['id'],
+                           self._info.secgroups)
+        return master
+
+    def add_master(self, zone, flavor):
+        """Adds a new instance in OpenStack which will be provisioned as master.
+
+        - Create a new machine
+        - Grab the public key from OpenStack so the master-add-pod can SSH to it.
+
+        Args:
+          zone (str): The noris.cloud availability zone to create the master in.
+          flavor (str): The noris.cloud instance flavor of the master.
+
+        Returns:
+          The results of the asyncio task.
+        """
+
+        cloud_config = self.cloud_config
+        master = self.create_new_master(zone, flavor)
+
+        loop = asyncio.get_event_loop()
+
+        key = self._info.conn.compute.find_keypair(self._info.name)
+
+        init = NthMasterInit(cloud_config, key.public_key)
+        userdata = str(init)
+        task = loop.create_task(master.create(
+            self._info.master_flavor, self._info.secgroups, self._info.keypair,
+            userdata))
+
+        loop.run_until_complete(*[task])
+
+        return task.result()
+
 
 class ClusterBuilder:  # pylint: disable=too-few-public-methods
     """
@@ -316,6 +389,32 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                         "kubernetes-ca")
         return CertBundle(_key, _ca)
 
+    def create_ssh_keypair(self):
+        """Generates a keypair for the first master node.
+
+        The master node needs a keypair which is uploaded to OpenStack. This
+        keypair is then used for adding master nodes to the cluster.
+
+        This key pair is also added as a secret to the master-adder-pod.
+
+        Returns:
+            An OpenStack keypair.
+        """
+
+        ssh_key = create_key()
+        pub_key_ascii = ssh_key.public_key().public_bytes(
+            serialization.Encoding.OpenSSH,
+            serialization.PublicFormat.OpenSSH).decode()
+        try:
+            self.info.conn.compute.create_keypair(name=self.info.name,
+                                                  public_key=pub_key_ascii)
+        except openstack.exceptions.ConflictException:
+            self.info.conn.compute.delete_keypair(self.info.name)
+            self.info.conn.compute.create_keypair(name=self.info.name,
+                                                  public_key=pub_key_ascii)
+
+        return ssh_key
+
     def create_network(self, config):
         """create network for cluster if not already present"""
 
@@ -348,6 +447,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
         ca_bundle = self.create_ca()
+        ssh_key = self.create_ssh_keypair()
         cert_dir = "-".join(("certs", config["cluster-name"]))
 
         # Check if dex has to be deployed
@@ -357,7 +457,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # generate ssh key pair for first master node. It is used to connect
         # to the other nodes so that they can join the cluster
-        ssh_key = create_key()
+        ssh_key = self.create_ssh_keypair()
 
         # create a load balancer for accessing the API server of the cluster;
         # do not add a listener, since we created no machines yet.

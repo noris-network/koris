@@ -35,6 +35,7 @@ preferences: {}
 users: []
 EOF
 
+# config for 1.12.7
 cat << EOF > /etc/kubernetes/kubeadm-node-${KUBE_VERSION}.yaml
 ---
 apiVersion: kubeadm.k8s.io/v1alpha2
