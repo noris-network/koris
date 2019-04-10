@@ -226,11 +226,17 @@ With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We g
      # 1.1 Substitute this with your Floating IP
     issuer: https://%%FLOATING_IP%%:32000
 
+    # ...
+
     # 1.2 (Optional): Enter the URL of your Gitlab instance
     baseURL: https://gitlab.com
 
+    # ...
+
     # 1.3 he URL Gitlab redirects to. Substitute with with your Floating IP
     redirectURI: https://%%FLOATING_IP%%:32000/callback
+
+    # ...
 
     # 1.4 The URL where Dex redirects to. Substitute with with your Floating IP
     - 'http://%%FLOATING_IP%%:5555/callback'
@@ -246,13 +252,14 @@ We should verify everything is running as intended:
 .. code:: shell
 
     $ kubectl get all -n kube-system -l k8s-app=dex
+
     NAME          TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
     service/dex   NodePort   10.99.212.63   <none>        5556:32000/TCP   86s
 
     NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
     deployment.apps/dex   1         1         1            1           86s
 
-Next we can edit the example-app in ``manifests/dex/01-example-app.yml``. Again, **substitute the Floating IP value
+Next we can edit the example-app in ``manifests/dex/01-example-app.yml``. Again, **substitute the Floating IP values
 accordingly**:
 
 .. code:: yaml
@@ -269,36 +276,67 @@ Now deploy it:
 
     $ kubectl create -f addons/dex/01-example-app.yml
 
-Afterwards, open your browser and head to http://10.36.60.232:5555,
-click on **Login**, allow the exception. Then click on
-**Login in with Gitlab**, which will redirect to Gitlab and ask for
-authorization.
-After accepting and a short wait, an ID token is returned that can be used to
-authenticate against the API server:
+And finally, let's check for existance:
 
 .. code:: shell
 
-    $ token='( ID token )'
-    $ curl --http1.1 -H "Authorization: Bearer $token" -k https://10.36.60.232:6443/api/v1/nodes
+    $ kubectl get all -n kube-system -l k8s-app=dex
+
+    NAME                                   READY   STATUS    RESTARTS   AGE
+    pod/dex-example-app-678b6db4b4-clnqb   1/1     Running   0          84s
+
+    NAME                      TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+    service/dex               NodePort   10.111.47.219    <none>        5556:32000/TCP   7m29s
+    service/dex-example-app   NodePort   10.108.248.239   <none>        5555:32555/TCP   84s
+
+    NAME                              DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+    deployment.apps/dex               1         1         1            1           7m29s
+    deployment.apps/dex-example-app   1         1         1            1           84s
+
+    NAME                                         DESIRED   CURRENT   READY   AGE
+    replicaset.apps/dex-example-app-678b6db4b4   1         1         1       84s
+
+
+Afterwards, open your browser and head to ``http://%%FLOATING_IP%%:5555``:
+
+.. image:: static/_imgs/dex_use_01.png
+
+This is the welcome screen for the example-app, which allows you to authenticate for a list of clients and
+extra scopes. You don't have to enter anything here, as we are using the default values. Click on **Login** and
+confirm the exception:
+
+.. image:: static/_imgs/dex_use_02.png
+
+You will be greeted by the Dex welcome, which lets you authenticate with the identity providers we have
+specified in our ``00-dex.yaml``. Click on **Login with Gitlab**:
+
+.. image:: static/_imgs/dex_use_03.png
+
+This will redirect to the Gitlab URL entered in ``00-dex.yaml``. Now click **Authorize**:
+
+.. image:: static/_imgs/dex_use_04.png
+
+After a short wait, Dex will return an ID token:
+
+.. image:: static/_imgs/dex_use_05.png
+
+We can copy this token, export it as an environment variable and use it to authenticate against our
+Kubernetes cluster:
+
+.. code:: shell
+
+    $ export token='copy your ID token in here'
+    $ curl --http1.1 -H "Authorization: Bearer $token" -k https://%%FLOATING_IP%%:6443/api/v1/nodes
 
 The request will fail, since no (Cluster)RoleBinding has been created yet.
 In order to give your user cluster admin privileges,
-edit the ``addons/02-clusterrolebinding.yml`` and enter the Email address you
+edit the ``manifests/dex/02-clusterrolebinding.yml`` and enter the Email address you
 have used for Gitlab:
 
 .. code-block:: yaml
 
-    kind: ClusterRoleBinding
-    apiVersion: rbac.authorization.k8s.io/v1
-    metadata:
-      name: your-user-binding
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: ClusterRole
-      name: cluster-admin
-    subjects:
-    - kind: User
-      name: your-gitlab-user-email@example.com
+    # 1. Enter the Email you have used with your Identity Provider
+    name: your-user-here
 
 Then deploy it into the cluster:
 
@@ -310,7 +348,7 @@ Now send the request again:
 
 .. code:: shell
 
-    $ curl --http1.1 -H "Authorization: Bearer $token" -k https://10.36.60.232:6443/api/v1/nodes
+    $ curl --http1.1 -H "Authorization: Bearer $token" -k https://%%FLOATING_IP%%:6443/api/v1/nodes
     {
         "kind": "NodeList",
         "apiVersion": "v1",
@@ -323,10 +361,16 @@ To remove Dex, delete all manifests:
 
 .. code:: shell
 
-    $ kubectl destroy -f addons/dex/
+    $ kubectl delete -f manifests/dex/
 
 Then delete all secrets:
 
 .. code:: shell
 
-    $ kubectl destroy secret dex.tls dex.root-ca gitlab-client
+    $ kubectl delete -n kube-system secret dex.tls dex.root-ca gitlab-client
+
+If you wish, you can remove the ``manifests/`` directory too:
+
+.. code:: shell
+
+    $ rm -rf manifests/

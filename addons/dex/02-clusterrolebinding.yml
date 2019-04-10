@@ -8,4 +8,5 @@ roleRef:
   name: cluster-admin
 subjects:
 - kind: User
+  # 1. Enter the Email you have used with your Identity Provider
   name: your-user-here
