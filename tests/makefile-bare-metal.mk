@@ -112,7 +112,7 @@ clean-masters:
 	for host in {1..3}; do openstack server delete $(CLUSTERNAME)-master-$${host} || echo "No server found " $(CLUSTERNAME)-master-$${host} ; done
 
 clean-nodes:
-	openstack server delete $(CLUSTERNAME)-node-1
+	openstack server delete $(CLUSTERNAME)-node-1 || exit 0
 
 clean-volumes-masters:
 	for host in {1..3}; do \
@@ -121,10 +121,9 @@ clean-volumes-masters:
 		openstack volume delete $(CLUSTERNAME)-root-master-$${host}; done
 
 clean-volumes-nodes:
-	openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep "No volume" || \
+	openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value || exit 0; \
 	until openstack volume show $(CLUSTERNAME)-root-node-1 -c status -f value | grep available; do sleep 2; done; \
 	openstack volume delete $(CLUSTERNAME)-root-node-1
-
 
 BUILD_TARGETS := create-volumes-masters create-volumes-nodes create-masters create-nodes create-loadbalancer config-loadbalancer
 build-cluster-bare-metal: $(BUILD_TARGETS)

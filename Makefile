@@ -34,8 +34,8 @@ PY ?= python3
 REV ?= HEAD
 BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
 REV_NUMBER = $(shell git rev-parse --short ${REV})
-CLUSTER_NAME = $(REV_NUMBER)$(BUILD_SUFFIX)
-KUBECONFIG ?= koris-pipe-line-$(CLUSTER_NAME)-admin.conf
+CLUSTER_NAME = koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
+KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
@@ -77,8 +77,15 @@ pylint: ## check style with pylint
 flake8: ## check style with flake8
 	flake8 koris tests
 
-test: ## run tests quickly with the default Python
+test: test-python test-bash
+
+test-python: ## run tests quickly with the default Python
+	@echo "Running Python Unit tests ..."
 	py.test
+
+test-bash:
+	@echo "Checking bash script syntax ..."
+	find koris/provision/userdata/ -name "*.sh" -print0 | xargs -0 -n1 bash -n
 
 coverage: ## check code coverage quickly with the default Python
 	$(PY) -m pytest -vv --cov .
@@ -126,6 +133,7 @@ integration-test: \
 	reset-config \
 	launch-cluster \
 	add-nodes \
+	add-master \
 	integration-run \
 	integration-wait \
 	integration-patch-wait \
@@ -150,7 +158,7 @@ launch-cluster: update-config
 
 add-nodes: FLAVOR ?= ECS.UC1.4-4
 add-nodes:
-	KUBECONFIG=${KUBECONFIG} koris add --amount 2 de-nbg6-1a $(FLAVOR) tests/koris_test.yml
+	KUBECONFIG=${KUBECONFIG} koris add --amount 2 --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the 2 nodes to join.
 	# assert cluster has now 5 nodes
 	echo "waiting for nodes to join"; \
@@ -159,6 +167,64 @@ add-nodes:
 		sleep 1; \
 	done
 	@echo "all nodes successfully joined!"
+
+add-master: FLAVOR ?= ECS.UC1.4-4
+add-master:
+	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
+	# wait for the master to join.
+	@echo "added master successfully!"
+	@mv tests/koris_test.updated.yml tests/koris_test.master.yml
+
+assert-masters: NUM ?= 4
+assert-masters:  ##
+	if [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; then echo "can't find $(NUM) masters"exit 1; else echo "all masters are fine"; fi
+
+assert-control-plane: NUM ?= 4
+assert-control-plane: \
+	assert-kube-apiservers \
+	assert-etcd \
+	assert-kube-controller-manager \
+	assert-kube-scheduler
+
+assert-kube-apiservers: NUM ?= 4
+assert-kube-apiservers:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="kube-apiserver-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-etcd: NUM ?= 4
+assert-etcd:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="etcd-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-kube-controller-manager: NUM ?= 4
+assert-kube-controller-manager:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="kube-controller-manager-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-kube-scheduler: NUM ?= 4
+assert-kube-scheduler:
+	NUM=$(NUM) \
+	NAMESPACE="kube-system" \
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	POD_NAME="kube-scheduler-master" \
+	./tests/scripts/assert_pod.sh
+
+assert-members: NUM ?= 4
+assert-members:
+	./tests/scripts/assert_members.sh $(NUM) $(CLUSTER_NAME)
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."
@@ -202,7 +268,7 @@ integration-patch:
 		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
-	@kubectl kubectl delete svc nginx-deployment 2>/dev/null || echo "No such service"
+	@kubectl --kubeconfig=${KUBECONFIG} delete svc nginx-deployment 2>/dev/null || echo "No such service"
 	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
 
 
@@ -276,7 +342,7 @@ security-checks-nodes:
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-[[:digit:]]' | head -n 1)
 update-config:
-	@sed -i "s/%%CLUSTER_NAME%%/koris-pipe-line-$(CLUSTER_NAME)/g" tests/koris_test.yml
+	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" tests/koris_test.yml
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" tests/koris_test.yml
 	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
 	@cat tests/koris_test.yml
@@ -287,13 +353,16 @@ clean-cluster: update-config
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
 		mv -v tests/koris_test.updated.yml tests/koris_test.yml; \
+		if [ -r tests/koris_test.master.yml ]; then \
+			sed -i 's/n-masters:\ 3/n-masters:\ 4/' tests/koris_test.yml; \
+		fi; \
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
 	@koris destroy tests/koris_test.yml --force
 	@git checkout tests/koris_test.yml
 	@rm -fv ${KUBECONFIG}
-	@rm -vfR certs-koris-pipe-line-${CLUSTER_NAME}
+	@rm -vfR certs-${CLUSTER_NAME}
 
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)

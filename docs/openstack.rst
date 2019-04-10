@@ -54,7 +54,7 @@ Prepare OpenStack
 
 .. _usage_deploy_cluster:
 
-Deploy your cluster
+deploy your cluster
 ~~~~~~~~~~~~~~~~~~~
 
 1. Before you can run ``koris``, source your RC file. Then enter your password:

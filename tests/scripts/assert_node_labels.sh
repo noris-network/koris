@@ -1,9 +1,9 @@
 #!/bin/bash
 # Might take up to 5 minutes before node is launched and configured
 
-for i in {1..10} 
+for i in {1..10}
 do
-    kubectl describe nodes --kubeconfig=${KUBECONFIG} node-${NUM}-koris-pipe-line-${CLUSTER_NAME} | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
+    kubectl describe nodes --kubeconfig=${KUBECONFIG} node-${NUM}-${CLUSTER_NAME} | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
     if [ $? -eq 0 ]; then
         echo "OK"
         exit 0
