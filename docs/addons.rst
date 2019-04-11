@@ -216,8 +216,8 @@ create a local copy from the template files:
 
 .. code:: shell
 
-    $ mkdir -p manifests/
-    $ cp -r addons/dex manifests
+    $ mkdir -p manifests/dex
+    $ cp -r addons/dex manifests/dex
 
 With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We go through the numbered comments in order:
 
@@ -245,7 +245,7 @@ With the manifest present, we can deploy Dex into the cluster:
 
 .. code:: shell
 
-    $ kubectl create -f addons/00-dex.yaml
+    $ kubectl create -f manifests/dex/00-dex.yaml
 
 We should verify everything is running as intended:
 
@@ -274,7 +274,7 @@ Now deploy it:
 
 .. code:: shell
 
-    $ kubectl create -f addons/dex/01-example-app.yml
+    $ kubectl create -f manifests/dex/01-example-app.yml
 
 And finally, let's check for existance:
 
@@ -308,11 +308,11 @@ confirm the exception:
 .. image:: static/_imgs/dex_use_02.png
 
 You will be greeted by the Dex welcome, which lets you authenticate with the identity providers we have
-specified in our ``00-dex.yaml``. Click on **Login with Gitlab**:
+specified in our ``manifests/dex/00-dex.yaml``. Click on **Login with Gitlab**:
 
 .. image:: static/_imgs/dex_use_03.png
 
-This will redirect to the Gitlab URL entered in ``00-dex.yaml``. Now click **Authorize**:
+This will redirect to the Gitlab URL entered in ``manifests/dex/00-dex.yaml``. Now click **Authorize**:
 
 .. image:: static/_imgs/dex_use_04.png
 
@@ -342,7 +342,7 @@ Then deploy it into the cluster:
 
 .. code:: shell
 
-    $ kubectl create -f addons/dex/02-clusterrolebinding.yml
+    $ kubectl create -f manifests/dex/02-clusterrolebinding.yml
 
 Now send the request again:
 
@@ -369,8 +369,8 @@ Then delete all secrets:
 
     $ kubectl delete -n kube-system secret dex.tls dex.root-ca gitlab-client
 
-If you wish, you can remove the ``manifests/`` directory too:
+If you wish, you can remove the ``manifests/dex`` directory too:
 
 .. code:: shell
 
-    $ rm -rf manifests/
+    $ rm -rf manifests/dex
