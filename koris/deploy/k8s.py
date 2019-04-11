@@ -435,10 +435,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         cmd = ("kubectl exec -it %s -n kube-system "
                "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
-               "--endpoints=https://%s:2379 member list -w json\" "
+               "--endpoints=https://%s:2379 member list -w json "
                "| jq -r -M --compact-output '[.members | .[] | "
-               ".name + \"=\" + .peerURLs[0]] | join(\",\")'" % (podname,
-                                                                 master_ip))
+               ".name + \"=\" + .peerURLs[0]] | join(\",\")'\"" % (podname,
+                                                                   master_ip))
 
         kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
         stdout, stderr = kctl.communicate()
