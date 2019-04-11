@@ -2,7 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from koris.cloud.openstack import (OSNetwork, get_connection, LoadBalancer)
+from koris.cloud.openstack import (OSNetwork, get_connection, LoadBalancer,
+                                   distribute_host_zones)
 from koris.cloud import OpenStackAPI
 from .testdata import (CONFIG, default_data, mock_listener,
                        mock_pool, mock_member, mock_pool_info)
@@ -349,3 +350,23 @@ def test_master_multiple_members(get_os):
     for i in range(len(mpi['members'])):
             assert master_listener['pool']['members'][i]['address'] == mpi['members'][i]['address'] # noqa
             assert master_listener['pool']['members'][i]['id'] == mpi['members'][i]['id']
+
+
+def test_distribute_host_zones():
+
+    assert distribute_host_zones(['foo', 'bar'], ['a', 'b']) == [
+        (('foo',), 'a'), (('bar',), 'b')]
+
+    assert distribute_host_zones(["foo", "bar"], ["a", "b"]) == [
+        (('foo',), 'a'), (('bar',), 'b')]
+
+    assert distribute_host_zones(["foo", "bar", "baz"], ["a", "b"]) == [
+        (['foo', 'baz'], 'a'), (['bar'], 'b')]
+
+    assert distribute_host_zones(["foo", "bar", "baz"], ["a", "b", "c"]) == [
+        (('foo',), 'a'), (('bar',), 'b'), (('baz',), 'c')]
+
+    # 2 hosts in each on 3 zones
+    assert distribute_host_zones(["foo", "bar", "baz", "bug", "buz", "does"],
+                                 ["a", "b", "c"]) == [
+        (['foo', 'bug'], 'a'), (['bar', 'buz'], 'b'), (['baz', 'does'], 'c')]
