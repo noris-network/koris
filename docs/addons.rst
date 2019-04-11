@@ -209,7 +209,7 @@ create a local copy from the template files:
 .. code:: shell
 
     $ mkdir -p manifests/dex
-    $ cp -r addons/dex manifests/dex
+    $ cp -r addons/dex/* manifests/dex
 
 With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We go through the numbered comments in order:
 
