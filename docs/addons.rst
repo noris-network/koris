@@ -211,7 +211,7 @@ Then we can deploy it as a secret:
         --namespace=kube-system
 
 Afterwards we can create the deployments for Dex and the client application. All files are located in
-``addons/dex`` and include numbered comments that refer to this tutorial. Before we edit those, Before, let's
+``addons/dex`` and include numbered comments that refer to this tutorial. Before we edit those, let's
 create a local copy from the template files:
 
 .. code:: shell
@@ -233,12 +233,12 @@ With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We g
 
     # ...
 
-    # 1.3 he URL Gitlab redirects to. Substitute with with your Floating IP
+    # 1.3 The Authenticator URL (e.g. Gitlab) redirects back to dex. Substitute with with your Floating IP
     redirectURI: https://%%FLOATING_IP%%:32000/callback
 
     # ...
 
-    # 1.4 The URL where Dex redirects to. Substitute with with your Floating IP
+    # 1.4 The Application URL (e.g. sample-app) where dex redirects to. Substitute with with your Floating IP
     - 'http://%%FLOATING_IP%%:5555/callback'
 
 With the manifest present, we can deploy Dex into the cluster:
