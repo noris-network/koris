@@ -236,7 +236,7 @@ function add_master_script_config_map() {
       typeset -f get_kubeadm;
       # shellcheck disable=SC2034
       typeset -f add_master;
-      echo "if [ -n \${DEBUGADDMASTER} ]; then set -x; fi"
+      echo "if [ ! -z \${DEBUGADDMASTER} ]; then set -x; fi"
       echo "mkdir -p /etch/kubernetes/"
       echo "touch /etc/kubernetes/koris.env"
       echo "HOST_NAME=\$1";
