@@ -237,7 +237,12 @@ class LoadBalancer:
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
-        self.subnet = config.get('private_net')['subnet'].get('name', '')
+
+        try:
+            self.subnet = config.get('private_net')['subnet'].get('name', self.name)
+        except KeyError:
+            self.subnet = self.name
+
         # these attributes are set after creation
         self._id = None
         self._subnet_id = None
