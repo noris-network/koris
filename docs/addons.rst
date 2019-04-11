@@ -192,22 +192,14 @@ We take those certificates, and deploy them as secrets into our cluster:
         --from-file=certs-test-dex/dex-ca.pem \
         --namespace=kube-system
 
-Next we have to deploy the *Application ID* and *Secret* from Gitlab as Kubernetes secrets too. For easier copying,
-we can export them as environment variables first. **Make sure to substitute
+Next we have to deploy the *Application ID* and *Secret* from Gitlab as Kubernetes secrets too, but **make sure to substitute
 the placeholders below with your own**:
 
 .. code:: shell
 
-    $ export APP_ID="%%APP_ID%%"
-    $ export APP_SECRET="%%APP_SECRET%%"
-
-Then we can deploy it as a secret:
-
-.. code:: shell
-
     $ kubectl create secret generic gitlab-client \
-        --from-literal=client-id=$APP_ID \
-        --from-literal=client-secret=$APP_SECRET \
+        --from-literal=client-id="%%APP_ID%%" \
+        --from-literal=client-secret="%%APP_SECRET%%" \
         --namespace=kube-system
 
 Afterwards we can create the deployments for Dex and the client application. All files are located in
@@ -241,11 +233,11 @@ With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We g
     # 1.4 The Application URL (e.g. sample-app) where dex redirects to. Substitute with with your Floating IP
     - 'http://%%FLOATING_IP%%:5555/callback'
 
-With the manifest present, we can deploy Dex into the cluster:
+With the manifest present, we can apply Dex into the cluster:
 
 .. code:: shell
 
-    $ kubectl create -f manifests/dex/00-dex.yaml
+    $ kubectl create -f manifests/dex/00-dex.yml
 
 We should verify everything is running as intended:
 
