@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import random
+import re
 import socket
 import string
 import subprocess as sp
@@ -18,6 +19,8 @@ import urllib3
 from pkg_resources import resource_filename, Requirement
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
+from kubernetes.stream import stream
+import yaml
 
 from koris.ssl import read_cert, discovery_hash
 from koris.util.util import get_logger, retry
@@ -411,9 +414,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         return False
 
-    @staticmethod
     @retry(ValueError)
-    def etcd_cluster_status(podname, master_ip):
+    def etcd_cluster_status(self, podname, master_ip):
         """Checks the current etcd cluster state.
 
         This function calls etcdctl inside a pod in order to obtain the
@@ -431,30 +433,28 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         Returns:
             The status of the etcd as a string
             (e.g.master-1=192.168.1.102,master-2=192.168.1.103)
-            """
+        """
+        exec_command = [
+            '/bin/sh', '-c',
+            ("ETCDCTL_API=3 etcdctl --endpoints=https://%s:2379 member list"
+             " -w json") % master_ip]  # noqa
 
-        cmd = ("kubectl exec -it %s -n kube-system "
-               "-- /bin/sh -c \"ETCDCTL_API=3 etcdctl "
-               "--endpoints=https://%s:2379 member list -w json\" "
-               "| jq -r -M --compact-output '[.members | .[] | "
-               ".name + \"=\" + .peerURLs[0]] | join(\",\")'" % (podname,
-                                                                 master_ip))
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
 
-        kctl = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        stdout, stderr = kctl.communicate()
-
-        if kctl.returncode:
-            LOGGER.info(stderr)
-            LOGGER.info(stdout)
+        if not response or not re.search("master-\\d+", response):
+            LOGGER.info(response)
             raise ValueError("Could not extract current etcd cluster state!")
-
-        lines = stdout.decode().strip().splitlines()
-        if not lines:
-            LOGGER.error("etcd cluster state in unexcepted format %s", lines)
-            LOGGER.error(stderr)
-            raise ValueError
-
-        etcd_cluster = lines[0]
+        # respone should be something like
+        # {'members': [{'ID': 9007573287841766007, 'name': 'master-7-am',
+        #  'peerURLs': ['https://10.32.192.11:2380'],
+        #  'clientURLs': ['https://10.32.192.11:2379']}]}
+        response = yaml.load(response)
+        etcd_cluster = ",".join(("=".join((m['name'], m['peerURLs'][0])) for m
+                                 in response['members']))
         LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
 
         return etcd_cluster
