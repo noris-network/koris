@@ -245,11 +245,17 @@ We should verify everything is running as intended:
 
     $ kubectl get all -n kube-system -l k8s-app=dex
 
-    NAME          TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
-    service/dex   NodePort   10.99.212.63   <none>        5556:32000/TCP   86s
+    NAME                       READY   STATUS    RESTARTS   AGE
+    pod/dex-865d78889b-h5tgt   1/1     Running   1          11s
+
+    NAME          TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+    service/dex   NodePort   10.102.34.166   <none>        5556:32000/TCP   12s
 
     NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-    deployment.apps/dex   1         1         1            1           86s
+    deployment.apps/dex   1         1         1            1           12s
+
+    NAME                             DESIRED   CURRENT   READY   AGE
+    replicaset.apps/dex-865d78889b   1         1         1       12s
 
 Next we can edit the example-app in ``manifests/dex/01-example-app.yml``. Again, **substitute the Floating IP values
 accordingly**:
@@ -274,19 +280,21 @@ And finally, let's check for existance:
 
     $ kubectl get all -n kube-system -l k8s-app=dex
 
-    NAME                                   READY   STATUS    RESTARTS   AGE
-    pod/dex-example-app-678b6db4b4-clnqb   1/1     Running   0          84s
+    NAME                                  READY   STATUS             RESTARTS   AGE
+    pod/dex-865d78889b-h5tgt              1/1     Running            1          2m39s
+    pod/dex-example-app-9b7599c96-cbb5f   1/1     Running            1          16s
 
     NAME                      TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
-    service/dex               NodePort   10.111.47.219    <none>        5556:32000/TCP   7m29s
-    service/dex-example-app   NodePort   10.108.248.239   <none>        5555:32555/TCP   84s
+    service/dex               NodePort   10.102.34.166    <none>        5556:32000/TCP   2m40s
+    service/dex-example-app   NodePort   10.104.117.128   <none>        5555:32555/TCP   16s
 
     NAME                              DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-    deployment.apps/dex               1         1         1            1           7m29s
-    deployment.apps/dex-example-app   1         1         1            1           84s
+    deployment.apps/dex               1         1         1            1           2m40s
+    deployment.apps/dex-example-app   1         1         1            1           16s
 
-    NAME                                         DESIRED   CURRENT   READY   AGE
-    replicaset.apps/dex-example-app-678b6db4b4   1         1         1       84s
+    NAME                                        DESIRED   CURRENT   READY   AGE
+    replicaset.apps/dex-865d78889b              1         1         1       2m40s
+    replicaset.apps/dex-example-app-9b7599c96   1         1         1       16s
 
 
 Afterwards, open your browser and head to ``http://%%FLOATING_IP%%:5555``:
