@@ -3,6 +3,11 @@ ifndef VER
 	$(error VER is undefined)
 endif
 
+check-api-key:
+ifndef ACCESS_TOKEN
+	$(error ACCESS_TOKEN is undefined)
+endif
+
 start-release: check-env
 	@echo "checking out branch prepare_"$(VER)
 	@git checkout -b prepare_$(VER)
@@ -17,18 +22,20 @@ do-bump: check-env
 	echo $(NVER)
 	sed -i "s/[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/$(NVER)/g" koris/__init__.py
 
-do-release: do-bump
+do-release: do-bump check-api-key
 	git add koris/__init__.py
 	git commit -m "Bump version to $(VER)"
 	git checkout master
 	git merge prepare_$(VER) --ff
 	git tag -f -s $(VER) -F TAGMESSAGE
+	python3 tests/scripts/protect-un-protect.py
 
-finish-release:
+finish-release: check-env check-api-key
 	git checkout dev
-	git branch --delete prepare_$(VER)
+	git branch -D prepare_$(VER)
 	git merge --ff master
 	git rebase
 	rm -f TAGMESSAGE
+	python3 tests/scripts/protect-un-protect.py
 
 # vim: tabstop=4 shiftwidth=4

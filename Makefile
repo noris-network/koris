@@ -398,6 +398,7 @@ start-release:
 do-release:
 	make -f release.mk do-release
 
-
+finish-release:
+	make -f release.mk finish-release
 # vim: tabstop=4 shiftwidth=4
 #
