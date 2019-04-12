@@ -2,11 +2,14 @@
 Addons
 ======
 
+.. _dex_docs:
+
 Dex
 ---
 
 .. note::
-  This feature is currently in beta; your mileage may vary and documentation is expected to change.
+  This feature is currently in beta; your mileage may vary and documentation is expected to change. Also
+  :ref:`add_master_nodes` is currently not supported with Dex.
 
 `Dex <https://github.com/dexidp/dex>`_ is an identity service that uses
 `OpenID Connect <https://openid.net/connect/>`_ to drive authentication for other apps. It can

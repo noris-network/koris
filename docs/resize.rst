@@ -88,6 +88,8 @@ Notice that, kubernetes can tolerate different versions in the cluster.
 We use this to update the claster in the manner of replacing old nodes
 with new ones.
 
+.. _add_master_nodes:
+
 Adding master nodes
 ~~~~~~~~~~~~~~~~~~~
 
@@ -142,6 +144,12 @@ A couple of minutes later, the new master will become ready:
    node-1-am     Ready    <none>   28m     v1.12.5
    node-2-am     Ready    <none>   12m     v1.12.7
    node-3-am     Ready    <none>   12m     v1.12.7
+
+.. note::
+
+   In the current version of koris, the **add-master feature does not work with** :ref:`dex_docs`. This means that if you adding
+   additional masters with a config that contains a Dex configuration block, the kube-apiserver pod launched on the new
+   master will not be properly configured to use Dex and may even fail to launch.
 
 What happens under the hood
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
