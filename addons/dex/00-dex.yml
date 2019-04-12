@@ -111,7 +111,7 @@ spec:
     targetPort: 5556
     nodePort: 32000
   selector:
-    app: dex
+    k8s-app: dex
 ---
 apiVersion: v1
 kind: ServiceAccount

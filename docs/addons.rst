@@ -60,14 +60,14 @@ Dex, set up a *Application ID* and *Secret* on Gitlab:
 1. Go to your **Gitlab User Settings** and click on **Applications**
 2. Create a new Application with the following parameters:
 
-============  ====================================
+============  ==========================================
 Parameter     Value
-============  ====================================
+============  ==========================================
 Name          dex
-Redirect URI  ``https://%%FLOATING_IP%%/callback``
+Redirect URI  ``https://%%FLOATING_IP%%:32000/callback``
 read_user     set
 openid        set
-============  ====================================
+============  ==========================================
 
 Example:
 
@@ -195,11 +195,11 @@ We take those certificates, and deploy them as secrets into our cluster:
 Next we have to deploy the *Application ID* and *Secret* from Gitlab as Kubernetes secrets too, but **make sure to substitute
 the placeholders below with your own**:
 
-.. code:: shell
+.. code::
 
     $ kubectl create secret generic gitlab-client \
-        --from-literal=client-id="%%APP_ID%%" \
-        --from-literal=client-secret="%%APP_SECRET%%" \
+        --from-literal=client-id=%%APP_ID%% \
+        --from-literal=client-secret=%%APP_SECRET%% \
         --namespace=kube-system
 
 Afterwards we can create the deployments for Dex and the client application. All files are located in
@@ -225,12 +225,12 @@ With local copies presents, let's edit ``manifests/dex/00-dex.yaml`` first. We g
 
     # ...
 
-    # 1.3 The Authenticator URL (e.g. Gitlab) redirects back to dex. Substitute with with your Floating IP
+    # 1.3 The URL Gitlab redirects to. Substitute with with your Floating IP
     redirectURI: https://%%FLOATING_IP%%:32000/callback
 
     # ...
 
-    # 1.4 The Application URL (e.g. sample-app) where dex redirects to. Substitute with with your Floating IP
+    # 1.4 The URL Dex redirects to. Substitute with with your Floating IP
     - 'http://%%FLOATING_IP%%:5555/callback'
 
 With the manifest present, we can apply Dex into the cluster:
