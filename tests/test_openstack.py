@@ -1,3 +1,5 @@
+import copy
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -347,5 +349,18 @@ def test_master_multiple_members(get_os):
     assert master_listener['pool']['name'] == MASTER_POOL_NAME
 
     for i in range(len(mpi['members'])):
-            assert master_listener['pool']['members'][i]['address'] == mpi['members'][i]['address'] # noqa
-            assert master_listener['pool']['members'][i]['id'] == mpi['members'][i]['id']
+        assert master_listener['pool']['members'][i]['address'] == mpi['members'][i]['address'] # noqa
+        assert master_listener['pool']['members'][i]['id'] == mpi['members'][i]['id']
+
+
+def test_loadbalancer_with_invalid_subnet():
+    lb = LoadBalancer(CONFIG, MagicMock())
+    assert lb.subnet == CONFIG['private_net']['subnet']['name']
+
+    config = copy.deepcopy(CONFIG)
+    del config['private_net']
+    print(config)
+    lb = LoadBalancer(config, MagicMock())
+
+    assert lb
+    assert lb.subnet == lb.name

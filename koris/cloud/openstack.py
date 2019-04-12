@@ -240,7 +240,7 @@ class LoadBalancer:
 
         try:
             self.subnet = config.get('private_net')['subnet'].get('name', self.name)
-        except KeyError:
+        except (KeyError, TypeError):
             self.subnet = self.name
 
         # these attributes are set after creation
