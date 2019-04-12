@@ -391,4 +391,7 @@ build-exec: ## build a single file executable of koris
 
 build-exec-in-docker:
 	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
+
+start-release:
+	make -f release.mk start-release
 # vim: tabstop=4 shiftwidth=4
