@@ -394,4 +394,10 @@ build-exec-in-docker:
 
 start-release:
 	make -f release.mk start-release
+
+do-release:
+	make -f release.mk do-release
+
+
 # vim: tabstop=4 shiftwidth=4
+#
