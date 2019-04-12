@@ -1,3 +1,5 @@
+import copy
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -370,3 +372,16 @@ def test_distribute_host_zones():
     assert distribute_host_zones(["foo", "bar", "baz", "bug", "buz", "does"],
                                  ["a", "b", "c"]) == [
         (['foo', 'bug'], 'a'), (['bar', 'buz'], 'b'), (['baz', 'does'], 'c')]
+
+
+def test_loadbalancer_with_invalid_subnet():
+    lb = LoadBalancer(CONFIG, MagicMock())
+    assert lb.subnet == CONFIG['private_net']['subnet']['name']
+
+    config = copy.deepcopy(CONFIG)
+    del config['private_net']
+    print(config)
+    lb = LoadBalancer(config, MagicMock())
+
+    assert lb
+    assert lb.subnet == lb.name
