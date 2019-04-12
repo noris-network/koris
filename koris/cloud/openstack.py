@@ -237,7 +237,12 @@ class LoadBalancer:
         if not self.floatingip:
             LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
         self.name = "%s-lb" % config['cluster-name']
-        self.subnet = config.get('private_net')['subnet'].get('name')
+
+        try:
+            self.subnet = config.get('private_net')['subnet'].get('name', self.name)
+        except (KeyError, TypeError):
+            self.subnet = self.name
+
         # these attributes are set after creation
         self._id = None
         self._subnet_id = None
@@ -1074,6 +1079,7 @@ def distribute_host_zones(hosts, zones):
     """
 
     if len(zones) == len(hosts):
+        hosts = [(i, ) for i in hosts]
         return list(zip(hosts, zones))
 
     hosts = [hosts[start::len(zones)] for start in range(len(zones))]
