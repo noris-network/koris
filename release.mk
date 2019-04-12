@@ -29,13 +29,17 @@ do-release: do-bump check-api-key
 	git merge prepare_$(VER) --ff
 	git tag -f -s $(VER) -F TAGMESSAGE
 	python3 tests/scripts/protect-un-protect.py master
+	git push origin master --tags
+	python3 tests/scripts/protect-un-protect.py master
 
 finish-release: check-env check-api-key
 	git checkout dev
 	git branch -D prepare_$(VER)
 	git merge --ff master
-	git rebase
 	rm -f TAGMESSAGE
+	git pull --rebase
+	python3 tests/scripts/protect-un-protect.py dev
+	git push origin dev
 	python3 tests/scripts/protect-un-protect.py dev
 
 # vim: tabstop=4 shiftwidth=4

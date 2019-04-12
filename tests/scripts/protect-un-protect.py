@@ -18,13 +18,14 @@ def main():
                        private_token=os.getenv("ACCESS_TOKEN"))
 
     project = gl.projects.get(os.getenv("CI_PROJECT_ID", 1260))
-
     branch = project.branches.get(sys.argv[1])
 
     if branch.attributes['protected']:
         branch.unprotect()
+        print("Successfully removed protection of %s" % sys.argv[1])
     else:
         branch.protect()
+        print("Successfully restored protection of %s" % sys.argv[1])
 
 
 if __name__ == "__main__":
