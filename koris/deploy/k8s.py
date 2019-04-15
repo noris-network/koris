@@ -337,8 +337,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             raise ValueError("Could execute the adder script in the adder pod!")
 
     def bootstrap_master(self, new_master_name, new_master_ip):
-        """
-        Run the steps required to bootstrap a new master.
+        """Run the steps required to bootstrap a new master.
+
         These are:
             1. Find all existing masters
             2. Get the hostname and the IP address of one
@@ -346,6 +346,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             4. Runs the add-master-script.
 
         Steps 3 and 4 are done in run_add_script.
+
+        Args:
+            new_master_name (str): Name of the new master
+            new_master_ip (str): IP of the new master.
         """
         nodes = self.api.list_node(pretty=True)
         nodes = [node for node in nodes.items if
