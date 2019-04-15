@@ -357,6 +357,16 @@ Now send the request again:
         "apiVersion": "v1",
     # ...
 
+Alternatively, the token can be passed directly to ``kubectl``:
+
+.. code:: shell
+
+    $ kubectl --token=$token get nodes
+    {
+        "kind": "NodeList",
+        "apiVersion": "v1",
+    # ...
+
 Cleanup
 ^^^^^^^
 
