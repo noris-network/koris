@@ -75,11 +75,14 @@ build-cluster:
   - "pip3 install -q -e ."
   - make launch-cluster
   - make show-nodes
+  - "make coverage"
+  - "make rename-coverage NAME=\"build-cluster\""
   artifacts:
     paths:
       - "certs-*"
       - "*-admin.conf"
       - "tests/koris_test.yml"
+      - ".coverage.build-cluster"
     expire_in: 1 week
   except:
     variables:
@@ -97,9 +100,12 @@ add-nodes:
   - "make add-nodes"
   - "make assert-node-labels NUM=4"
   - "make assert-node-labels NUM=5"
+  - "make coverage"
+  - "make rename-coverage NAME=\"add-nodes\""
   artifacts:
     paths:
       - "tests/koris_test.updated.yml"
+      - ".coverage.add-nodes"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
