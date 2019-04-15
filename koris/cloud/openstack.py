@@ -13,17 +13,14 @@ import textwrap
 from functools import lru_cache
 
 from netaddr import IPNetwork, valid_ipv4, valid_ipv6
-import novaclient
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound, NoUniqueMatch)  # noqa
-
-import cinderclient
 from cinderclient import client as cclient
 from neutronclient.v2_0 import client as ntclient
-from neutronclient.common.exceptions import Conflict as NeutronConflict
-from neutronclient.common.exceptions import StateInvalidClient
-from neutronclient.common.exceptions import NotFound
-from neutronclient.common.exceptions import BadRequest
+
+from neutronclient.common.exceptions import (Conflict as NeutronConflict,
+                                             StateInvalidClient, NotFound,
+                                             BadRequest)
 
 from openstack.exceptions import ConflictException as OSConflict
 from openstack.exceptions import ResourceNotFound as OSNotFound
@@ -38,19 +35,55 @@ from koris.util.util import (get_logger, host_names,
                              retry)
 from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
+
 LOGGER = get_logger(__name__, level=logging.DEBUG)
+
+
+# OpenStack clients. Initialized at time of calling get_clients. You should not
+# use these directly bur rather call get_clients to ensure those variables
+# get initialized correctly.
+NOVA, NEUTRON, CINDER = None, None, None
+
+
+# pylint: disable=redefined-outer-name, global-statement
+def get_clients():
+    """
+    get openstack low level clients
+
+    This should be replaced in the future with ``openstack.connect``
+    """
+    global NOVA, NEUTRON, CINDER
+    if(not NOVA or not NEUTRON or not CINDER):
+        # at least one client has not already been initialized
+        try:
+            auth = identity.Password(**read_os_auth_variables())
+            sess = session.Session(auth=auth)
+            NOVA = nvclient.Client('2.1', session=sess)
+            NEUTRON = ntclient.Client(session=sess)
+            CINDER = cclient.Client('3.0', session=sess)
+
+        except TypeError:
+            print(red("Did you source your OS rc file in v3?"))
+            print(red("If your file has the key OS_ENDPOINT_TYPE it's the"
+                      " wrong one!"))
+            sys.exit(1)
+        except KeyError:
+            print(red("Did you source your OS rc file?"))
+            sys.exit(1)
+    return NOVA, NEUTRON, CINDER
+
 
 if getattr(sys, 'frozen', False):  # pragma: nocoverage
     def monkey_patch():
         """monkey patch get available versions, because the original
         code uses __file__ which is not available in frozen build"""
         return ['2', '1']
-    novaclient.api_versions.get_available_major_versions = monkey_patch
+    nvclient.api_versions.get_available_major_versions = monkey_patch
 
     def monkey_patch_cider():
         """the same spiel for cinder"""
         return ['3']
-    cinderclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
+    cclient.api_versions.get_available_major_versions = monkey_patch_cider  # noqa
 
 
 def get_connection():
@@ -813,30 +846,6 @@ def read_os_auth_variables(trim=True):
         list(env.pop(i) for i in not_in_default_rc if i in env)
 
     return env
-
-
-def get_clients():
-    """
-    get openstack low level clients
-
-    This should be replaced in the future with ``openstack.connect``
-    """
-    try:
-        auth = identity.Password(**read_os_auth_variables())
-        sess = session.Session(auth=auth)
-        nova = nvclient.Client('2.1', session=sess)
-        neutron = ntclient.Client(session=sess)
-        cinder = cclient.Client('3.0', session=sess)
-    except TypeError:
-        print(red("Did you source your OS rc file in v3?"))
-        print(red("If your file has the key OS_ENDPOINT_TYPE it's the"
-                  " wrong one!"))
-        sys.exit(1)
-    except KeyError:
-        print(red("Did you source your OS rc file?"))
-        sys.exit(1)
-
-    return nova, neutron, cinder
 
 
 class OSNetwork:  # pylint: disable=too-few-public-methods

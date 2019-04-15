@@ -20,7 +20,7 @@ import yaml
 
 from mach import mach1
 
-from koris.cloud.openstack import get_clients, OSCloudConfig
+from koris.cloud.openstack import OSCloudConfig
 from koris.cloud.openstack import BuilderError, InstanceExists
 from koris.util.util import KorisVersionCheck
 
@@ -32,7 +32,8 @@ from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
-from .cloud.openstack import OSClusterInfo, get_connection, LoadBalancer
+from .cloud.openstack import (OSClusterInfo, get_connection, LoadBalancer,
+                              get_clients)
 
 # pylint: disable=protected-access
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -102,11 +103,6 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
     and descides which action shoud be taken
     """
     def __init__(self):
-
-        nova, neutron, cinder = get_clients()
-        self.nova = nova
-        self.neutron = neutron
-        self.cinder = cinder
         self.parser.add_argument(  # pylint: disable=no-member
             "--version", action="store_true",
             help="show version and exit",
@@ -131,6 +127,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
+        nova, neutron, cinder = get_clients()
+
         builder = ClusterBuilder(config)
         try:
             builder.run(config)
@@ -139,7 +137,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         except BuilderError as err:
             print(red("Error encoutered ... "))
             print(red(err))
-            delete_cluster(config, self.nova, self.neutron, self.cinder,
+            delete_cluster(config, nova, neutron, cinder,
                            True)
 
     def destroy(self, config: str, force: bool = False):
@@ -149,11 +147,13 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
+        nova, neutron, cinder = get_clients()
+
         print(red(
             "You are about to destroy your cluster '{}'!!!".format(
                 config['cluster-name'])))
 
-        delete_cluster(config, self.nova, self.neutron, self.cinder, force)
+        delete_cluster(config, nova, neutron, cinder, force)
         certs_location = 'certs-' + config['cluster-name']
         try:
             shutil.rmtree(certs_location)
@@ -201,16 +201,18 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         with open(config, 'r') as stream:
             config_dict = yaml.safe_load(stream)
 
+        nova, neutron, cinder = get_clients()
+
         k8s = K8S(os.getenv("KUBECONFIG"))
-        os_cluster_info = OSClusterInfo(self.nova, self.neutron, self.cinder,
+        os_cluster_info = OSClusterInfo(nova, neutron, cinder,
                                         config_dict)
         k8s.validate_context(os_cluster_info.conn)
 
         try:
-            subnet = self.neutron.find_resource(
+            subnet = neutron.find_resource(
                 'subnet', config_dict['private_net']['subnet']['name'])
         except KeyError:
-            subnet = self.neutron.list_subnets()['subnets'][-1]
+            subnet = neutron.list_subnets()['subnets'][-1]
 
         cloud_config = OSCloudConfig(subnet['id'])
         if role == 'node':

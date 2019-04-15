@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from koris.cloud.openstack import (OSNetwork, get_connection, LoadBalancer,
-                                   distribute_host_zones)
+                                   distribute_host_zones, get_clients)
 from koris.cloud import OpenStackAPI
 from .testdata import (CONFIG, default_data, mock_listener,
                        mock_pool, mock_member, mock_pool_info)
@@ -75,6 +75,8 @@ def test_fallback_networks():
 
 def test_get_connection():
     # All good
+    # called in order to try to load the Opentack client
+    get_clients()
     conn = get_connection()
     assert conn
 

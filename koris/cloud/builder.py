@@ -26,14 +26,11 @@ from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
 from koris.util.util import get_logger
 from koris.ssl import b64_cert, b64_key
 from .openstack import OSClusterInfo, InstanceExists
-from .openstack import (get_clients, Instance,
-                        OSCloudConfig, LoadBalancer, get_connection,
-                        )
+from .openstack import (Instance, OSCloudConfig, LoadBalancer, get_connection,
+                        get_clients)
 
 
 LOGGER = get_logger(__name__)
-
-NOVA, NEUTRON, CINDER = get_clients()
 
 
 def get_server_range(servers, cluster_name, role, amount):
@@ -352,7 +349,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             print(red("You must have an odd number (>=1) of masters!"))
             sys.exit(2)
 
-        self.info = OSClusterInfo(NOVA, NEUTRON, CINDER, config)
+        self.nova, self.neutron, self.cinder = get_clients()
+        self.info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
         LOGGER.debug(info("Done collecting information from OpenStack"))
 
         self.nodes_builder = NodeBuilder(config, self.info)
@@ -428,10 +426,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         self.info.secgroup.configure()
 
         try:
-            subnet = NEUTRON.find_resource(
+            subnet = self.neutron.find_resource(
                 'subnet', config['private_net']['subnet']['name'])
         except KeyError:
-            subnet = NEUTRON.list_subnets()['subnets'][-1]
+            subnet = self.neutron.list_subnets()['subnets'][-1]
             config['private_net']['subnet'] = subnet
 
         cloud_config = OSCloudConfig(subnet['id'])
