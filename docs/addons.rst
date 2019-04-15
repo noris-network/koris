@@ -362,10 +362,14 @@ Alternatively, the token can be passed directly to ``kubectl``:
 .. code:: shell
 
     $ kubectl --token=$token get nodes
-    {
-        "kind": "NodeList",
-        "apiVersion": "v1",
-    # ...
+    NAME                STATUS   ROLES    AGE     VERSION
+    master-1-test-dex   Ready    master   6h19m   v1.12.7
+    master-2-test-dex   Ready    master   6h14m   v1.12.7
+    master-3-test-dex   Ready    master   6h17m   v1.12.7
+    node-1-test-dex     Ready    <none>   6h17m   v1.12.7
+    node-2-test-dex     Ready    <none>   6h17m   v1.12.7
+    node-3-test-dex     Ready    <none>   6h17m   v1.12.7
+
 
 Cleanup
 ^^^^^^^
