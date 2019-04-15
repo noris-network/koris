@@ -266,6 +266,14 @@ def main():
     run and execute koris
     """
     k = Koris()
+
+    # Display a little information message, at the koris --help page.
+    # pylint: disable=no-member
+    k.parser.description = 'Before any koris command can be run, an '\
+                           'OpenStack RC file has to be sourced in the '\
+                           'shell. See online documentation for more '\
+                           'information.'
+
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically
     # creates the CLI parser. It also adds the method run to the class.
