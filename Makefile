@@ -66,6 +66,7 @@ clean-pyc: ## remove Python file artifacts
 clean-test: ## remove test and coverage artifacts
 	rm -fr .tox/
 	rm -f .coverage
+	rm -f .coverage.*
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
@@ -92,6 +93,10 @@ coverage: ## check code coverage quickly with the default Python
 	#coverage report -m
 	#coverage html
 	#$(BROWSER) htmlcov/index.html
+
+rename-coverage: NAME ?= ".coverage.default"
+rename-coverage:
+	mv .coverage .coverage.$(NAME)
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	sphinx-apidoc -o docs/ koris

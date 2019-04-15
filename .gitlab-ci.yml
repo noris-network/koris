@@ -118,9 +118,12 @@ add-master:
   - "make assert-members NUM=4"
   - "make assert-masters NUM=4"
   - "make assert-control-plane NUM=4"
+  - "make coverage"
+  - "make rename-coverage NAME=\"add-master\""
   artifacts:
     paths:
       - "tests/koris_test.master.yml"
+      - ".coverage.add-master"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
