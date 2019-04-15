@@ -17,6 +17,7 @@ import time
 import urllib3
 
 from pkg_resources import resource_filename, Requirement
+from netaddr import valid_ipv4
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from kubernetes.stream import stream
@@ -462,3 +463,25 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
 
         return etcd_cluster
+
+    @retry(ValueError)
+    def etcd_members(self, podname, master_ip):
+        if not valid_ipv4(master_ip):
+            raise RuntimeError(f"Invalid IP: {master_ip}")
+
+        exec_command = [
+            '/bin/sh', '-c',
+            ("ETCDCTL_API=3 etcdctl --endpoints=https://%s:2379 member list"
+             " -w json") % master_ip]  # noqa
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+
+        if not response or not re.search("master-\\d+", response):
+            LOGGER.info(response)
+            raise ValueError("Could not extract current etcd cluster state!")
+
+        return {}

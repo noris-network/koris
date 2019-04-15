@@ -30,6 +30,26 @@ CONFIG = {
     'storage_class': "TestStorageClass"
 }
 
+VALID_IPV4 = ["192.168.0.1", "127.0.0.1", "0.0.0.0"]
+INVALID_IPV4 = ["192.168.300.2", "-1", "hello world", [], "ヽ༼ຈل͜ຈ༽ﾉ",
+                '🐵 🙈']
+
+ETCD_RESPONSE = "".join(['{"header":{"cluster_id":8827847562006938542,',
+                         '"member_id":13982982772617700588,',
+                         '"raft_term":14},',
+                         '"members":[{"ID":5521461231283543456,',
+                         '"name":"master-3-ajk-test",',
+                         '"peerURLs":["https://10.32.192.90:2380"],',
+                         '"clientURLs":["https://10.32.192.90:2379"]},',
+                         '{"ID":12332765792019519285,',
+                         '"name":"master-2-ajk-test",',
+                         '"peerURLs":["https://10.32.192.57:2380"],',
+                         '"clientURLs":["https://10.32.192.57:2379"]},',
+                         '{"ID":13982982772617700588,',
+                         '"name":"master-1-ajk-test",',
+                         '"peerURLs":["https://10.32.192.66:2380"],',
+                         '"clientURLs":["https://10.32.192.66:2379"]}]}'])
+
 
 def mock_listener():
     out = Munch()

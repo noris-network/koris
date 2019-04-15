@@ -26,5 +26,7 @@ def test_etcd_members_ips(k8sconfig, k8sstream):
     k8s = K8S("test")
     assert k8s
 
-    k8sstream.return_value = ETCD_RESPONSE
-    assert isinstance(k8s.etcd_members("test", IP), dict)
+    with patch.object(K8S.api, "connect_get_namespaced_pod_exec",
+                      return_value=MagicMock()):
+        k8sstream.return_value = ETCD_RESPONSE
+        assert isinstance(k8s.etcd_members("test", IP), dict)
