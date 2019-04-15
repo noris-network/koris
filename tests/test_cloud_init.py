@@ -37,7 +37,7 @@ with patch('koris.cloud.openstack.read_os_auth_variables') as p:
                           user_domain_name="noris.de",
                           region_name="de-nbg6-1")
 
-CLOUD_CONFIG = OSCloudConfig()
+    CLOUD_CONFIG = OSCloudConfig()
 LB_IP = "10.32.192.121",
 
 
