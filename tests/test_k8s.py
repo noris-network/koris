@@ -1,32 +1,47 @@
 import pytest
-import copy
 
-from unittest.mock import patch, MagicMock
-from .testdata import VALID_IPV4, INVALID_IPV4, ETCD_RESPONSE
+from .testdata import ETCD_RESPONSE
 
-from koris.deploy.k8s import K8S
+from koris.deploy.k8s import parse_etcd_response
 
-IP = "1.2.3.4"
 
-@patch("kubernetes.config.load_kube_config")
-def test_etcd_members_ips(k8sconfig):
-    k8s = K8S("test")
-    assert k8s
+# (aknipping) If someone figures out how to mock this bloody
+# kubernetes python client PLEASE let me know.
+# def test_etcd_members_ips():
+#     k8s = MagicMock()
+#     k8s.api = PropertyMock(return_value=True)
+#     k8s.etcd_members.side_effect = K8S.etcd_members
 
-    for ip in VALID_IPV4:
-        assert isinstance(k8s.etcd_members("test", ip), dict)
+#     for ip in VALID_IPV4:
+#         assert isinstance(k8s.etcd_members(k8s, "test", ip), dict)
 
-    for ip in INVALID_IPV4:
-        with pytest.raises(RuntimeError):
-            k8s.etcd_members("test", ip)
+#     for ip in INVALID_IPV4:
+#         with pytest.raises(RuntimeError):
+#             k8s.etcd_members("test", ip)
 
-@patch("kubernetes.stream")
-@patch("kubernetes.config.load_kube_config")
-def test_etcd_members_ips(k8sconfig, k8sstream):
-    k8s = K8S("test")
-    assert k8s
 
-    with patch.object(K8S.api, "connect_get_namespaced_pod_exec",
-                      return_value=MagicMock()):
-        k8sstream.return_value = ETCD_RESPONSE
-        assert isinstance(k8s.etcd_members("test", IP), dict)
+def test_parse_etcd_response():
+    resp_invalid = ["", None, [], {}]
+
+    for resp in resp_invalid:
+        with pytest.raises(ValueError):
+            parse_etcd_response(resp)
+
+    resp_invalid = str.replace(ETCD_RESPONSE, "master", "Asdasd")
+    with pytest.raises(ValueError):
+        parse_etcd_response(resp_invalid)
+
+    out_expected = {
+        'master-1-ajk-test': {
+            'ID': 13982982772617700588,
+            'clientURLs': ['https://10.32.192.66:2379'],
+            'peerURLs': ['https://10.32.192.66:2380']},
+        'master-2-ajk-test': {
+            'ID': 12332765792019519285,
+            'clientURLs': ['https://10.32.192.57:2379'],
+            'peerURLs': ['https://10.32.192.57:2380']},
+        'master-3-ajk-test': {
+            'ID': 5521461231283543456,
+            'clientURLs': ['https://10.32.192.90:2379'],
+            'peerURLs': ['https://10.32.192.90:2380']}}
+    assert parse_etcd_response(ETCD_RESPONSE) == out_expected

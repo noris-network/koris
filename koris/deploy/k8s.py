@@ -190,6 +190,36 @@ def get_token_description():
     return description.format('%s@%s' % (getpass.getuser(), socket.gethostname()),
                               datetime.now())
 
+def parse_etcd_response(resp):
+    """Takes a response from etcdctl and parses it for its member info.
+
+    Args:
+        resp (str): The response from etcdctl.
+
+    Returns:
+        A dict containing member information.
+
+    Raises:
+        ValueError if state could not be extracted.
+        KeyError if the etcd cluster has no members.
+    """
+
+    if not resp or resp is None:
+        raise ValueError("etcdtl response is empty")
+
+    if not re.search("master-\\d+", resp):
+        LOGGER.info(resp)
+        raise ValueError("can't find 'master' in etcdtl response")
+
+    # Reconstructing the response so we get a dict where the key is the
+    # member name and and value is a dict with the other info.
+    out = {}
+    resp_yaml = yaml.load(resp)
+    for mem in resp_yaml['members']:
+        out[mem['name']] = {k: v for k, v in mem.items() if k != "name"}
+
+    return out
+
 
 class K8S:  # pylint: disable=too-many-locals,too-many-arguments
     """
@@ -466,6 +496,16 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
     @retry(ValueError)
     def etcd_members(self, podname, master_ip):
+        """Retrieves a dictionary with information about the etcd cluster.
+
+        This function uses ``etcdctl member list`` to retrieve information
+        about the etcd cluster, then parses that response into a dictionary
+        where the keys are the names of the members and the corresponding values
+        hold the rest of the information such as ID, clientURLs and peerURLs.
+
+        Returns:
+            A dictionary with information about the etcd cluster.
+        """
         if not valid_ipv4(master_ip):
             raise RuntimeError(f"Invalid IP: {master_ip}")
 
@@ -480,8 +520,4 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                           stderr=True, stdin=False,
                           stdout=True, tty=False)
 
-        if not response or not re.search("master-\\d+", response):
-            LOGGER.info(response)
-            raise ValueError("Could not extract current etcd cluster state!")
-
-        return {}
+        return parse_etcd_response(response)
