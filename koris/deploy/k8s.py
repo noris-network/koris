@@ -21,6 +21,8 @@ from netaddr import valid_ipv4
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from kubernetes.stream import stream
+from kubernetes.client.rest import ApiException
+
 import yaml
 
 from koris.ssl import read_cert, discovery_hash
@@ -58,6 +60,7 @@ SSHOPTS = ["-l ubuntu "] + SFTPOPTS
 
 # The deployment configuration of the master-adder operator.
 # This pod runs inside a cluster and waits for requests to bootstrap new masters
+MASTER_ADDER_PODNAME = "master-adder"
 MASTER_ADDER_DEPLOYMENT = {
     "apiVersion": "apps/v1",
     "kind": "Deployment",
@@ -86,7 +89,7 @@ MASTER_ADDER_DEPLOYMENT = {
                 "tolerations": [{"key": "node-role.kubernetes.io/master",
                                  "effect": "NoSchedule"}],
                 "containers": [
-                    {"name": "master-adder",
+                    {"name": MASTER_ADDER_PODNAME,
                      "image": "oz123/koris-etcd:0.2",
                      "volumeMounts":
                      [{"mountPath": "/usr/local/bin/add-master-script",
@@ -190,6 +193,7 @@ def get_token_description():
     return description.format('%s@%s' % (getpass.getuser(), socket.gethostname()),
                               datetime.now())
 
+
 def parse_etcd_response(resp):
     """Takes a response from etcdctl and parses it for its member info.
 
@@ -216,6 +220,8 @@ def parse_etcd_response(resp):
     out = {}
     resp_yaml = yaml.load(resp)
     for mem in resp_yaml['members']:
+        # ID needs to be in hex !!!
+        # hex(...).strip("0x")
         out[mem['name']] = {k: v for k, v in mem.items() if k != "name"}
 
     return out
@@ -367,6 +373,26 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if kctl.returncode:
             raise ValueError("Could execute the adder script in the adder pod!")
 
+    def get_random_master(self):
+        """Returns a name and IP of a random master server in the cluster.
+
+        Returns:
+            Tuple of name and IP of a master.
+        """
+
+        nodes = self.api.list_node(pretty=True)
+        nodes = [node for node in nodes.items if
+                 'node-role.kubernetes.io/master' in node.metadata.labels]
+
+        addresses = nodes[0].status.addresses
+
+        # master_ip and master_name are the hostname and IP of an existing
+        # master, where an etcd instance is already running.
+        master_ip = _get_node_addr(addresses, "InternalIP")
+        master_name = _get_node_addr(addresses, "Hostname")
+
+        return master_name, master_ip
+
     def bootstrap_master(self, new_master_name, new_master_ip):
         """Run the steps required to bootstrap a new master.
 
@@ -382,16 +408,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_name (str): Name of the new master
             new_master_ip (str): IP of the new master.
         """
-        nodes = self.api.list_node(pretty=True)
-        nodes = [node for node in nodes.items if
-                 'node-role.kubernetes.io/master' in node.metadata.labels]
+        master_name, master_ip = self.get_random_master()
 
-        addresses = nodes[0].status.addresses
-
-        # master_ip and master_name are the hostname and IP of an existing
-        # master, where an etcd instance is already running.
-        master_ip = _get_node_addr(addresses, "InternalIP")
-        master_name = _get_node_addr(addresses, "Hostname")
         podname = self.launch_master_adder()
         LOGGER.info("Executing adder script on new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
@@ -505,9 +523,12 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         Returns:
             A dictionary with information about the etcd cluster.
+
+        Raises:
+            ValueError if master_ip is not valid.
         """
         if not valid_ipv4(master_ip):
-            raise RuntimeError(f"Invalid IP: {master_ip}")
+            raise ValueError(f"Invalid IP: {master_ip}")
 
         exec_command = [
             '/bin/sh', '-c',
@@ -521,3 +542,100 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                           stdout=True, tty=False)
 
         return parse_etcd_response(response)
+
+    @retry(ValueError)
+    def remove_from_etcd(self, name):
+        """Removes a member from etcd.
+
+        The 'master-adder' operator will be used to perform the
+        queries against etcd. The pod will be created if not found.
+
+        Args:
+            name (str): The name of the member to remove.
+
+        Raises:
+            ValueError if name is not part of etcd cluster.
+        """
+
+        podname = self.launch_master_adder()
+        _, master_ip = self.get_random_master()
+
+        etcd_members = self.etcd_members(podname, master_ip)
+        LOGGER.debug(etcd_members)
+
+        try:
+            etcd_id = etcd_members[name]['ID']
+        except KeyError as exc:
+            raise ValueError(f"Error: {exc}; {name} not part of etcd cluster")
+
+        cmd = " ".join(["ETCDCTL_API=3", "etcdctl",
+                        f"--endpoints=https://{master_ip}:2379",
+                        "member", "remove", f"{etcd_id}", "-w", "json"])
+        exec_command = ['/bin/sh', '-c', cmd]
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+        LOGGER.debug("%s", response)
+
+    def node_status(self, nodename):
+        """Returns the status of a Node.
+
+        Args:
+            nodename (str): The name of the node to check.
+
+        Returns:
+            The status of the node as string or None if an error was
+                encountered.
+        """
+
+        resp = None
+        try:
+            resp = self.api.read_node_status(
+                nodename,
+                pretty=True)
+            LOGGER.debug("API Response: %s", resp)
+        except ApiException as exc:
+            LOGGER.debug("API exception: %s", exc)
+            return None
+
+        # Grab dat string
+        status = [x for x in resp.status.conditions if x.type == 'Ready']
+
+        return status[0].status
+
+    def drain_node(self, nodename):
+        """Drains a node of pods.
+
+        We're using ``kubectl drain`` instead of the eviction API, since it's
+        quicker and we don't have to get all the Pods of the Node first.
+
+        Will check if the node exists first.
+
+        Args:
+            nodename (str): Name of the node to drain
+
+        Raises:
+            ValueError is Node doesn't exist
+            RuntimeError if ``kubectl drain`` fails.
+        """
+
+        if self.node_status(nodename) is None:
+            raise ValueError(f"Error: Node {nodename} doesn't exist")
+
+        # kubectl drain needs to block
+        cmd = ["kubectl", "drain", nodename, "--ignore-daemonsets"]
+        try:
+            proc = sp.run(cmd,
+                          check=True,
+                          encoding="utf-8",
+                          stdout=sp.PIPE,
+                          stderr=sp.PIPE)
+        except sp.CalledProcessError as exc:
+            LOGGER.error()
+            msg = "Error calling '{}': {}".format(" ".join(cmd), exc)
+            raise RuntimeError(msg)
+
+        LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout, proc.returncode)

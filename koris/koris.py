@@ -96,6 +96,30 @@ def add_node(cloud_config,
     node_builder.launch_new_nodes(tasks)
 
 
+def delete_node(name):
+    """Delete a master or worker node from the cluster.
+
+    Will perform basic validity checks on the name.
+    Args:
+        name (str): The name of the node to delete.
+
+    Raises:
+        ValueError if name is invalid.
+    """
+
+    if not name or name is None:
+        raise ValueError("name can't be empty")
+
+    k8s = K8S(os.getenv("KUBECONFIG"))
+
+    # Drain the node first, will also check if it's exists
+    k8s.drain_node(name)
+
+    # If master, remove from etcd cluster
+    if 'master' in name:
+        k8s.remove_from_etcd(name)
+
+
 @mach1()
 class Koris:  # pylint: disable=no-self-use,too-many-locals
     """
@@ -160,6 +184,31 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         except FileNotFoundError:
             print(red("Certificates {} already deleted".format(certs_location)))
         sys.exit(0)
+
+    def delete(self, config: str, resource: str, name: str = ""):
+        """
+        Delete a node from the cluster, or the complete cluster.
+
+        config - koris configuration file.
+        resource - the type of resource to delete. [node | cluster]
+        name - the name of the resource to delete.
+        """
+
+        with open(config, 'r') as stream:
+            config = yaml.safe_load(stream)
+
+        allowed_resource = ["node", "cluster"]
+        if resource not in allowed_resource:
+            msg = f'Error: resource must be [{" | ".join(allowed_resource)}]'
+            print(red(msg))
+            sys.exit(1)
+
+        if resource == "node":
+            try:
+                delete_node(name)
+            except (ValueError, RuntimeError) as exc:
+                LOGGER.error("Error: %s", exc)
+                sys.exit(1)
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
