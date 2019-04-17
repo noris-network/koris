@@ -110,6 +110,34 @@ def get_connection():
     return conn
 
 
+def delete_instance(name, conn):
+    """Removes a server from OpenStack.
+
+    This will also remove Volumes and Network ports.
+
+    Will skip if server doesn't exist.
+
+    Args:
+        name (str): Name of the Server to delete.
+        conn: An OpenStack Connection object.
+    """
+
+    srv = conn.compute.find_server(name)
+    if not srv or srv is None:
+        LOGGER.info("Instance '%s' doesn't exist, skipping deletion", name)
+        return
+
+    # Deleting the instance and volumes
+    conn.compute.delete_server(srv)
+
+    # Deleting attached network ports
+    ports = list(conn.network.ports(device_id=srv.id))
+    for port in ports:
+        conn.network.delete_port(port)
+
+    LOGGER.info("Instance '%s' deleted successfully", name)
+
+
 class BuilderError(Exception):
     """Raise a custom error if the build fails"""
 
@@ -124,7 +152,7 @@ class Instance:  # pylint: disable=too-many-arguments
     """
 
     def __init__(self, cinder, nova, name, network, zone, role,
-                 volume_config, flavor):
+                 volume_config, flavor, conn=None):
         self.cinder = cinder
         self.nova = nova
         self.name = name
@@ -136,6 +164,9 @@ class Instance:  # pylint: disable=too-many-arguments
         self.ports = []
         self._ip_address = None
         self.exists = False
+
+        if conn is None:
+            self.conn = get_connection()
 
     @property
     def nics(self):

@@ -20,8 +20,6 @@ import yaml
 
 from mach import mach1
 
-from koris.cloud.openstack import OSCloudConfig
-from koris.cloud.openstack import BuilderError, InstanceExists
 from koris.util.util import KorisVersionCheck
 
 from . import __version__
@@ -32,8 +30,9 @@ from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
-from .cloud.openstack import (OSClusterInfo, get_connection, LoadBalancer,
-                              get_clients)
+from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
+                              delete_instance, OSClusterInfo, get_connection,
+                              LoadBalancer, get_clients)
 
 # pylint: disable=protected-access
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -100,8 +99,10 @@ def delete_node(name):
     """Delete a master or worker node from the cluster.
 
     Will perform basic validity checks on the name.
+
     Args:
         name (str): The name of the node to delete.
+        conn: An OpenStack connection object.
 
     Raises:
         ValueError if name is invalid.
@@ -110,14 +111,22 @@ def delete_node(name):
     if not name or name is None:
         raise ValueError("name can't be empty")
 
+    conn = get_connection()
+
     k8s = K8S(os.getenv("KUBECONFIG"))
 
-    # Drain the node first, will also check if it's exists
+    # Drain the node first
     k8s.drain_node(name)
 
-    # If master, remove from etcd cluster
+    # If master, remove member from etcd cluster
     if 'master' in name:
         k8s.remove_from_etcd(name)
+
+    # Delete the node from Kubernetes
+    k8s.delete_node(name)
+
+    # Delete the instance from OpenStack
+    delete_instance(name, conn)
 
 
 @mach1()
@@ -195,7 +204,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         """
 
         with open(config, 'r') as stream:
-            config = yaml.safe_load(stream)
+            config_dict = yaml.safe_load(stream)
 
         allowed_resource = ["node", "cluster"]
         if resource not in allowed_resource:
@@ -204,11 +213,27 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             sys.exit(1)
 
         if resource == "node":
+            if not name or name is None:
+                LOGGER.error("Must specifiy --name when deleting a node")
+                sys.exit(1)
+
             try:
                 delete_node(name)
-            except (ValueError, RuntimeError) as exc:
+            except (ValueError) as exc:
                 LOGGER.error("Error: %s", exc)
                 sys.exit(1)
+
+            if "master" in name:
+                update_config(config_dict, config, -1, "masters")
+            else:
+                update_config(config_dict, config, -1, "nodes")
+
+        else:
+            msg = " ".join([
+                "Feature not implemented yet.",
+                "Please use 'koris destroy' for time being!"
+            ])
+            print(red(msg))
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
@@ -235,7 +260,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         if bootstrap_only:
             if len(bootstrap_only) != 2:
-                print("To bootstarp a node you must specify both name and IP")
+                print("To bootstrap a node you must specify both name and IP")
                 sys.exit(1)
 
             print(
