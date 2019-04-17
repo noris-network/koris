@@ -2,8 +2,11 @@
 Test koris.cloud.builder
 """
 #  pylint: disable=redefined-outer-name
+import copy
 from unittest import mock
+from unittest.mock import MagicMock
 import pytest
+import unittest
 
 import koris.cloud.openstack
 
@@ -31,6 +34,24 @@ class Flavor:  # pylint:  disable=too-few-public-methods
 
         self.name = name
         self.id = 'abcdefg12345678'
+
+
+class Test_raise_system_exit(unittest.TestCase):
+    def test_instance_naming_with_illegal_chars(self):
+        """test using illegal name for instance raises sys.exit"""
+        NEUTRON.list_security_groups = mock.MagicMock(
+            return_value=iter([{"security_groups": []}]))
+        NEUTRON.create_subnet = mock.MagicMock(
+            return_value={"subnet": SUBNETS}
+        )
+        conn = MagicMock()
+        config_bad = copy.deepcopy(CONFIG)
+        config_bad['cluster-name'] = "illegal:)chars"
+
+        info = OSClusterInfo(NOVA, NEUTRON, CINDER, config_bad, conn)
+        with self.assertRaises(SystemExit):
+            # assert this raises system exit
+            info.nodes_names
 
 
 def get_ca():
@@ -247,16 +268,33 @@ def test_controlplane_builder(os_info):  # pylint disable=redefined-outer-name
 def test_create_nodes(os_info):  # pylint disable=redefined-outer-name
     """ test create nodes"""
     NOVA.servers.list = mock.MagicMock(
-        return_value=[DummyServer("node-%d-test" % i,
+        return_value=[DummyServer("test-node-%d" % i,
                                   "10.32.192.10%d" % i,
                                   Flavor('ECS.C1.4-8')) for i in range(1, 4)])
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1")
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)
-    assert nodes[0].name == 'node-4-test'
+    assert nodes[0].name == 'test-node-4'
 
     nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1", amount=3)
     assert isinstance(nodes[0], koris.cloud.openstack.Instance)
-    assert nodes[0].name == 'node-4-test'
-    assert nodes[1].name == 'node-5-test'
-    assert nodes[2].name == 'node-6-test'
+    assert nodes[0].name == 'test-node-4'
+    assert nodes[1].name == 'test-node-5'
+    assert nodes[2].name == 'test-node-6'
+
+
+def test_instance_naming_creation():
+    """
+    test instance naming uses the pattern
+    <cluster-name>-<type>-<number>
+    """
+    NEUTRON.list_security_groups = mock.MagicMock(
+        return_value=iter([{"security_groups": []}]))
+    NEUTRON.create_subnet = mock.MagicMock(
+        return_value={"subnet": SUBNETS}
+    )
+    conn = MagicMock()
+    info = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG, conn)
+    instance_names = info.nodes_names
+    for i in range(len(instance_names)):
+        assert instance_names[i] == 'test-node-{}'.format(i + 1)

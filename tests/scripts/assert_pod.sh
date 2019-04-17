@@ -7,7 +7,7 @@ CURR=0
 MAX=10
 
 for (( i=1; i<=${NUM}; i++ )); do
-    TO_CHECK="${POD_NAME}-${i}-${CLUSTER_NAME}"
+    TO_CHECK="${POD_NAME}-${CLUSTER_NAME}-master-${i}"
     echo -n "Checking if ${TO_CHECK} is available: "
     for (( j=1; j<=${MAX}; j++ )); do
         STATUS=$(kubectl --kubeconfig=${KUBECONFIG} -n ${NAMESPACE} -o jsonpath='{.status.phase}' get po ${TO_CHECK})
