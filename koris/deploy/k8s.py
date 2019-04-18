@@ -590,12 +590,19 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                         "member", "remove", f"{etcd_id}", "-w", "json"])
         exec_command = ['/bin/sh', '-c', cmd]
 
-        response = stream(self.api.connect_get_namespaced_pod_exec,
-                          podname, 'kube-system',
-                          command=exec_command,
-                          stderr=True, stdin=False,
-                          stdout=True, tty=False)
-        LOGGER.debug("%s", response)
+        # response = stream(self.api.connect_get_namespaced_pod_exec,
+        #                   podname, 'kube-system',
+        #                   command=exec_command,
+        #                   stderr=True, stdin=False,
+        #                   stdout=True, tty=False)
+        stream(self.api.connect_get_namespaced_pod_exec,
+               podname, 'kube-system',
+               command=exec_command,
+               stderr=True, stdin=False,
+               stdout=True, tty=False)
+
+        # Commenting output because wall-of-YAML
+        # LOGGER.debug("%s", response)
 
     def node_status(self, nodename):
         """Returns the status of a Node.
@@ -651,17 +658,24 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         # kubectl drain needs to block
         cmd = ["kubectl", "drain", nodename, "--ignore-daemonsets"]
         try:
-            proc = sp.run(cmd,
-                          check=True,
-                          encoding="utf-8",
-                          stdout=sp.PIPE,
-                          stderr=sp.PIPE)
+            # proc = sp.run(cmd,
+            #               check=True,
+            #               encoding="utf-8",
+            #               stdout=sp.PIPE,
+            #               stderr=sp.PIPE)
+            sp.run(cmd,
+                   check=True,
+                   encoding="utf-8",
+                   stdout=sp.PIPE,
+                   stderr=sp.PIPE)
         except sp.CalledProcessError as exc:
             LOGGER.error()
             msg = "Error calling '{}': {}".format(" ".join(cmd), exc)
             raise RuntimeError(msg)
 
-        LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout, proc.returncode)
+        # Commenting output because wall-of-YAML
+        # LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
+        #              proc.returncode)
 
     def delete_node(self, nodename, grace_period=0, ignore_not_found=True):
         """Delete a node in Kubernetes.

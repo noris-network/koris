@@ -95,17 +95,18 @@ def add_node(cloud_config,
     node_builder.launch_new_nodes(tasks)
 
 
-def delete_node(name):
+def delete_node(config_dict, name):
     """Delete a master or worker node from the cluster.
 
     Will perform basic validity checks on the name.
 
     Args:
+        config_dict (dict): A dictionary representing the config.
         name (str): The name of the node to delete.
         conn: An OpenStack connection object.
 
     Raises:
-        ValueError if name is invalid.
+        ValueError if name is invalid or LoadBalancer not found.
         :class:`.openstack.InstanceNotFound` if instance doesn't exist.
     """
 
@@ -113,6 +114,12 @@ def delete_node(name):
         raise ValueError("name can't be empty")
 
     conn = get_connection()
+
+    # Get our LoadBalancer
+    lb = LoadBalancer(config_dict, conn)
+    lbinst = lb.get()
+    if not lbinst:
+        raise ValueError("No LoadBalancer found")
 
     k8s = K8S(os.getenv("KUBECONFIG"))
 
@@ -129,6 +136,15 @@ def delete_node(name):
     # Delete the instance from OpenStack
     delete_instance(name, conn, ignore_not_found=False)
 
+    # Delete master from LoadBalancer
+    if 'master' in name:
+        # We need more logic because our members don't have names
+
+        # Query lb.master_listener['master-listener]['master-pool]
+        # for the pool_id and the address of the member
+
+        # Call lb.delete_member with pool_id and address
+        pass
 
 @mach1()
 class Koris:  # pylint: disable=no-self-use,too-many-locals
@@ -220,7 +236,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
             change_config = True
             try:
-                delete_node(name)
+                delete_node(config_dict, name)
             except (ValueError) as exc:
                 LOGGER.error("Error: %s", exc)
                 sys.exit(1)
