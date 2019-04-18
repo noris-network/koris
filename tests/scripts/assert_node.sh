@@ -73,7 +73,7 @@ function deleted-openstack() {
             exit 0
         fi
         echo "Node ${NODE_NAME} still up, sleeping for 5s ..."
-        sleep 30s
+        sleep 10s
     done
 
     echo "Node ${NODE_NAME} still present in OpenStack:"
