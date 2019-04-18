@@ -192,7 +192,7 @@ assert-kube-apiservers:
 	NAMESPACE="kube-system" \
 	KUBECONFIG=${KUBECONFIG} \
 	CLUSTER_NAME=$(CLUSTER_NAME) \
-	POD_NAME="kube-apiserver-master" \
+	POD_NAME="kube-apiserver" \
 	./tests/scripts/assert_pod.sh
 
 assert-etcd: NUM ?= 4
@@ -201,7 +201,7 @@ assert-etcd:
 	NAMESPACE="kube-system" \
 	KUBECONFIG=${KUBECONFIG} \
 	CLUSTER_NAME=$(CLUSTER_NAME) \
-	POD_NAME="etcd-master" \
+	POD_NAME="etcd" \
 	./tests/scripts/assert_pod.sh
 
 assert-kube-controller-manager: NUM ?= 4
@@ -210,7 +210,7 @@ assert-kube-controller-manager:
 	NAMESPACE="kube-system" \
 	KUBECONFIG=${KUBECONFIG} \
 	CLUSTER_NAME=$(CLUSTER_NAME) \
-	POD_NAME="kube-controller-manager-master" \
+	POD_NAME="kube-controller-manager" \
 	./tests/scripts/assert_pod.sh
 
 assert-kube-scheduler: NUM ?= 4
@@ -219,7 +219,7 @@ assert-kube-scheduler:
 	NAMESPACE="kube-system" \
 	KUBECONFIG=${KUBECONFIG} \
 	CLUSTER_NAME=$(CLUSTER_NAME) \
-	POD_NAME="kube-scheduler-master" \
+	POD_NAME="kube-scheduler" \
 	./tests/scripts/assert_pod.sh
 
 assert-members: NUM ?= 4
