@@ -167,7 +167,7 @@ add-nodes:
 		echo -n "."; \
 		sleep 1; \
 	done
-	@echo mv tests/koris_test.updated.yml tests/koris_test.add_node.yml
+	@mv tests/koris_test.updated.yml tests/koris_test.add_node.yml
 	@echo "OK"
 
 assert-node: NUM ?= 4

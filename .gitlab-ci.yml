@@ -4,7 +4,6 @@ stages:
  - wait-for-resources
  - build-cluster
  - integration-test
- - resize-add
  - resize-delete
  - security-checks
  - compliance-checks
@@ -12,7 +11,7 @@ stages:
  - pages
  - build
 
-# --[2]-- STATIC ANALYSIS --
+# --[ STATIC ANALYSIS ]--
 static-analysis-python:
   stage: static-analysis
   image: oz123/koris-alpine:0.1.5
@@ -26,7 +25,7 @@ static-analysis-bash:
     - make test-bash
 
 
-# --[2]-- UNIT TESTS --
+# --[ UNIT TESTS ]--
 unittest:
   stage: unittest
   image: oz123/koris-alpine:0.1.5
@@ -35,7 +34,7 @@ unittest:
     - make coverage PY=python3
 
 
-# --[3]-- WAIT FOR RESOURCES --
+# --[ WAIT FOR RESOURCES ]--
 wait-for-resources:
   stage: wait-for-resources
   image: oz123/koris-alpine:0.1.5
@@ -48,7 +47,7 @@ wait-for-resources:
       - $SKIP_E2E
 
 
-# --[4]-- BUILD --
+# --[ BUILD ]--
 bare-metal-build:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.5
@@ -82,7 +81,7 @@ build-cluster:
       - $SKIP_E2E
 
 
-# --[5]-- INTEGRATION TESTS --
+# --[ INTEGRATION TESTS ]--
 bare-metal-integration:
   stage: integration-test
   image: oz123/koris-alpine:0.1.5
@@ -95,7 +94,7 @@ bare-metal-integration:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
 integration-test:
@@ -122,7 +121,7 @@ integration-test:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
 check-dns:
@@ -138,7 +137,7 @@ check-dns:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
 check-members:
@@ -153,7 +152,7 @@ check-members:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
 assert-control-plane:
@@ -169,7 +168,7 @@ assert-control-plane:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
 check-node-labels:
@@ -186,13 +185,11 @@ check-node-labels:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
-
-# --[6]-- RESIZE ADD --
 add-nodes:
-  stage: resize-add
+  stage: integration-test
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -209,11 +206,12 @@ add-nodes:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
 add-master:
-  stage: resize-add
+  stage: integration-test
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -231,11 +229,12 @@ add-master:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
 check-added-node-labels:
-  stage: resize-add
+  stage: integration-test
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -247,11 +246,12 @@ check-added-node-labels:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
 check-added-nodes-ready:
-  stage: resize-add
+  stage: integration-test
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -263,11 +263,12 @@ check-added-nodes-ready:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
 
-# --[7]-- RESIZE DELETE --
+# --[ RESIZE DELETE ]--
 delete-added-nodes:
   stage: resize-delete
   image: oz123/koris-alpine:0.1.5
@@ -287,6 +288,7 @@ delete-added-nodes:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
   when: always
@@ -308,13 +310,14 @@ delete-added-master:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
   when: always
   allow_failure: true
 
 
-# --[8]-- SECURITY CHECKS --
+# --[ SECURITY CHECKS ]--
 security-checks-masters:
   stage: security-checks
   image: oz123/koris-alpine:0.1.5
@@ -346,7 +349,7 @@ security-checks-nodes:
       - $SKIP_E2E
 
 
-# --[9]-- COMPLIANCE CHECKS --
+# --[ COMPLIANCE CHECKS ]--
 compliance-checks:
   stage: compliance-checks
   image: oz123/koris-alpine:0.1.5
@@ -370,7 +373,7 @@ compliance-checks:
       - $SKIP_E2E
 
 
-# --[10]-- CLEANUP --
+# --[ CLEANUP ]--
 cleanup:
   stage: cleanup
   image: oz123/koris-alpine:0.1.5
@@ -403,7 +406,7 @@ clean-bare-metal:
       - $SKIP_E2E
 
 
-# --[11]-- PAGES --
+# --[ PAGES ]--
 dev-docs:
   stage: pages
   image: oz123/koris-alpine:0.1.5
@@ -441,7 +444,7 @@ pages:
     - master
 
 
-# --[12]-- BUILD --
+# --[ BUILD ]--
 build:
   stage: build
   image: oz123/koris-builder:0.2
