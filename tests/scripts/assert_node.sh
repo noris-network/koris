@@ -62,29 +62,50 @@ function labels() {
     exit 1
 }
 
+# Assert that a node has been deleted from OpenStack
+function deleted-openstack() {
+    echo "Asserting that ${NODE_NAME} has been removed from OpenStack ..."
+    openstack server list -f value -c Name | grep -q ${NODE_NAME}
+    if [ $? -eq 1 ]; then
+        echo "OK"
+        exit 0
+    fi
+
+    echo "Node ${NODE_NAME} still present in OpenStack: "
+    openstack server list
+    exit 1
+}
+
 function usage() {
     echo "Usage:"
-    echo -e "$0 deleted\t\tChecks if node has been deleted from the cluster."
-    echo -e "$0 ready\t\tChecks if node is in status Ready."
-    echo -e "$0 labels\t\tChecks if node has correct node labels."
+    echo -e "$0 deleted\t\t\tChecks if node has been deleted from the cluster."
+    echo -e "$0 ready\t\t\tChecks if node is in status Ready."
+    echo -e "$0 labels\t\t\tChecks if node has correct node labels."
+    echo -e "$0 deleted-openstack\tChecks if the has been deleted from OpenStack"
     echo
     echo "Requires environment variabel NODE_NAME to be set."
 }
 
 # -----------------------------
 
-if [ "$1" == "deleted" ]; then
+if [ "$1" == "help" ]; then
+    usage
+elif [ "$1" == "deleted" ]; then
     deleted
 elif [ "$1" == "ready" ]; then
     ready
 elif [ "$1" == "labels" ]; then
     labels
+elif [ "$1" == "deleted-openstack" ]; then
+    deleted-openstack
 elif [ $# -eq 0 ]; then
     echo "No arguments supplied."
+    echo
     usage
     exit 1
 else
     echo "Unrecognized option '$1'"
+    echo
     usage
     exit 1
 fi
