@@ -55,26 +55,3 @@ def test_delete_node():
     for name in invalid_names:
         with pytest.raises(ValueError):
             delete_node(name)
-
-
-# def test_koris_delete():
-#     conf = 'tests/koris_test.yml'
-#     resource_valid = ["cluster", "node"]
-#     resource_invalid = ["asd"]
-#     resource_invalid.extend(NAUGHTY_STRINGS)
-
-#     for res in resource_valid:
-#         cmd = ["koris", "delete", res, "--name", "test", conf]
-#         subprocess.run(cmd, check=True)
-
-#     for res in resource_invalid:
-#         cmd = ["koris", "delete", res, conf]
-#         with pytest.raises(subprocess.CalledProcessError):
-#             subprocess.run(cmd, check=True)
-
-
-# def test_koris_delete_node():
-#     """Empty --name should exit with non-zero"""
-#     cmd = ["koris", "delete", "node", "--name", "", 'tests/koris_test.yml']
-#     with pytest.raises(subprocess.CalledProcessError):
-#         subprocess.run(cmd, check=True)
