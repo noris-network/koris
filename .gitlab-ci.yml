@@ -277,10 +277,12 @@ delete-added-nodes:
     LANG: "C.UTF-8"
   script:
     - "pip3 install -q -e ."
-    - make delete-node NUM=5 KORIS_CONF="tests/koris_test.add_node"
-    - make assert-node ACTION=deleted NUM=5
-    - make delete-node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
-    - make assert-node ACTION=deleted NUM=4
+    - make delete-node NODE_TYPE=node NUM=5 KORIS_CONF="tests/koris_test.add_node"
+    - make assert-node NODE_TYPE=node ACTION=deleted NUM=5
+    - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=5
+    - make delete-node NODE_TYPE=node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
+    - make assert-node NODE_TYPE=node ACTION=deleted NUM=4
+    - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=4
   artifacts:
     paths:
       - "tests/koris_test.delete_node.yml"
@@ -302,7 +304,8 @@ delete-added-master:
     LANG: "C.UTF-8"
   script:
     - "pip3 install -q -e ."
-    - "make delete-node NUM=4 KORIS_CONF=tests/koris_test.add_master"
+    - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
+    - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
   artifacts:
     paths:
       - "tests/koris_test.delete_master.yml"
