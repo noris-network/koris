@@ -18,7 +18,7 @@ function deleted() {
             echo "OK"
             exit 0
         fi
-        echo "${NODE_NAME} still up, sleeping for 10s ... "
+        echo "Node ${NODE_NAME} still up, sleeping for 10s ... "
         sleep 10s
     done
 
@@ -36,7 +36,7 @@ function ready() {
             echo "OK"
             exit 0
         fi
-        echo "Node doesn't seem to be up yet, sleeping for 30s ... "
+        echo "Node ${NODE_NAME} doesn't seem to be up yet, sleeping for 30s ... "
         sleep 30s
     done
 
@@ -54,7 +54,7 @@ function labels() {
             echo "OK"
             exit 0
         fi
-        echo "Node doesn't seem to be up yet, sleeping for 30s ... "
+        echo "Node ${NODE_NAME} doesn't seem to be up yet, sleeping for 30s ... "
         sleep 30s
     done
 
@@ -65,13 +65,18 @@ function labels() {
 # Assert that a node has been deleted from OpenStack
 function deleted-openstack() {
     echo "Asserting that ${NODE_NAME} has been removed from OpenStack ..."
-    openstack server list -f value -c Name | grep -q ${NODE_NAME}
-    if [ $? -eq 1 ]; then
-        echo "OK"
-        exit 0
-    fi
+    for i in {1..10}
+    do
+        openstack server list -f value -c Name | grep -q ${NODE_NAME}
+        if [ $? -eq 1 ]; then
+            echo "OK"
+            exit 0
+        fi
+        echo "Node ${NODE_NAME} still up, sleeping for 5s ..."
+        sleep 5s
+    done
 
-    echo "Node ${NODE_NAME} still present in OpenStack: "
+    echo "Node ${NODE_NAME} still present in OpenStack:"
     openstack server list
     exit 1
 }
