@@ -6,6 +6,7 @@ import copy
 import logging
 import re
 import time
+import sys
 
 
 from functools import lru_cache
@@ -80,12 +81,37 @@ def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
     return yml_config
 
 
+def name_validation(name):
+    """
+    Validates a name that will be used as an instance name.
+    Each name should conform to the following convention:
+    not too long (maximum 244 characters)
+    only ASCII-letters, numbers and dashes
+
+    Args:
+        name (str): The name to be checked
+
+    Returns:
+        Name if valid, Exits with Status code 2 if name is invalid.
+    """
+    if len(name) > 244:
+        print(red("cluster-name is too long"))
+        sys.exit(2)
+    allowed = re.compile(r"^[a-zA-Z\d-]+$")
+    if not allowed.match(name):
+        print(red("cluster-name '{}' is using illegal characters. \
+              Please change cluster-name in config file".format(name)))
+        sys.exit(2)
+    return name
+
+
 @lru_cache(maxsize=16)
 def host_names(role, num, cluster_name):
     """
     format host names
     """
-    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+    name_validation(cluster_name)
+    return ["%s-%s-%s" % (cluster_name, role, i) for i in
             range(1, num + 1)]
 
 

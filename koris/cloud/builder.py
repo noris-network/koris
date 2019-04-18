@@ -38,11 +38,11 @@ def get_server_range(servers, cluster_name, role, amount):
     Given a list of servers find the last server name and add N more
     """
     servers = [s for s in servers if
-               s.name.endswith(cluster_name)]
-    servers = [s for s in servers if s.name.startswith(role)]
+               s.name.startswith(cluster_name)]
+    servers = [s for s in servers if role in s.name]
 
     lastname = sorted(servers, key=lambda x: x.name)[-1].name
-    idx = int(lastname.split('-')[1])
+    idx = int(lastname.split('-')[-1])
     return range(idx + 1, idx + amount + 1)
 
 
@@ -73,7 +73,7 @@ class NodeBuilder:
         """
         nodes = [Instance(self._info.storage_client,
                           self._info.compute_client,
-                          '%s-%d-%s' % (role, n, self.config['cluster-name']),
+                          '%s-%s-%d' % (self.config['cluster-name'], role, n),
                           self._info.net,
                           zone,
                           role,
@@ -295,8 +295,9 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         master = Instance(self._info.storage_client,
                           self._info.compute_client,
-                          '%s-%s-%s' % (role, master_number,
-                                        self._config['cluster-name']),
+                          '%s-%s-%s' % (self._config['cluster-name'],
+                                        role, master_number
+                                        ),
                           self._info.net,
                           zone,
                           role,

@@ -1,7 +1,7 @@
 import io
 import unittest.mock
 
-from koris.util.util import KorisVersionCheck
+from koris.util.util import KorisVersionCheck, name_validation
 from koris.util.hue import red
 
 phtml = """
@@ -42,3 +42,29 @@ def test_version_is_newer():
 
 def test_web_site_is_not_avail():
     assert KorisVersionCheck("").version == "0.0.0"
+
+
+class Test_name_validation(unittest.TestCase):
+    def test_names(self):
+        """test name_validation func using different cluster-names"""
+        cluster_name = "example"
+        name = name_validation(cluster_name)
+        assert name == cluster_name
+
+        cluster_name = "11-04-2019-example"
+        name = name_validation(cluster_name)
+        assert name == cluster_name
+
+        cluster_name = "example-11-04-2019"
+        name = name_validation(cluster_name)
+        assert name == cluster_name
+
+        # assert this raises system exit
+        cluster_name = "bad" * 250
+        with self.assertRaises(SystemExit):
+            name_validation(cluster_name)
+
+        # assert this raises system exit
+        cluster_name = "bad:)chars"
+        with self.assertRaises(SystemExit):
+            name_validation(cluster_name)
