@@ -4,8 +4,8 @@ stages:
  - wait-for-resources
  - build-cluster
  - integration-test
- - resize-node
- - resize-master
+ - resize-add
+ - resize-delete
  - security-checks
  - compliance-checks
  - cleanup
@@ -190,9 +190,9 @@ check-node-labels:
       - $SKIP_E2E
 
 
-# --[6]-- RESIZE NODE --
+# --[6]-- RESIZE ADD --
 add-nodes:
-  stage: resize-node
+  stage: resize-add
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -210,11 +210,32 @@ add-nodes:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-/
+      - $SKIP_E2E
+
+add-master:
+  stage: resize-add
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+    - "pip3 install -q -e ."
+    - "make add-master"
+    - "make assert-members NUM=4"
+    - "make assert-masters NUM=4"
+    - "make assert-control-plane NUM=4"
+  artifacts:
+    paths:
+      - "tests/koris_test.add_master.yml"
+      - "tests/koris_test.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
 check-added-node-labels:
-  stage: resize-node
+  stage: resize-add
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -227,11 +248,10 @@ check-added-node-labels:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-/
       - $SKIP_E2E
 
 check-added-nodes-ready:
-  stage: resize-node
+  stage: resize-add
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -244,11 +264,12 @@ check-added-nodes-ready:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-/
       - $SKIP_E2E
 
+
+# --[7]-- RESIZE DELETE --
 delete-added-nodes:
-  stage: resize-node
+  stage: resize-delete
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -268,35 +289,10 @@ delete-added-nodes:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-/
       - $SKIP_E2E
 
-
-# --[7]-- RESIZE MASTER --
-add-master:
-  stage: resize-master
-  image: oz123/koris-alpine:0.1.5
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-    - "pip3 install -q -e ."
-    - "make add-master"
-    - "make assert-members NUM=4"
-    - "make assert-masters NUM=4"
-    - "make assert-control-plane NUM=4"
-  artifacts:
-    paths:
-      - "tests/koris_test.add_master.yml"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-master/
-      - $SKIP_E2E
-
-delete-master:
-  stage: resize-master
+delete-added-master:
+  stage: resize-delete
   image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
@@ -307,14 +303,14 @@ delete-master:
   when: on_success
   artifacts:
     paths:
-      - "tests/koris_test.remove_master.yml"
+      - "tests/koris_test.delete_master.yml"
       - "tests/koris_test.yml"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-master/
       - $SKIP_E2E
+
 
 # --[8]-- SECURITY CHECKS --
 security-checks-masters:
