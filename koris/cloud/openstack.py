@@ -110,22 +110,26 @@ def get_connection():
     return conn
 
 
-def delete_instance(name, conn):
+def delete_instance(name, conn, ignore_not_found=True):
     """Removes a server from OpenStack.
 
     This will also remove Volumes and Network ports.
 
-    Will skip if server doesn't exist.
-
     Args:
         name (str): Name of the Server to delete.
         conn: An OpenStack Connection object.
+        ignore_not_found (bool): If set to False, raises
+            InstanceNotFound if the instance doesn't exist.
     """
 
     srv = conn.compute.find_server(name)
     if not srv or srv is None:
-        LOGGER.info("Instance '%s' doesn't exist, skipping deletion", name)
-        return
+        msg = f"Instance '{name}' doesn't exist, skipping deletion"
+        if ignore_not_found:
+            LOGGER.info(msg)
+            return
+
+        raise InstanceNotFound(msg)
 
     # Deleting the instance and volumes
     conn.compute.delete_server(srv)
@@ -135,7 +139,7 @@ def delete_instance(name, conn):
     for port in ports:
         conn.network.delete_port(port)
 
-    LOGGER.info("Instance '%s' deleted successfully", name)
+    LOGGER.info("OpenStack instance '%s' has been deleted successfully", name)
 
 
 class BuilderError(Exception):
@@ -144,6 +148,10 @@ class BuilderError(Exception):
 
 class InstanceExists(Exception):
     """raise a custom error if the machine exists"""
+
+
+class InstanceNotFound(Exception):
+    """Raises a custom error if machine doesn't exist."""
 
 
 class Instance:  # pylint: disable=too-many-arguments

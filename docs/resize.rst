@@ -152,7 +152,7 @@ A couple of minutes later, the new master will become ready:
    master will not be properly configured to use Dex and may even fail to launch.
 
 What happens under the hood
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Although one subcommand `add` is used for adding masters and nodes, under the
 hood, adding master and worker nodes take very different code paths.
@@ -195,3 +195,24 @@ When we add a master node the following happens:
         to join the etcd cluster.
      * Adding the instance as a new member to the exisiting etcd cluster.
      * Continuing with all the other steps need to complete ``kubeadm init``.
+
+Deleting nodes
+~~~~~~~~~~~~~~
+
+Master and worker nodes can be deleted via  the command ``koris delete node``,
+which requires the ``--name`` flag to be passed:
+
+.. code:: shell
+
+   $ koris delete node --name master-1-am add-m.updated.yml
+
+This command will perform the following:
+
+1. `Drain <https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/>`_
+    the node of all workloads.
+
+2.  If the node is a master, remove it from the etcd cluster.
+
+3. Delete the node from Kubernetes.
+
+4. Delete the node from OpenStack.

@@ -693,4 +693,5 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                                     grace_period_seconds=grace_period)
 
         LOGGER.debug(resp)
-        LOGGER.debug("node '%s' has been deleted successfully", nodename)
+        LOGGER.debug("Kubernetes node '%s' has been deleted successfully",
+                     nodename)

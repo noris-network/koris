@@ -32,7 +32,7 @@ from .util.util import (get_logger, )
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
 from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
                               delete_instance, OSClusterInfo, get_connection,
-                              LoadBalancer, get_clients)
+                              LoadBalancer, get_clients, InstanceNotFound)
 
 # pylint: disable=protected-access
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -106,6 +106,7 @@ def delete_node(name):
 
     Raises:
         ValueError if name is invalid.
+        :class:`.openstack.InstanceNotFound` if instance doesn't exist.
     """
 
     if not name or name is None:
@@ -126,7 +127,7 @@ def delete_node(name):
     k8s.delete_node(name)
 
     # Delete the instance from OpenStack
-    delete_instance(name, conn)
+    delete_instance(name, conn, ignore_not_found=False)
 
 
 @mach1()
@@ -217,16 +218,21 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                 LOGGER.error("Must specifiy --name when deleting a node")
                 sys.exit(1)
 
+            change_config = True
             try:
                 delete_node(name)
             except (ValueError) as exc:
                 LOGGER.error("Error: %s", exc)
                 sys.exit(1)
+            except InstanceNotFound:
+                change_config = False
 
-            if "master" in name:
-                update_config(config_dict, config, -1, "masters")
-            else:
-                update_config(config_dict, config, -1, "nodes")
+            # Don't change config if Instance wasn't deleted from OpenStack
+            if change_config:
+                if "master" in name:
+                    update_config(config_dict, config, -1, "masters")
+                else:
+                    update_config(config_dict, config, -1, "nodes")
 
         else:
             msg = " ".join([

@@ -4,34 +4,41 @@ stages:
  - wait-for-resources
  - build-cluster
  - integration-test
+ - resize-node
+ - resize-master
  - security-checks
  - compliance-checks
  - cleanup
  - pages
  - build
 
+# --[2]-- STATIC ANALYSIS --
 static-analysis-python:
   stage: static-analysis
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
     - make lint
 
 static-analysis-bash:
   stage: static-analysis
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
     - make test-bash
 
+
+# --[2]-- UNIT TESTS --
 unittest:
   stage: unittest
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
     - pip3 install -q -e .
     - make coverage PY=python3
 
+
+# --[3]-- WAIT FOR RESOURCES --
 wait-for-resources:
   stage: wait-for-resources
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
    - pip3 install -q -e .
    - python3 tests/scripts/wait_for_pipeline.py
@@ -40,9 +47,11 @@ wait-for-resources:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+
+# --[4]-- BUILD --
 bare-metal-build:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
    - apk add openssh
    - pip install python-openstackclient python-octaviaclient
@@ -54,23 +63,9 @@ bare-metal-build:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
-bare-metal-integration:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.4
-  script:
-   - apk add openssh
-   - pip install python-openstackclient python-octaviaclient
-   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
-   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
-   - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
 build-cluster:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
   - "pip3 install -q -e ."
   - make launch-cluster
@@ -86,57 +81,17 @@ build-cluster:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
-add-nodes:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.4
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make add-nodes"
-  - "make assert-node-labels NUM=4"
-  - "make assert-node-labels NUM=5"
-  artifacts:
-    paths:
-      - "tests/koris_test.updated.yml"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
-      - $SKIP_E2E
 
-add-master:
+# --[5]-- INTEGRATION TESTS --
+bare-metal-integration:
   stage: integration-test
   image: oz123/koris-alpine:0.1.5
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
   script:
-  - "pip3 install -q -e ."
-  - "make add-master"
-  - "make assert-members NUM=4"
-  - "make assert-masters NUM=4"
-  - "make assert-control-plane NUM=4"
-  artifacts:
-    paths:
-      - "tests/koris_test.master.yml"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
-      - $SKIP_E2E
-
-check-dns:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.4
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
-  - "pip3 install -q -e ."
-  - "make check-cluster-dns"
+   - apk add openssh
+   - pip install python-openstackclient python-octaviaclient
+   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
+   - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -145,7 +100,7 @@ check-dns:
 
 integration-test:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -170,15 +125,16 @@ integration-test:
       - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
       - $SKIP_E2E
 
-check-node-labels:
+check-dns:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
   - "pip3 install -q -e ."
-  - "make assert-node-labels"
+  - "make check-cluster-dns"
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -202,7 +158,7 @@ check-members:
 
 assert-control-plane:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -216,9 +172,148 @@ assert-control-plane:
       - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
       - $SKIP_E2E
 
+check-node-labels:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-node ACTION=labels NUM=1"
+  - "make assert-node ACTION=labels NUM=2"
+  - "make assert-node ACTION=labels NUM=3"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-test/
+      - $SKIP_E2E
+
+
+# --[6]-- RESIZE NODE --
+add-nodes:
+  stage: resize-node
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make add-nodes NUM=2"
+  - "make assert-node ACTION=labels NUM=4"
+  - "make assert-node ACTION=labels NUM=5"
+  artifacts:
+    paths:
+      - "tests/koris_test.add_node.yml"
+      - "tests/koris_test.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
+
+check-added-node-labels:
+  stage: resize-node
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-node ACTION=labels NUM=4"
+  - "make assert-node ACTION=labels NUM=5"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
+
+check-added-nodes-ready:
+  stage: resize-node
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-node ACTION=ready NUM=4"
+  - "make assert-node ACTION=ready NUM=5"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
+
+delete-nodes:
+  stage: resize-node
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+    - "pip3 install -q -e ."
+    - make delete-node NUM=5 KORIS_CONF="tests/koris_test.add_node"
+    - make assert-node ACTION=deleted NUM=5
+    - make delete-node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
+    - make assert-node ACTION=deleted NUM=4
+  when: on_success
+  artifacts:
+    paths:
+      - "tests/koris_test.delete_node.yml"
+      - "tests/koris_test.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
+
+
+# --[7]-- RESIZE MASTER --
+add-master:
+  stage: resize-master
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+    - "pip3 install -q -e ."
+    - "make add-master"
+    - "make assert-members NUM=4"
+    - "make assert-masters NUM=4"
+    - "make assert-control-plane NUM=4"
+  artifacts:
+    paths:
+      - "tests/koris_test.add_master.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
+
+delete-master:
+  stage: resize-master
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+    - "pip3 install -q -e ."
+    - "make delete-node NUM=4 KORIS_CONF=tests/koris_test.add_master"
+  when: on_success
+  artifacts:
+    paths:
+      - "tests/koris_test.remove_master.yml"
+      - "tests/koris_test.yml"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
+
+# --[8]-- SECURITY CHECKS --
 security-checks-masters:
   stage: security-checks
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -232,7 +327,7 @@ security-checks-masters:
 
 security-checks-nodes:
   stage: security-checks
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -246,9 +341,11 @@ security-checks-nodes:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+
+# --[9]-- COMPLIANCE CHECKS --
 compliance-checks:
   stage: compliance-checks
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -268,9 +365,11 @@ compliance-checks:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+
+# --[10]-- CLEANUP --
 cleanup:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -286,7 +385,7 @@ cleanup:
 
 clean-bare-metal:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -299,9 +398,11 @@ clean-bare-metal:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+
+# --[11]-- PAGES --
 dev-docs:
   stage: pages
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - pip3 install .
@@ -321,7 +422,7 @@ dev-docs:
 
 pages:
   stage: pages
-  image: oz123/koris-alpine:0.1.4
+  image: oz123/koris-alpine:0.1.5
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
@@ -335,6 +436,8 @@ pages:
     - tags
     - master
 
+
+# --[12]-- BUILD --
 build:
   stage: build
   image: oz123/koris-builder:0.2
