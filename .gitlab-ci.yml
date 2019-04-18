@@ -244,7 +244,7 @@ check-added-nodes-ready:
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
-delete-nodes:
+delete-added-nodes:
   stage: resize-node
   image: oz123/koris-alpine:0.1.5
   variables:

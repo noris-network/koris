@@ -216,3 +216,6 @@ This command will perform the following:
 3. Delete the node from Kubernetes.
 
 4. Delete the node from OpenStack.
+
+5. If deletiong from OpenStack was successful, an updated config file will be
+   saved alongside the original.

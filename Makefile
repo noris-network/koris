@@ -170,10 +170,10 @@ add-nodes:
 	@echo mv tests/koris_test.updated.yml tests/koris_test.add_node.yml
 	@echo "OK"
 
-assert-node: NUM
 assert-node: NUM ?= 4
 assert-node: NODE_TYPE ?= node
 assert-node: ACTION ?= labels
+assert-node:
 	NODE_NAME=$(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) \
 		KUBECONFIG=${KUBECONFIG} \
 		tests/scripts/assert_node.sh $(ACTION)
@@ -364,8 +364,6 @@ clean-cluster: update-config
 	koris destroy tests/koris_test.yml --force
 
 clean-all:
-	# (aknipping) Ideally this part is not needed anymore but I will
-	# leave it in for now.
 	@if [ -r tests/koris_test.updated.yml ]; then \
 		mv -v tests/koris_test.updated.yml tests/koris_test.yml; \
 		if [ -r tests/koris_test.master.yml ]; then \
