@@ -160,7 +160,7 @@ class Instance:  # pylint: disable=too-many-arguments
     """
 
     def __init__(self, cinder, nova, name, network, zone, role,
-                 volume_config, flavor, conn=None):
+                 volume_config, flavor):
         self.cinder = cinder
         self.nova = nova
         self.name = name
