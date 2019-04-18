@@ -173,9 +173,6 @@ class Instance:  # pylint: disable=too-many-arguments
         self._ip_address = None
         self.exists = False
 
-        if conn is None:
-            self.conn = get_connection()
-
     @property
     def nics(self):
         """return all network interfaces attached to the instance"""

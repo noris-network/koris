@@ -280,7 +280,6 @@ delete-added-nodes:
     - make assert-node ACTION=deleted NUM=5
     - make delete-node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
     - make assert-node ACTION=deleted NUM=4
-  when: on_success
   artifacts:
     paths:
       - "tests/koris_test.delete_node.yml"
@@ -290,6 +289,8 @@ delete-added-nodes:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
+  when: always
+  allow_failure: true
 
 delete-added-master:
   stage: resize-delete
@@ -300,7 +301,6 @@ delete-added-master:
   script:
     - "pip3 install -q -e ."
     - "make delete-node NUM=4 KORIS_CONF=tests/koris_test.add_master"
-  when: on_success
   artifacts:
     paths:
       - "tests/koris_test.delete_master.yml"
@@ -310,6 +310,8 @@ delete-added-master:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
+  when: always
+  allow_failure: true
 
 
 # --[8]-- SECURITY CHECKS --
