@@ -20,8 +20,6 @@ import yaml
 
 from mach import mach1
 
-from koris.cloud.openstack import OSCloudConfig
-from koris.cloud.openstack import BuilderError, InstanceExists
 from koris.util.util import KorisVersionCheck
 
 from . import __version__
@@ -32,8 +30,9 @@ from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
-from .cloud.openstack import (OSClusterInfo, get_connection, LoadBalancer,
-                              get_clients)
+from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
+                              delete_instance, OSClusterInfo, get_connection,
+                              LoadBalancer, get_clients, InstanceNotFound)
 
 # pylint: disable=protected-access
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -94,6 +93,41 @@ def add_node(cloud_config,
                                             flavor=flavor,
                                             amount=amount)
     node_builder.launch_new_nodes(tasks)
+
+
+def delete_node(name):
+    """Delete a master or worker node from the cluster.
+
+    Will perform basic validity checks on the name.
+
+    Args:
+        name (str): The name of the node to delete.
+        conn: An OpenStack connection object.
+
+    Raises:
+        ValueError if name is invalid.
+        :class:`.openstack.InstanceNotFound` if instance doesn't exist.
+    """
+
+    if not name or name is None:
+        raise ValueError("name can't be empty")
+
+    conn = get_connection()
+
+    k8s = K8S(os.getenv("KUBECONFIG"))
+
+    # Drain the node first
+    k8s.drain_node(name)
+
+    # If master, remove member from etcd cluster
+    if 'master' in name:
+        k8s.remove_from_etcd(name)
+
+    # Delete the node from Kubernetes
+    k8s.delete_node(name)
+
+    # Delete the instance from OpenStack
+    delete_instance(name, conn, ignore_not_found=False)
 
 
 @mach1()
@@ -161,6 +195,52 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             print(red("Certificates {} already deleted".format(certs_location)))
         sys.exit(0)
 
+    def delete(self, config: str, resource: str, name: str = ""):
+        """
+        Delete a node from the cluster, or the complete cluster.
+
+        config - koris configuration file.
+        resource - the type of resource to delete. [node | cluster]
+        name - the name of the resource to delete.
+        """
+
+        with open(config, 'r') as stream:
+            config_dict = yaml.safe_load(stream)
+
+        allowed_resource = ["node", "cluster"]
+        if resource not in allowed_resource:
+            msg = f'Error: resource must be [{" | ".join(allowed_resource)}]'
+            print(red(msg))
+            sys.exit(1)
+
+        if resource == "node":
+            if not name or name is None:
+                LOGGER.error("Must specifiy --name when deleting a node")
+                sys.exit(1)
+
+            change_config = True
+            try:
+                delete_node(name)
+            except (ValueError) as exc:
+                LOGGER.error("Error: %s", exc)
+                sys.exit(1)
+            except InstanceNotFound:
+                change_config = False
+
+            # Don't change config if Instance wasn't deleted from OpenStack
+            if change_config:
+                if "master" in name:
+                    update_config(config_dict, config, -1, "masters")
+                else:
+                    update_config(config_dict, config, -1, "nodes")
+
+        else:
+            msg = " ".join([
+                "Feature not implemented yet.",
+                "Please use 'koris destroy' for time being!"
+            ])
+            print(red(msg))
+
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
             role: str = 'node', amount: int = 1, ip_address: str = None,
@@ -186,7 +266,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         if bootstrap_only:
             if len(bootstrap_only) != 2:
-                print("To bootstarp a node you must specify both name and IP")
+                print("To bootstrap a node you must specify both name and IP")
                 sys.exit(1)
 
             print(

@@ -1,6 +1,11 @@
 import os
 import subprocess
 
+import pytest
+
+# from .testdata import NAUGHTY_STRINGS
+from koris.koris import delete_node
+
 
 def _get_clean_env():
     """
@@ -42,3 +47,11 @@ def test_need_rc_file():
         assert False
     except AssertionError:
         pass
+
+
+def test_delete_node():
+    invalid_names = ["", None]
+
+    for name in invalid_names:
+        with pytest.raises(ValueError):
+            delete_node(name)

@@ -157,8 +157,9 @@ launch-cluster: update-config
 	koris apply tests/koris_test.yml
 
 add-nodes: FLAVOR ?= ECS.UC1.4-4
+add-nodes: NUM ?= 2
 add-nodes:
-	KUBECONFIG=${KUBECONFIG} koris add --amount 2 --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
+	KUBECONFIG=${KUBECONFIG} koris add --amount $(NUM) --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the 2 nodes to join.
 	# assert cluster has now 5 nodes
 	echo "waiting for nodes to join"; \
@@ -166,14 +167,31 @@ add-nodes:
 		echo -n "."; \
 		sleep 1; \
 	done
-	@echo "all nodes successfully joined!"
+	@mv tests/koris_test.updated.yml tests/koris_test.add_node.yml
+	@echo "OK"
+
+assert-node: NUM ?= 4
+assert-node: NODE_TYPE ?= node
+assert-node: ACTION ?= labels
+assert-node:
+	NODE_NAME=$(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) \
+		KUBECONFIG=${KUBECONFIG} \
+		tests/scripts/assert_node.sh $(ACTION)
+
+delete-node: NUM ?= 4
+delete-node: NODE_TYPE ?= node
+delete-node: KORIS_CONF ?= tests/koris_test
+delete-node:
+	KUBECONFIG=${KUBECONFIG} koris delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml
+	mv ${KORIS_CONF}.updated.yml tests/koris_test.delete_$(NODE_TYPE).yml
 
 add-master: FLAVOR ?= ECS.UC1.4-4
+add-master: KORIS_CONF ?= tests/koris_test
 add-master:
-	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
+	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) $(KORIS_CONF).yml
 	# wait for the master to join.
-	@echo "added master successfully!"
-	@mv tests/koris_test.updated.yml tests/koris_test.master.yml
+	@echo "OK"
+	@mv $(KORIS_CONF).updated.yml tests/koris_test.add_master.yml
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
@@ -303,11 +321,6 @@ clean-lb-after-integration-test:
 	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
 	# wait for deletion of LB by kubernetes
 	@sleep 60
-
-assert-node-labels: NUM ?= 1
-assert-node-labels:  ## checks that the cloud-provider set labels on the nodes
-	# kubectl describe nodes --kubeconfig=$(KUBECONFIG) node-$(NUM)-koris-pipe-line-$(CLUSTER_NAME) | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
-	NUM=$(NUM) KUBECONFIG=$(KUBECONFIG) CLUSTER_NAME=$(CLUSTER_NAME) ./tests/scripts/assert_node_labels.sh
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the

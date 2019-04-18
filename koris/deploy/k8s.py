@@ -17,12 +17,17 @@ import time
 import urllib3
 
 from pkg_resources import resource_filename, Requirement
+from netaddr import valid_ipv4
 
 from kubernetes import (client as k8sclient, config as k8sconfig)
 from kubernetes.stream import stream
+from kubernetes.client.rest import ApiException
+from kubernetes.client import V1DeleteOptions
+
 import yaml
 
-from koris.ssl import read_cert, discovery_hash
+from koris.ssl import read_cert
+from koris.ssl import discovery_hash as ssl_discovery_hash
 from koris.util.util import get_logger, retry
 from koris.util.hue import red, bad  # pylint: disable=no-name-in-module
 from koris import MASTER_LISTENER_NAME
@@ -57,6 +62,7 @@ SSHOPTS = ["-l ubuntu "] + SFTPOPTS
 
 # The deployment configuration of the master-adder operator.
 # This pod runs inside a cluster and waits for requests to bootstrap new masters
+MASTER_ADDER_PODNAME = "master-adder"
 MASTER_ADDER_DEPLOYMENT = {
     "apiVersion": "apps/v1",
     "kind": "Deployment",
@@ -85,7 +91,7 @@ MASTER_ADDER_DEPLOYMENT = {
                 "tolerations": [{"key": "node-role.kubernetes.io/master",
                                  "effect": "NoSchedule"}],
                 "containers": [
-                    {"name": "master-adder",
+                    {"name": MASTER_ADDER_PODNAME,
                      "image": "oz123/koris-etcd:0.2",
                      "volumeMounts":
                      [{"mountPath": "/usr/local/bin/add-master-script",
@@ -190,14 +196,46 @@ def get_token_description():
                               datetime.now())
 
 
+def parse_etcd_response(resp):
+    """Takes a response from etcdctl and parses it for its member info.
+
+    The response is to be expected in JSON format as obtained by
+    ``etcdctl member list -w json``. Right now, the IDs in the JSON
+    response are in uint64 format and will be transformed into hex
+    with this function.
+
+    Args:
+        resp (str): A JSON response from etcdctl.
+
+    Returns:
+        A dict containing member information.
+
+    Raises:
+        ValueError if state could not be extracted.
+    """
+
+    if not resp or resp is None:
+        raise ValueError("etcdtl response is empty")
+
+    if not re.search("master-\\d+", resp):
+        LOGGER.info(resp)
+        raise ValueError("can't find 'master' in etcdtl response")
+
+    # Reconstructing the response so we get a dict where the key is the
+    # member name and and value is a dict with the other info.
+    out = {}
+    resp_yaml = yaml.load(resp)
+    for mem in resp_yaml['members']:
+        out[mem['name']] = {k: v for k, v in mem.items() if k != "name"}
+
+        # ID is uint64, but we need it in hex
+        out[mem['name']]['ID'] = hex(out[mem['name']]['ID'])[2:]
+
+    return out
+
+
 class K8S:  # pylint: disable=too-many-locals,too-many-arguments
-    """
-    Deploy basic service to the cluster
-
-    This class is responsible of starting the CNI layer (calico) and
-    the DNS service (kube-dns)
-
-    """
+    """Class allowing various interactions with a Kubernets cluster."""
 
     def __init__(self, config, manifest_path=None):
 
@@ -209,8 +247,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         self.api = k8sclient.CoreV1Api()
 
     def get_bootstrap_token(self):
-        """
-        Generate a Bootstrap token
+        """Generate a Bootstrap token
+
+        Returns:
+            A string of the form ``<token id>.<token secret>``.
         """
         tid = rand_string(6)
         token_secret = rand_string(16)
@@ -237,32 +277,40 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
     @property
     def host(self):
-        """retrieve the host or loadbalancer info"""
+        """Retrieve the host or loadbalancer info"""
         return self.api.api_client.configuration.host
 
     @property
     def ca_info(self):
-        """return a dict with the read ca and the discovery hash"""
+        """Return a dict with the read ca and the discovery hash"""
         return {"ca_cert": self.ca_cert, "discovery_hash": self.discovery_hash}
 
     @property
     def ca_cert(self):
-        """
-        retrun the CA as b64 string
+        """Returns the API servers CA.
+
+        Returns:
+            The CA encoded as base64.
         """
         return read_cert(self.api.api_client.configuration.ssl_ca_cert)
 
     @property
     def discovery_hash(self):
+        """Calculate and return a discovery_hash.
+
+        Based on the cluster CA.
+
+        Returns:
+            A discovery hash encoded in Hex.
         """
-        calculate and return a discovery_hash based on the cluster CA
-        """
-        return discovery_hash(self.ca_cert)
+        return ssl_discovery_hash(self.ca_cert)
 
     @property
     def is_ready(self):
-        """
-        check if the API server is already available
+        """Check if the API server is already available.
+
+        Returns:
+            True if it's reachable.
         """
         logging.getLogger("urllib3").setLevel(logging.ERROR)
         try:
@@ -273,12 +321,17 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
-    def add_all_masters_to_loadbalancer(self,
-                                        n_masters,
-                                        lb_inst
-                                        ):
-        """
-        If we find at least one node that has no Ready: True, return False.
+    def add_all_masters_to_loadbalancer(self, n_masters, lb_inst):
+        """Adds all master nodes to the LoadBalancer listener.
+
+        If the number of members in the master listener pool of the LoadBalancer
+        is less than expected number of masters this function will add them to
+        the pool as soon as they have node status "Ready".
+
+        Args:
+            n_master (int): Number of desired master nodes.
+            lb_inst (:class:`.cloud.openstack.LoadBalancer): A configured
+                LoadBalancer instance.
         """
         cond = {'Ready': 'True'}
         master_listener = lb_inst.master_listener
@@ -310,8 +363,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
     def run_add_script(self, pod, master_name, master_ip,
                        new_master_name, new_master_ip):
-        """
-        Executes a script inside the master-adder operator.
+        """Executes a script inside the master-adder operator.
 
         This function simply takes the required arguments for the
         ``add-master-script`` shell function
@@ -336,6 +388,26 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if kctl.returncode:
             raise ValueError("Could execute the adder script in the adder pod!")
 
+    def get_random_master(self):
+        """Returns a name and IP of a random master server in the cluster.
+
+        Returns:
+            Tuple of name and IP of a master.
+        """
+
+        nodes = self.api.list_node(pretty=True)
+        nodes = [node for node in nodes.items if
+                 'node-role.kubernetes.io/master' in node.metadata.labels]
+
+        addresses = nodes[0].status.addresses
+
+        # master_ip and master_name are the hostname and IP of an existing
+        # master, where an etcd instance is already running.
+        master_ip = _get_node_addr(addresses, "InternalIP")
+        master_name = _get_node_addr(addresses, "Hostname")
+
+        return master_name, master_ip
+
     def bootstrap_master(self, new_master_name, new_master_ip):
         """Run the steps required to bootstrap a new master.
 
@@ -351,24 +423,15 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_name (str): Name of the new master
             new_master_ip (str): IP of the new master.
         """
-        nodes = self.api.list_node(pretty=True)
-        nodes = [node for node in nodes.items if
-                 'node-role.kubernetes.io/master' in node.metadata.labels]
+        master_name, master_ip = self.get_random_master()
 
-        addresses = nodes[0].status.addresses
-
-        # master_ip and master_name are the hostname and IP of an existing
-        # master, where an etcd instance is already running.
-        master_ip = _get_node_addr(addresses, "InternalIP")
-        master_name = _get_node_addr(addresses, "Hostname")
         podname = self.launch_master_adder()
         LOGGER.info("Executing adder script on new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
                             new_master_ip)
 
     def launch_master_adder(self):
-        """
-        launch the add_master_deployment.
+        """Launch the add_master_deployment.
 
         Args:
             new_master_name (str): the new master's name
@@ -400,8 +463,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         return result.items[0].metadata.name
 
     def validate_context(self, cloud_client):
-        """
-        validate that server that we are talking to via K8S API
+        """Validate that server that we are talking to via K8S API
         is also the cloud context we are using.
 
         Args:
@@ -462,3 +524,174 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
 
         return etcd_cluster
+
+    @retry(ValueError)
+    def etcd_members(self, podname, master_ip):
+        """Retrieves a dictionary with information about the etcd cluster.
+
+        This function uses ``etcdctl member list`` to retrieve information
+        about the etcd cluster, then parses that response into a dictionary
+        where the keys are the names of the members and the corresponding values
+        hold the rest of the information such as ID, clientURLs and peerURLs.
+
+        Returns:
+            A dictionary with information about the etcd cluster.
+
+        Raises:
+            ValueError if master_ip is not valid.
+        """
+        if not valid_ipv4(master_ip):
+            raise ValueError(f"Invalid IP: {master_ip}")
+
+        exec_command = [
+            '/bin/sh', '-c',
+            ("ETCDCTL_API=3 etcdctl --endpoints=https://%s:2379 member list"
+             " -w json") % master_ip]  # noqa
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+
+        return parse_etcd_response(response)
+
+    @retry(ValueError)
+    def remove_from_etcd(self, name, ignore_not_found=True):
+        """Removes a member from etcd.
+
+        The 'master-adder' operator will be used to perform the
+        queries against etcd. The pod will be created if not found.
+
+        Args:
+            name (str): The name of the member to remove.
+            ignore_not_found (bool): If set to False, will raise a
+                ValueError if member is not part of etcd cluster.
+        """
+
+        podname = self.launch_master_adder()
+        _, master_ip = self.get_random_master()
+
+        etcd_members = self.etcd_members(podname, master_ip)
+        LOGGER.debug(etcd_members)
+
+        try:
+            etcd_id = etcd_members[name]['ID']
+        except KeyError:
+            msg = f"'{name}' not part of etcd cluster"
+            if ignore_not_found:
+                LOGGER.info("Skipping removing %s from etcd, %s", name, msg)
+                return
+
+            raise ValueError(msg)
+
+        cmd = " ".join(["ETCDCTL_API=3", "etcdctl",
+                        f"--endpoints=https://{master_ip}:2379",
+                        "member", "remove", f"{etcd_id}", "-w", "json"])
+        exec_command = ['/bin/sh', '-c', cmd]
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+        LOGGER.debug("%s", response)
+
+    def node_status(self, nodename):
+        """Returns the status of a Node.
+
+        Args:
+            nodename (str): The name of the node to check.
+
+        Returns:
+            The status of the node as string or None if an error was
+                encountered.
+        """
+
+        resp = None
+        try:
+            resp = self.api.read_node_status(
+                nodename,
+                pretty=True)
+            LOGGER.debug("API Response: %s", resp)
+        except ApiException as exc:
+            LOGGER.debug("API exception: %s", exc)
+            return None
+
+        # Grab dat string
+        status = [x for x in resp.status.conditions if x.type == 'Ready']
+
+        return status[0].status
+
+    def drain_node(self, nodename, ignore_not_found=True):
+        """Drains a node of pods.
+
+        We're using ``kubectl drain`` instead of the eviction API, since it's
+        quicker and we don't have to get all the Pods of the Node first.
+
+        Will check if the node exists first.
+
+        Args:
+            nodename (str): Name of the node to drain
+            ignore_not_found (bool): If set to False, will raise
+                a ValueError if the node doesn't exist.
+
+        Raises:
+            RuntimeError if ``kubectl drain`` fails.
+        """
+
+        if self.node_status(nodename) is None:
+            msg = f"Node {nodename} doesn't exist"
+            if ignore_not_found:
+                LOGGER.info("Skipping node eviction, %s", msg)
+                return
+
+            raise ValueError(msg)
+
+        # kubectl drain needs to block
+        cmd = ["kubectl", "drain", nodename, "--ignore-daemonsets"]
+        try:
+            proc = sp.run(cmd,
+                          check=True,
+                          encoding="utf-8",
+                          stdout=sp.PIPE,
+                          stderr=sp.PIPE)
+        except sp.CalledProcessError as exc:
+            LOGGER.error()
+            msg = "Error calling '{}': {}".format(" ".join(cmd), exc)
+            raise RuntimeError(msg)
+
+        LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout, proc.returncode)
+
+    def delete_node(self, nodename, grace_period=0, ignore_not_found=True):
+        """Delete a node in Kubernetes.
+
+        Args:
+            nodename (str): The name of the node to delete.
+            grace_period (int): Duration in seconds before the node should be
+                delete. Defaults to 0, which means immediately.
+            ignore_not_found (bool): If set to False, will raise a ValueError if
+                node doesn't exist.
+
+        Raises:
+            :class:`kubernetes.client.rest.ApiException` in case the API call
+                fails.
+        """
+
+        if self.node_status(nodename) is None:
+            msg = f"Node {nodename} doesn't exist"
+            if ignore_not_found:
+                LOGGER.info("Skipping node eviction, %s", msg)
+                return
+
+            raise ValueError(msg)
+
+        options = V1DeleteOptions(grace_period_seconds=grace_period)
+        resp = self.api.delete_node(nodename,
+                                    options,
+                                    pretty=True,
+                                    grace_period_seconds=grace_period)
+
+        LOGGER.debug(resp)
+        LOGGER.debug("Kubernetes node '%s' has been deleted successfully",
+                     nodename)
