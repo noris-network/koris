@@ -206,7 +206,6 @@ add-nodes:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
