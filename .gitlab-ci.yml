@@ -457,7 +457,7 @@ coverage-report:
   when: always
   artifacts:
     paths:
-      - ".coverage.unit-test"
+      - ".coverage"
     expire_in: 1 week
 
 

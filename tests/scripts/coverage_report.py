@@ -9,8 +9,7 @@ import os
 import subprocess
 import sys
 
-from urllib.parse import urlparse
-
+from urllib import parse
 
 CI_PROJECT_URL = "https://gitlab.noris.net/PI/koris/"
 CI_PROJECT_ID = "1260"
@@ -22,34 +21,45 @@ FILES = {
     "add-master": [".coverage.add-master"],
     "add-nodes": [".coverage.add-nodes"],
     "delete-added-master": [".coverage.delete-master"],
-    "delete-added-node": [".coverage.delete-nodes"],
+    "delete-added-nodes": [".coverage.delete-nodes"],
     "cleanup": [".coverage.destroy"],
 }
 
 
 def main(argv):
-    URL = urlparse(os.getenv("CI_PROJECT_URL", CI_PROJECT_URL))
+    # talk to the GitLab API and download all necessary artifacts
+    URL = parse.urlparse(os.getenv("CI_PROJECT_URL", CI_PROJECT_URL))
     gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
                        private_token=os.getenv("ACCESS_TOKEN"))
     project = gl.projects.get(os.getenv("CI_PROJECT_ID", CI_PROJECT_ID))
 
     pipeline = project.pipelines.get(os.getenv("CI_PIPELINE_ID"))
-    jobs = pipeline.jobs.list(all=True)
+    pipeline_jobs = pipeline.jobs.list(all=True)
 
-    for job in jobs:
+    for pipeline_job in pipeline_jobs:
         # check if we have a job we want to extract data from
-        if job.name in FILES:
-            print(job.name)  # TODO: remove if we know it works
+        if pipeline_job.name in FILES:
+            print("Checking job {}".format(pipeline_job.name))
 
-            # find artifact archive that cotnaints the interesting files
-            zipfn = "___artifacts.zip"
-            with open(zipfn, "wb") as f:
-                job.artifacts(streamed=True, action=f.write)
-                subprocess.run(["unzip", "-bo", zipfn])
+            # we need to convert to a job object in order to download artifacts
+            job = project.jobs.get(pipeline_job.id, lazy=True)
 
-                subprocess.run(["ls", "-la"])  # TODO: remove if it works
+            # download every interesting file
+            for artifact in FILES[pipeline_job.name]:
+                print("Download file {}".format(artifact))
+                with open(artifact, "wb") as file:
+                    file.write(job.artifact(artifact))
 
-                os.unlink(zipfn)
+    # call python combine
+    cmd = ["python3", "-m", "coverage", "combine"]
+    for job in FILES:
+        for file in FILES[job]:
+            cmd.append(file)
+
+    print(cmd)
+    subprocess.run(cmd, check=True)
+
+    print("Successfully combined the coverage reports.")
 
 
 if __name__ == "__main__":
