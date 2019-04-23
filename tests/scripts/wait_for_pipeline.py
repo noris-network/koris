@@ -29,7 +29,7 @@ def can_i_run():
     running_pipelines = [lin for lin in project.pipelines.list() if
                          lin.attributes['status'] == 'running']
 
-    return len(running_pipelines) < MAX_PIPES
+    return len(running_pipelines) <= MAX_PIPES
 
 
 def clean_resources():
