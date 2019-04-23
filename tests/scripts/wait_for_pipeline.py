@@ -20,24 +20,16 @@ gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
 
 project = gl.projects.get(os.getenv("CI_PROJECT_ID", 1260))
 
+MAX_PIPES = int(os.getenv("CI_MAX_RUNNING_PIELINES", 3))
+
 
 def can_i_run():
-    """
-    check if other jobs are not in step:
-        'build-cluster', 'integration-test', 'security-checks',
-        'compliance-checks'
-    """
+    """Only allow a certain number of pipelines to run."""
+
     running_pipelines = [lin for lin in project.pipelines.list() if
                          lin.attributes['status'] == 'running']
 
-    running_pipelines = sorted(running_pipelines, key=lambda x: x.id)
-    # print(running_pipelines)
-    myID = int(os.getenv("CI_PIPELINE_ID"))
-    # print(myID)
-    if myID == running_pipelines[0].id:
-        return True
-    else:
-        return False
+    return len(running_pipelines) < 3
 
 
 def clean_resources():
