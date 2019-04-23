@@ -40,7 +40,7 @@ else:
     MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
                                       'koris/deploy/manifests')
 
-LOGGER = get_logger(__name__, level=logging.INFO)
+LOGGER = get_logger(__name__, level=logging.DEBUG)
 
 
 def _get_node_addr(addresses, addr_type):
@@ -478,7 +478,9 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         """
 
         lb_ip = conn.network.find_ip(self.host.strip("https://").split(":")[0])
+        LOGGER.debug("lb_ip: %s", lb_ip)
         for item in conn.load_balancer.load_balancers():
+            LOGGER.debug("item: %s", item)
             if item.project_id == lb_ip.project_id:
                 return True
 
