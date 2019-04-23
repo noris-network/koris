@@ -8,6 +8,7 @@ stages:
  - security-checks
  - compliance-checks
  - cleanup
+ - coverage-report
  - pages
  - build
 
@@ -45,6 +46,7 @@ wait-for-resources:
   stage: wait-for-resources
   image: oz123/koris-alpine:0.1.5
   script:
+   - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
    - python3 tests/scripts/wait_for_pipeline.py
   except:
@@ -437,6 +439,26 @@ clean-bare-metal:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
+
+
+# --[ COVERAGE REPORT ]--
+
+coverage-report:
+  stage: coverage-report
+  image: oz123/koris-alpine:0.1.5
+  script:
+   - "pip3 install -r requirements_ci.txt"
+   - pip3 install -q -e .
+   - python3 tests/scripts/coverage_report.py
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+  when: always
+  artifacts:
+    paths:
+      - ".coverage.unit-test"
+    expire_in: 1 week
 
 
 # --[ PAGES ]--
