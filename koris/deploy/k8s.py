@@ -40,7 +40,7 @@ else:
     MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
                                       'koris/deploy/manifests')
 
-LOGGER = get_logger(__name__, level=logging.DEBUG)
+LOGGER = get_logger(__name__, level=logging.INFO)
 
 
 def _get_node_addr(addresses, addr_type):
@@ -470,6 +470,9 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         then checks if it finds the same ID in any LoadBalancer of the
         currently sourced OpenStack project.
 
+        In case the IP is not a Floating IP but only a Virtual IP, both
+        IPs are simply compared.
+
         Args:
             conn (obj): OpenStack connection object.
 
@@ -480,14 +483,13 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         lb_ip = conn.network.find_ip(raw_ip)
 
         if lb_ip:
-            LOGGER.debug("k8s.host: %s", self.host)
-            LOGGER.debug("lb_ip: %s", lb_ip)
+            # We have a Floating IP
             for item in conn.load_balancer.load_balancers():
-                LOGGER.debug("item: %s", item)
                 if item.project_id == lb_ip.project_id:
                     return True
         else:
-            for item in conn.load_balancer.load_balancer():
+            # We have a Virtual IP
+            for item in conn.load_balancer.load_balancers():
                 if item.vip_address == raw_ip:
                     return True
 
