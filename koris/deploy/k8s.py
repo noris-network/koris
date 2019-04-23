@@ -599,11 +599,6 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                           command=exec_command,
                           stderr=True, stdin=False,
                           stdout=True, tty=False)
-        stream(self.api.connect_get_namespaced_pod_exec,
-               podname, 'kube-system',
-               command=exec_command,
-               stderr=True, stdin=False,
-               stdout=True, tty=False)
 
         LOGGER.debug("%s", response)
 
