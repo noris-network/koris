@@ -28,6 +28,10 @@ FILES = {
 
 def main(argv):
     # talk to the GitLab API and download all necessary artifacts
+    # TODO: Probably we can remove the whole script / the bottom, since we can
+    # do it in the gitlab-ci file directly.
+    # TODO: upload HTML file to documentation
+    # TODO: adjust badge
     """URL = parse.urlparse(os.getenv("CI_PROJECT_URL", CI_PROJECT_URL))
     gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
                        private_token=os.getenv("ACCESS_TOKEN"))
