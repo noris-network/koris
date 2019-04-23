@@ -30,8 +30,14 @@ unittest:
   stage: unittest
   image: oz123/koris-alpine:0.1.5
   script:
+    - "pip3 install -r requirements_ci.txt"
     - pip3 install -q -e .
     - make coverage PY=python3
+    - "make rename-coverage NAME=\"unit-test\""
+  artifacts:
+    paths:
+      - ".coverage.unit-test"
+    expire_in: 1 week
 
 
 # --[ WAIT FOR RESOURCES ]--
@@ -66,19 +72,17 @@ build-cluster:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.5
   script:
+  - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
   - "make launch-cluster"
-  - "make show-nodes"
   - "make rename-coverage NAME=\"build-cluster\""
-  - "make coverage"
-  - "make rename-coverage NAME=\"unit-test\""
+  - "make show-nodes"
   artifacts:
     paths:
       - "certs-*"
       - "*-admin.conf"
       - "tests/koris_test.yml"
       - ".coverage.build-cluster"
-      - ".coverage.unit-test"
     expire_in: 1 week
   except:
     variables:
@@ -200,6 +204,7 @@ add-nodes:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+  - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
   - "make add-nodes NUM=2"
   - "make assert-node ACTION=labels NUM=4"
@@ -224,6 +229,7 @@ add-master:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - "pip3 install  -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - "make add-master"
     - "make assert-members NUM=4"
@@ -285,6 +291,7 @@ delete-added-nodes:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - "pip3 install -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - make delete-node NODE_TYPE=node NUM=5 KORIS_CONF="tests/koris_test.add_node"
     - make assert-node NODE_TYPE=node ACTION=deleted NUM=5
@@ -314,6 +321,7 @@ delete-added-master:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - "pip3 install -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
     - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
