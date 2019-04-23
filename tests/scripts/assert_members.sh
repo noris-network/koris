@@ -9,14 +9,13 @@ echo "Asserting that LoadBalancer ${LB_NAME} has ${DESIRED_NUM} members ..."
 
 # Need to extract the Pool ID with cluster name since this will fail
 # if there are multiple LoadBalancers / Clusters in the project such as in PI
-# POOLID="$(${CMD} pool show 'master-pool' -f value -c id)"
 LB_ID=$(${CMD} list -f value -c name -c id | grep ${LB_NAME} | awk '{print $1}')
 POOL_ID=$(${CMD} show ${LB_ID} -f shell | grep pools | cut -d '=' -f2 | sed -e "s/\"//g")
 
 ACTUAL_NUM=$(${CMD} member list ${POOL_ID} -f json -c address | jq '.| length')
 
 if [ "${ACTUAL_NUM}" -ne "${DESIRED_NUM}" ]; then
-	echo "${ACTUAL_NUM} members found:"
+	echo "Error: ${ACTUAL_NUM} members found:"
 	${CMD} member list ${POOL_ID}
 	exit 1
 fi
