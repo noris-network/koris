@@ -79,7 +79,6 @@ build-cluster:
   - "make show-nodes"
   artifacts:
     paths:
-      - "certs-*"
       - "*-admin.conf"
       - "tests/koris_test.yml"
       - ".coverage.build-cluster"
@@ -123,7 +122,6 @@ integration-test:
   - "make clean-lb-after-integration-test"
   artifacts:
     paths:
-      - "certs-*"
       - "*-admin.conf"
       - "tests/koris_test.yml"
     expire_in: 1 week
@@ -215,6 +213,7 @@ add-nodes:
       - "tests/koris_test.add_node.yml"
       - "tests/koris_test.yml"
       - ".coverage.add-nodes"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -241,6 +240,7 @@ add-master:
       - "tests/koris_test.add_master.yml"
       - "tests/koris_test.yml"
       - ".coverage.add-master"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -305,6 +305,7 @@ delete-added-nodes:
       - "tests/koris_test.delete_node.yml"
       - "tests/koris_test.yml"
       - ".coverage.delete-nodes"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -331,6 +332,7 @@ delete-added-master:
       - "tests/koris_test.delete_master.yml"
       - "tests/koris_test.yml"
       - ".coverage.delete-master"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -391,6 +393,7 @@ compliance-checks:
   artifacts:
     paths:
       - results
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -406,13 +409,19 @@ cleanup:
     LANG: "C.UTF-8"
   script:
   - apk add make
+  - "pip3 install  -r requirements_ci.txt"
   - "pip3 install -q -e ."
   - make clean-all
+  - "make rename-coverage NAME=\"destroy\""
   when: always
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
+  artifacts:
+    paths:
+      - ".coverage.destroy"
+    expire_in: 1 week
 
 clean-bare-metal:
   stage: cleanup

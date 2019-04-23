@@ -366,7 +366,7 @@ update-config:
 	@cat tests/koris_test.yml
 
 clean-cluster: update-config
-	koris destroy tests/koris_test.yml --force
+	$(PY) -m coverage run -m koris destroy tests/koris_test.yml --force
 
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
@@ -377,7 +377,7 @@ clean-all:
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
-	@koris destroy tests/koris_test.yml --force
+	$(PY) -m coverage run -m koris destroy tests/koris_test.yml --force
 	@git checkout tests/koris_test.yml
 	@rm -fv ${KUBECONFIG}
 	@rm -vfR certs-${CLUSTER_NAME}
