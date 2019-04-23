@@ -40,7 +40,7 @@ else:
     MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
                                       'koris/deploy/manifests')
 
-LOGGER = get_logger(__name__, level=logging.DEBUG)
+LOGGER = get_logger(__name__, level=logging.INFO)
 
 
 def _get_node_addr(addresses, addr_type):
@@ -218,7 +218,7 @@ def parse_etcd_response(resp):
         raise ValueError("etcdtl response is empty")
 
     if not re.search("master-\\d+", resp):
-        LOGGER.info(resp)
+        LOGGER.debug(resp)
         raise ValueError("can't find 'master' in etcdtl response")
 
     # Reconstructing the response so we get a dict where the key is the
@@ -376,7 +376,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_name (str): the host name to provision
             new_master_ip (str): the IP address of the master to provision
         """
-        LOGGER.info("Extract current etcd cluster state...")
+        LOGGER.info("Retrieving etcd cluster state ...")
 
         etcd_cluster = self.etcd_cluster_status(pod, master_ip)
         cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
@@ -386,7 +386,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         kctl = sp.Popen(cmd, shell=True)
         kctl.communicate()
         if kctl.returncode:
-            raise ValueError("Could execute the adder script in the adder pod!")
+            raise ValueError("unable to execute adder script in adder pod")
 
     def get_random_master(self):
         """Returns a name and IP of a random master server in the cluster.
@@ -462,20 +462,24 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                 label_selector='k8s-app=master-adder')
         return result.items[0].metadata.name
 
-    def validate_context(self, cloud_client):
+    def validate_context(self, conn):
         """Validate that server that we are talking to via K8S API
         is also the cloud context we are using.
 
+        This retrieves the project ID of the Kubernetes LoadBalancer,
+        then checks if it finds the same ID in any LoadBalancer of the
+        currently sourced OpenStack project.
+
         Args:
-            host (str): a load balancer or server name found the k8s context
-            cloud_client (obj): an object capable of querying the cloud for the
-               presence of host
+            conn (obj): OpenStack connection object.
 
         Return:
             bool
         """
-        for item in cloud_client.load_balancer.load_balancers():
-            if item.vip_address == self.host:
+
+        lb_ip = conn.network.find_ip(self.host.strip("https://").split(":")[0])
+        for item in conn.load_balancer.load_balancers():
+            if item.project_id == lb_ip.project_id:
                 return True
 
         return False
@@ -521,7 +525,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         response = yaml.load(response)
         etcd_cluster = ",".join(("=".join((m['name'], m['peerURLs'][0])) for m
                                  in response['members']))
-        LOGGER.info("Current etcd cluster state is: %s", etcd_cluster)
+        LOGGER.debug("Current etcd cluster state is: %s", etcd_cluster)
 
         return etcd_cluster
 
@@ -590,19 +594,18 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                         "member", "remove", f"{etcd_id}", "-w", "json"])
         exec_command = ['/bin/sh', '-c', cmd]
 
-        # response = stream(self.api.connect_get_namespaced_pod_exec,
-        #                   podname, 'kube-system',
-        #                   command=exec_command,
-        #                   stderr=True, stdin=False,
-        #                   stdout=True, tty=False)
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
         stream(self.api.connect_get_namespaced_pod_exec,
                podname, 'kube-system',
                command=exec_command,
                stderr=True, stdin=False,
                stdout=True, tty=False)
 
-        # Commenting output because wall-of-YAML
-        # LOGGER.debug("%s", response)
+        LOGGER.debug("%s", response)
 
     def node_status(self, nodename):
         """Returns the status of a Node.
@@ -658,24 +661,19 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         # kubectl drain needs to block
         cmd = ["kubectl", "drain", nodename, "--ignore-daemonsets"]
         try:
-            # proc = sp.run(cmd,
-            #               check=True,
-            #               encoding="utf-8",
-            #               stdout=sp.PIPE,
-            #               stderr=sp.PIPE)
-            sp.run(cmd,
-                   check=True,
-                   encoding="utf-8",
-                   stdout=sp.PIPE,
-                   stderr=sp.PIPE)
+            proc = sp.run(cmd,
+                          check=True,
+                          encoding="utf-8",
+                          stdout=sp.PIPE,
+                          stderr=sp.PIPE)
+
         except sp.CalledProcessError as exc:
             LOGGER.error()
             msg = "Error calling '{}': {}".format(" ".join(cmd), exc)
             raise RuntimeError(msg)
 
-        # Commenting output because wall-of-YAML
-        # LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
-        #              proc.returncode)
+        LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
+                     proc.returncode)
 
     def delete_node(self, nodename, grace_period=0, ignore_not_found=True):
         """Delete a node in Kubernetes.

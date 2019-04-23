@@ -306,6 +306,7 @@ delete-added-master:
     - "pip3 install -q -e ."
     - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
     - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
+    - make assert-members NUM=3
   artifacts:
     paths:
       - "tests/koris_test.delete_master.yml"
