@@ -4,12 +4,12 @@ A script to generate a comprehensive coverage report based on a set of
 .coverage files from the previous steps.
 """
 
-import gitlab
-import os
+# import gitlab
+# import os
 import subprocess
 import sys
 
-from urllib import parse
+# from urllib import parse
 
 CI_PROJECT_URL = "https://gitlab.noris.net/PI/koris/"
 CI_PROJECT_ID = "1260"
@@ -28,7 +28,7 @@ FILES = {
 
 def main(argv):
     # talk to the GitLab API and download all necessary artifacts
-    URL = parse.urlparse(os.getenv("CI_PROJECT_URL", CI_PROJECT_URL))
+    """URL = parse.urlparse(os.getenv("CI_PROJECT_URL", CI_PROJECT_URL))
     gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
                        private_token=os.getenv("ACCESS_TOKEN"))
     project = gl.projects.get(os.getenv("CI_PROJECT_ID", CI_PROJECT_ID))
@@ -49,7 +49,7 @@ def main(argv):
                 print("Download file {}".format(artifact))
                 with open(artifact, "wb") as file:
                     file.write(job.artifact(artifact))
-
+    """
     # call python combine
     cmd = ["python3", "-m", "coverage", "combine"]
     for job in FILES:

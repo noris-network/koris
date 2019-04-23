@@ -450,7 +450,6 @@ coverage-report:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
    - python3 tests/scripts/coverage_report.py
-   - mv tests/scripts/.coverage .coverage
    - python3 -m coverage report -m
    - python3 -m coverage html
   except:
