@@ -17,11 +17,15 @@ start-release: check-env
 	@python setup.py sdist
 	@echo "Edit ChangeLog manually and rename it to TAGMESSAGE"
 
-
 do-bump: NVER = $(subst v,,$(VER))
 do-bump: check-env
 	echo $(NVER)
 	sed -i "s/[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/$(NVER)/g" koris/__init__.py
+
+abort-release:
+	git checkout dev
+	git branch -D prepare_$(VER)
+	git tag -d $(VER)
 
 do-release: do-bump check-api-key
 	git add koris/__init__.py
