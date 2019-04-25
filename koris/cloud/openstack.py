@@ -490,7 +490,7 @@ class LoadBalancer:
             # default pool name that is independent of the cluster name?
             pool = self.conn.network.find_pool(self._data.pools[0]['id'])
             for member_id in [list(x.values())[0] for x in pool.members]:
-                self._del_member(member_id, pool.id)
+                self.del_member(member_id, pool.id)
 
         for member in master_ips:
             LOGGER.info("Adding member %s ...", member)
@@ -752,7 +752,14 @@ class LoadBalancer:
 
     @retry(exceptions=(StateInvalidClient, OSConflict), backoff=1, tries=5, delay=5,
            logger=LOGGER.debug)
-    def _del_member(self, member_id, pool_id):  # pylint: disable=no-self-use
+    def del_member(self, member_id, pool_id):  # pylint: disable=no-self-use
+        """Deletes a member from the LoadBalancer.
+
+        Args:
+            member_id (str): The ID of the member to be deleted.
+            pool_id (str): The ID of the pool where the member is located.
+        """
+
         try:
             self.conn.network.delete_pool_member(member_id, pool_id, ignore_missing=False)
             LOGGER.debug("Deleted member %s from pool %s", member_id, pool_id)

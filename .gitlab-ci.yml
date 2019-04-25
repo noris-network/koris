@@ -206,7 +206,6 @@ add-nodes:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
@@ -229,7 +228,6 @@ add-master:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
@@ -246,7 +244,6 @@ check-added-node-labels:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
@@ -263,7 +260,6 @@ check-added-nodes-ready:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
@@ -290,7 +286,6 @@ delete-added-nodes:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
   when: always
@@ -306,6 +301,7 @@ delete-added-master:
     - "pip3 install -q -e ."
     - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
     - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
+    - make assert-members NUM=3
   artifacts:
     paths:
       - "tests/koris_test.delete_master.yml"
@@ -313,7 +309,6 @@ delete-added-master:
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
   when: always

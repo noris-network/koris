@@ -26,7 +26,8 @@ from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
 
-from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
+from .util.hue import (bad, red,            # pylint: disable=no-name-in-module
+                       info as infomsg)     # pylint: disable=no-name-in-module
 from .util.util import (get_logger, )
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
@@ -95,18 +96,76 @@ def add_node(cloud_config,
     node_builder.launch_new_nodes(tasks)
 
 
-def delete_node(name):
+# pylint: disable=too-many-locals
+def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
+               os_cluster_info, k8s):
+    """Add a new master to OpenStack and the Kubernetes cluster.
+
+    Will add a new node to OpenStack, adjust the config, bootstrap the master
+    and add the IP to the LoadBalancer pool.
+
+    Args:
+        bootstrap_only (list): A list of name and IP for the node to be
+            bootstrapped
+         builder (:class:`.cloud.openstack.ControlPlaneBuilder`): A
+            ControlPlanBuilder instance.
+        zone (str): The AZ to add the new node in.
+        flavor (str): The node flavor of the node.
+        config (str): The path of the koris config.
+        config_dict (dict): The parsed koris config.
+        os_cluster_info (:class:`.cloud.openstack.OSClusterInfo`): A
+            OSClusterInfo instance.
+        k8s (:class:`.deploy.K8S`): A K8S instance.
+    """
+
+    if not bootstrap_only:
+        master = builder.add_master(zone, flavor)
+        name, ip_address = master.name, master.ip_address
+        update_config(config_dict, config, 1, role='masters')
+
+    try:
+        k8s.bootstrap_master(name, ip_address)
+    except ValueError as err:
+        print(red(f"Error: {err}"))
+
+        # Cleanup
+        LOGGER.info("Deleting instance %s from OpenStack ...", name)
+        delete_instance(name, os_cluster_info.conn)
+
+        sys.exit(1)
+    except urllib3.exceptions.MaxRetryError:
+        LOGGER.warning(
+            red("Connection failed! Are you using the correct "
+                "kubernetes context?"))
+        sys.exit(1)
+
+    # Adding master to LB
+    conn = get_connection()
+    lb = LoadBalancer(config_dict, conn)
+    if not lb.get():
+        red("No LoadBalancer found")
+        sys.exit(1)
+    try:
+        master_pool = lb.master_listener['pool']['id']
+    except KeyError as exc:
+        red(f"Unable to obtain master-pool: {exc}")
+        sys.exit(1)
+    lb.add_member(master_pool, master.ip_address)
+
+
+# pylint: disable=no-member
+def delete_node(config_dict, name):
     """Delete a master or worker node from the cluster.
 
     Will perform basic validity checks on the name.
 
     Args:
+        config_dict (dict): A dictionary representing the config.
         name (str): The name of the node to delete.
         conn: An OpenStack connection object.
 
     Raises:
-        ValueError if name is invalid.
-        :class:`.openstack.InstanceNotFound` if instance doesn't exist.
+        ValueError if name is invalid or resources are not found.
     """
 
     if not name or name is None:
@@ -114,15 +173,45 @@ def delete_node(name):
 
     conn = get_connection()
 
+    # Get our LoadBalancer
+    lb = LoadBalancer(config_dict, conn)
+    lbinst = lb.get()
+    if not lbinst:
+        raise ValueError("no LoadBalancer found")
+
     k8s = K8S(os.getenv("KUBECONFIG"))
+
+    # Verify we are in the project of our target cluster
+    if not k8s.validate_context(conn):
+        raise ValueError("cluster not part of your sourced OpenStack tenant")
 
     # Drain the node first
     k8s.drain_node(name)
 
-    # If master, remove member from etcd cluster
+    # If master, remove member from etcd cluster and LoadBalancer
     if 'master' in name:
         k8s.remove_from_etcd(name)
 
+        # Get IP of node to be deleted
+        srv = conn.compute.find_server(name)
+        if not srv:
+            raise ValueError(f"instance '{name}' not found")
+        ip = list(conn.compute.server_ips(srv))
+        if not ip:
+            raise ValueError(f"instance '{name}' has no IP")
+
+        # Get member ID of node to be ledeted
+        mems = lb.master_listener['pool']['members']
+        mem_id = [x['id'] for x in mems if x['address'] == ip[0].address]
+        if mem_id:
+            # Delete member from LoadBalancer master pool
+            pool_id = lb.master_listener['pool']['id']
+            lb.del_member(mem_id[0], pool_id)
+            LOGGER.info("Removed instance '%s' from LoadBalancer '%s'", name,
+                        lb.name)
+        else:
+            LOGGER.debug("Members: %s", mems)
+            LOGGER.error("instance '%s' not part of LoadBalancer", name)
     # Delete the node from Kubernetes
     k8s.delete_node(name)
 
@@ -169,8 +258,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         except InstanceExists:
             pass
         except BuilderError as err:
-            print(red("Error encoutered ... "))
-            print(red(err))
+            print(red(f"Error: {err}"))
             delete_cluster(config, nova, neutron, cinder,
                            True)
 
@@ -209,20 +297,20 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         allowed_resource = ["node", "cluster"]
         if resource not in allowed_resource:
-            msg = f'Error: resource must be [{" | ".join(allowed_resource)}]'
-            print(red(msg))
+            print(red('Error: resource must be '
+                      '[%s]' % " | ".join(allowed_resource)))
             sys.exit(1)
 
         if resource == "node":
             if not name or name is None:
-                LOGGER.error("Must specifiy --name when deleting a node")
+                print(bad(red("Must specifiy --name when deleting a node")))
                 sys.exit(1)
 
             change_config = True
             try:
-                delete_node(name)
+                delete_node(config_dict, name)
             except (ValueError) as exc:
-                LOGGER.error("Error: %s", exc)
+                print(bad(red(f"Error: {exc}")))
                 sys.exit(1)
             except InstanceNotFound:
                 change_config = False
@@ -235,11 +323,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                     update_config(config_dict, config, -1, "nodes")
 
         else:
-            msg = " ".join([
-                "Feature not implemented yet.",
-                "Please use 'koris destroy' for time being!"
-            ])
-            print(red(msg))
+            print(red("Feature not implemented yet."
+                      "Please use 'koris destroy' for time being!"))
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
@@ -286,7 +371,11 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         k8s = K8S(os.getenv("KUBECONFIG"))
         os_cluster_info = OSClusterInfo(nova, neutron, cinder,
                                         config_dict)
-        k8s.validate_context(os_cluster_info.conn)
+
+        if not k8s.validate_context(os_cluster_info.conn):
+            print(bad(red("Error: cluster not part of your sourced"
+                          "OpenStack tenant")))
+            sys.exit(1)
 
         try:
             subnet = neutron.find_resource(
@@ -303,39 +392,11 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             update_config(config_dict, config, amount)
 
         elif role == 'master':
-            if not bootstrap_only:
-                builder = ControlPlaneBuilder(config_dict, os_cluster_info,
-                                              cloud_config)
-                master = builder.add_master(zone, flavor)
-                name, ip_address = master.name, master.ip_address
-                update_config(config_dict, config, 1, role='masters')
+            builder = ControlPlaneBuilder(config_dict, os_cluster_info,
+                                          cloud_config)
 
-            try:
-                k8s.bootstrap_master(name, ip_address)
-            except ValueError as error:
-                print(red("Error encoutered ... ", error))
-                print(red("You may want to remove the newly created Openstack "
-                          "instance manually..."))
-                sys.exit(1)
-            except urllib3.exceptions.MaxRetryError:
-                LOGGER.warning(
-                    red("Connection failed! Are you using the correct "
-                        "kubernetes context?"))
-                sys.exit(1)
-
-            # Adding master to LB
-            conn = get_connection()
-            lb = LoadBalancer(config_dict, conn)
-            lbinst = lb.get()
-            if not lbinst:
-                red("No LoadBalancer found")
-                sys.exit(1)
-            try:
-                master_pool = lb.master_listener['pool']['id']
-            except KeyError as exc:
-                red(f"Unable to obtain master-pool: {exc}")
-                sys.exit(1)
-            lb.add_member(master_pool, master.ip_address)
+            add_master(bootstrap_only, builder, zone, flavor, config,
+                       config_dict, os_cluster_info, k8s)
 
         else:
             print("Unknown role")

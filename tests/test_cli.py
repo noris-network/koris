@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-# from .testdata import NAUGHTY_STRINGS
+from .testdata import CONFIG
 from koris.koris import delete_node
 
 
@@ -54,4 +54,4 @@ def test_delete_node():
 
     for name in invalid_names:
         with pytest.raises(ValueError):
-            delete_node(name)
+            delete_node(CONFIG, name)
