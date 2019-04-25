@@ -14,22 +14,24 @@ endif
 define ABORT_PIPELINE
 import os
 import sys
-
 from urllib.parse import urlparse
 
 import gitlab
 
 URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.noris.net/PI/koris/"))
 PROJECT_ID=os.getenv("CI_PROJECT_ID", 1260)
-print(PROJECT_ID)
-gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname, private_token=os.getenv("ACCESS_TOKEN"))
+VERSION=os.environ['VER']
+REVISION = sys.argv[-1]
+
+gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
+	               private_token=os.getenv("ACCESS_TOKEN"))
 
 project = gl.projects.get(PROJECT_ID)
 
 for pl in project.pipelines.list():
-    if pl.attributes['ref'] == 'master':
+    if pl.attributes['sha'] == REVISION and pl.attributes['ref'] != VERSION:
         pl.cancel()
-        print("Caneclled pipeline for master")
+        print("Caneclled pipeline %s" % pl.id)
 
 endef
 export ABORT_PIPELINE
@@ -48,7 +50,7 @@ do-bump: check-env
 	echo $(NVER)
 	sed -i "s/[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/$(NVER)/g" koris/__init__.py
 
-abort-release: check-ver
+abort-release: check-env
 	git checkout dev
 	git branch -D prepare_$(VER)
 	git tag -d $(VER)
@@ -62,10 +64,10 @@ do-release: do-bump check-api-key
 	python3 tests/scripts/protect-un-protect.py master
 	git push origin master --tags
 	python3 tests/scripts/protect-un-protect.py master
-	@$(PY) -c "$$ABORT_PIPELINE"
+	@$(PY) -c "$$ABORT_PIPELINE" "$$(git rev-parse HEAD)"
 
-abort-pipeline: check-api-key
-	@$(PY) -c "$$ABORT_PIPELINE"
+abort-pipeline: check-api-key check-env
+	@$(PY) -c "$$ABORT_PIPELINE" "$$(git rev-parse HEAD)"
 
 finish-release: check-env check-api-key
 	git checkout dev
@@ -75,9 +77,8 @@ finish-release: check-env check-api-key
 	git pull --rebase
 	python3 tests/scripts/protect-un-protect.py dev
 	git push origin dev
+	@$(PY) -c "$$ABORT_PIPELINE" "$$(git rev-parse HEAD)"
 	python3 tests/scripts/protect-un-protect.py dev
-
-
 
 
 # vim: tabstop=4 shiftwidth=4
