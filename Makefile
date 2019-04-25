@@ -406,12 +406,15 @@ build-exec-in-docker:
 	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
 
 start-release:
-	make -f release.mk start-release
+	make -f release.mk $@  # $@ is the name of the target
 
 do-release:
-	make -f release.mk do-release
+	make -f release.mk release
 
 finish-release:
 	make -f release.mk finish-release
+
+abort-release:
+	make -f release.mk $@
 
 # vim: tabstop=4 shiftwidth=4
