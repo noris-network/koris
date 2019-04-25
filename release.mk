@@ -11,11 +11,12 @@ endif
 start-release: check-env
 	@echo "checking out branch prepare_"$(VER)
 	@git checkout -b prepare_$(VER)
-	@sudo rm -Rf koris.egg-info dist/
-	@echo "create a git tag"
+	sudo rm -Rf koris.egg-info dist/
 	git tag -s $(VER) -m "tmp-tag"
+	@echo "create a git tag"
 	@python setup.py sdist
 	@echo "Edit ChangeLog manually and rename it to TAGMESSAGE"
+
 
 do-bump: NVER = $(subst v,,$(VER))
 do-bump: check-env
