@@ -142,8 +142,7 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
     # Adding master to LB
     conn = get_connection()
     lb = LoadBalancer(config_dict, conn)
-    lbinst = lb.get()
-    if not lbinst:
+    if not lb.get():
         red("No LoadBalancer found")
         sys.exit(1)
     try:
@@ -298,8 +297,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         allowed_resource = ["node", "cluster"]
         if resource not in allowed_resource:
-            msg = f'Error: resource must be [{" | ".join(allowed_resource)}]'
-            print(red(msg))
+            print(red('Error: resource must be '
+                      '[%s]' % " | ".join(allowed_resource)))
             sys.exit(1)
 
         if resource == "node":
@@ -324,11 +323,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                     update_config(config_dict, config, -1, "nodes")
 
         else:
-            msg = " ".join([
-                "Feature not implemented yet.",
-                "Please use 'koris destroy' for time being!"
-            ])
-            print(red(msg))
+            print(red("Feature not implemented yet."
+                      "Please use 'koris destroy' for time being!"))
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
@@ -377,8 +373,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                                         config_dict)
 
         if not k8s.validate_context(os_cluster_info.conn):
-            msg = "Error: cluster not part of your sourced OpenStack tenant"
-            print(bad(red(msg)))
+            print(bad(red("Error: cluster not part of your sourced"
+                          "OpenStack tenant")))
             sys.exit(1)
 
         try:

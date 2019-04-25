@@ -595,7 +595,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         except KeyError:
             msg = f"'{name}' not part of etcd cluster"
             if ignore_not_found:
-                LOGGER.info("Skipping removing %s from etcd, %s", name, msg)
+                LOGGER.info("Skipping removing %s from etcd: %s", name, msg)
                 return
 
             raise ValueError(msg)
@@ -674,9 +674,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                           stderr=sp.PIPE)
 
         except sp.CalledProcessError as exc:
-            LOGGER.error()
-            msg = "Error calling '{}': {}".format(" ".join(cmd), exc)
-            raise RuntimeError(msg)
+            raise RuntimeError("error calling '%s':"
+                               "%s" % " ".join(cmd), exc)
 
         LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
                      proc.returncode)
