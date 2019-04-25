@@ -408,11 +408,9 @@ build-exec-in-docker:
 start-release:
 	make -f release.mk $@  # $@ is the name of the target
 
-do-release:
-	make -f release.mk do-release
-
-finish-release:
-	make -f release.mk finish-release
+complete-release:
+	make -f release.mk $@
+	make -f release.mk abort-pipeline
 
 abort-release:
 	make -f release.mk $@

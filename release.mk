@@ -52,8 +52,9 @@ do-bump: check-env
 
 abort-release: check-env
 	git checkout dev
-	git branch -D prepare_$(VER)
-	git tag -d $(VER)
+	git branch -D prepare_$(VER) || echo "branch not found"
+	git tag -d $(VER) || echo "tag not found"
+	git push --delete origin $(VER)
 
 do-release: do-bump check-api-key
 	git add koris/__init__.py
@@ -64,10 +65,12 @@ do-release: do-bump check-api-key
 	python3 tests/scripts/protect-un-protect.py master
 	git push origin master --tags
 	python3 tests/scripts/protect-un-protect.py master
-	@$(PY) -c "$$ABORT_PIPELINE" "$$(git rev-parse HEAD)"
 
 abort-pipeline: check-api-key check-env
 	@$(PY) -c "$$ABORT_PIPELINE" "$$(git rev-parse HEAD)"
+
+complete-release: do-release finish-release
+	echo "finished release"
 
 finish-release: check-env check-api-key
 	git checkout dev
@@ -77,8 +80,6 @@ finish-release: check-env check-api-key
 	git pull --rebase
 	python3 tests/scripts/protect-un-protect.py dev
 	git push origin dev
-	@$(PY) -c "$$ABORT_PIPELINE" "$$(git rev-parse HEAD)"
 	python3 tests/scripts/protect-un-protect.py dev
-
 
 # vim: tabstop=4 shiftwidth=4
