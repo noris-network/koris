@@ -409,7 +409,7 @@ start-release:
 	make -f release.mk $@  # $@ is the name of the target
 
 do-release:
-	make -f release.mk release
+	make -f release.mk do-release
 
 finish-release:
 	make -f release.mk finish-release
