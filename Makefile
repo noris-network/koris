@@ -335,6 +335,9 @@ clean-lb: ## delete a loadbalancer with all it's components
 	$(call ndef,LOADBALANCER_NAME)
 	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy
 
+clean-all-lb:
+	openstack loadbalancer list -f value -c id | xargs -I % sh -c 'openstack loadbalancer delete --cascade %'
+
 security-checks: security-checks-nodes security-checks-masters
 
 security-checks-masters: OVERRIDES="{ \"apiVersion\": \"v1\", \
