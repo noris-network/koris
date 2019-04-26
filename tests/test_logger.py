@@ -1,37 +1,52 @@
 import pytest
 
-from koris.util.logger import Logger, LOG_LEVELS
+from koris.util.logger import Logger, LOG_LEVELS, DEFAULT_LOG_LEVEL
+
+# @pytest.fixture(scope="functiion")
+# def logger():
+#     yield Logger("test")
+
+
+def test_logger_default_state():
+    assert Logger.LOG_LEVEL == DEFAULT_LOG_LEVEL
 
 
 def test_logger_creation():
+    assert Logger.LOG_LEVEL == DEFAULT_LOG_LEVEL
+
     # OK
     for i in LOG_LEVELS:
-        assert Logger(i)
-        assert Logger(i, "test")
+        Logger.LOG_LEVEL = i
+        log = Logger("test")
+        assert log is not None
+        assert log.LOG_LEVEL == i
 
+
+def test_logger_fail():
     # Not OK
     for i in [-1, 100, 23, 42]:
+        Logger.LOG_LEVEL = i
+        assert Logger.LOG_LEVEL == i
+
         with pytest.raises(ValueError):
-            Logger(i)
+            Logger("test")
 
 
-def test_set_level():
-    log = Logger(1)
-
-    # OK
-    for i in LOG_LEVELS:
-        log.set_level(i)
-
-    # # Not OK
-    for i in [-1, 100, 23, 42]:
-        with pytest.raises(ValueError):
-            log.set_level(i)
-
-
+# Run tests with -s to verify the output:
+# py.test -s tests/test_logger.py
 def test_level_logging():
     for i in LOG_LEVELS:
-        print(f"-- Logging on level {i} --")
-        log = Logger(i)
+        Logger.LOG_LEVEL = i
+        log = Logger(f"test")
+
+        print("----")
+        print(f"id(log): {id(log)}")
+        print(f"Logger.LOG_LEVEL: {Logger.LOG_LEVEL}")
+        print(f"log.LOG_LEVEL: {log.LOG_LEVEL}")
+        print(f"log.level: {log.level}")
+        print(f"log.handlers: {log.logger.handlers}")
+        print("----")
+
         msg = "The quick brown fox jumps over the lazy dog"
         msg2 = "-123.00"
 

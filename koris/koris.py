@@ -16,18 +16,18 @@ from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 import urllib3
 import yaml
-import builtins
 
 from mach import mach1
 
 from koris.util.util import KorisVersionCheck
 
+import koris
+
 from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
 
-from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
-from .util.util import get_logger
+from .util.hue import red  # pylint: disable=no-name-in-module
 from .util.logger import Logger
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
@@ -39,7 +39,7 @@ from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
 ssl._create_default_https_context = ssl._create_unverified_context
 
 KORIS_DOC_URL = "https://pi.docs.noris.net/koris/"
-
+LOGGER = Logger(__name__)
 
 
 def update_config(config_dict, config, amount, role='nodes'):
@@ -52,8 +52,8 @@ def update_config(config_dict, config, amount, role='nodes'):
     with open(updated_name, 'w') as stream:
         yaml.dump(config_dict, stream=stream)
 
-    print(infomsg("An updated cluster configuration was written to: {}".format(
-        updated_name)))
+    LOGGER.info("An updated cluster configuration was written to: {}".format(
+        updated_name))
 
 
 def add_node(cloud_config,
@@ -237,8 +237,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             "1 = error, ",
             "2 = warning, ",
             "3 = info, ",
-            "4 = debug)"]
-        )
+            "4 = debug)"])
         self.parser.add_argument("--verbosity",  # pylint: disable=no-member
                                  "-v",
                                  help=verbosity_help,
@@ -259,16 +258,6 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
     def _get_verbosity(self):
         pass
-
-    def test(self):
-        """
-        testing
-        """
-        LOGGER = Logger(name=__name__)
-        LOGGER.error("error")
-        LOGGER.warn("warn")
-        LOGGER.info("info")
-        LOGGER.debug("debug")
 
     def apply(self, config):
         """
@@ -300,16 +289,16 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         nova, neutron, cinder = get_clients()
 
-        print(red(
-            "You are about to destroy your cluster '{}'!!!".format(
-                config['cluster-name'])))
+        LOGGER.question(
+            "Deleting cluster '{}':".format(
+                config['cluster-name']))
 
         delete_cluster(config, nova, neutron, cinder, force)
         certs_location = 'certs-' + config['cluster-name']
         try:
             shutil.rmtree(certs_location)
         except FileNotFoundError:
-            print(red("Certificates {} already deleted".format(certs_location)))
+            LOGGER.warn(f"Certificates {certs_location} already deleted")
         sys.exit(0)
 
     def delete(self, config: str, resource: str, name: str = ""):
@@ -452,13 +441,15 @@ def main():
         'warning': 2,
         'info': 3,
         'debug': 4}
-
     try:
         level = int(level)
     except ValueError:
         level = level_to_int[level]
 
-    builtins.LOG_LEVEL = level
+    koris.util.logger.Logger.LOG_LEVEL = level
+
+    # Calling again because the instance was set on import
+    LOGGER.__init__(__name__)
 
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically
