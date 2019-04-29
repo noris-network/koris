@@ -335,7 +335,7 @@ clean-lb: ## delete a loadbalancer with all it's components
 	$(call ndef,LOADBALANCER_NAME)
 	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy
 
-security-checks: security-checks-nodes security-checks-masters
+security-checks: security-checks-nodes security-checks-masters ## run the complete aquasec security tests from your local machine
 
 security-checks-masters: OVERRIDES="{ \"apiVersion\": \"v1\", \
 	\"spec\": { \"hostPID\": true, \"nodeSelector\": \
@@ -394,9 +394,7 @@ clean-sonobuoy:
 	rm sonobuoy.tgz || true;
 	rm sonobuoy || true;
 
-compliance-checks: \
-	check-sonobuoy \
-	clean-sonobuoy
+compliance-checks: check-sonobuoy clean-sonobuoy ## run the complete sonobuoy test from your local machine
 
 install-git-hooks:
 	pip install git-pylint-commit-hook
