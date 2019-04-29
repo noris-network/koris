@@ -377,14 +377,28 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_ip (str): the IP address of the master to provision
         """
         LOGGER.info("Retrieving etcd cluster state ...")
-
         etcd_cluster = self.etcd_cluster_status(pod, master_ip)
+        LOGGER.debug(f"etcd cluster: {etcd_cluster}")
         cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
                '"/usr/local/bin/add-master-script '
                '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
                                     etcd_cluster, master_name, master_ip))
-        kctl = sp.Popen(cmd, shell=True)
-        kctl.communicate()
+
+        LOGGER.info("Bootstrapping new master node ...")
+        cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
+               '"/usr/local/bin/add-master-script '
+               '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
+                                    etcd_cluster, master_name, master_ip))
+        kctl = sp.Popen(cmd,
+                        stdout=sp.PIPE,
+                        stderr=sp.PIPE,
+                        shell=True,
+                        universal_newlines=True)
+
+        out, err = kctl.communicate()
+        LOGGER.debug(f"STDOUT: {out}")
+        LOGGER.debug(f"STDERR: {err}")
+
         if kctl.returncode:
             raise ValueError("unable to execute adder script in adder pod")
 
@@ -426,9 +440,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         master_name, master_ip = self.get_random_master()
 
         podname = self.launch_master_adder()
-        LOGGER.info("Executing adder script on new master node...")
+        LOGGER.info("Preparing bootstrap of new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
                             new_master_ip)
+        LOGGER.success("Bootstrap of new master finished successfully")
 
     def launch_master_adder(self):
         """Launch the add_master_deployment.
@@ -612,6 +627,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                           stdout=True, tty=False)
 
         LOGGER.debug("%s", response)
+        LOGGER.debug("Removed '%s' from etcd", name)
 
     def node_status(self, nodename):
         """Returns the status of a Node.

@@ -914,7 +914,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
             net_name = self.config.get('private_net')['name']
         network = self.conn.get_network(net_name)
         if network:
-            LOGGER.info(f"The network [{net_name}] already exists. Skipping")
+            LOGGER.info(f"Network [{net_name}] already exists. Skipping ...")
         else:
             LOGGER.info("Creating network [%s]" % net_name)
             network = self.conn.create_network(name=net_name,

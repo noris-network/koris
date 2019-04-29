@@ -49,8 +49,8 @@ def update_config(config_dict, config, amount, role='nodes'):
     with open(updated_name, 'w') as stream:
         yaml.dump(config_dict, stream=stream)
 
-    LOGGER.info("An updated cluster configuration was written to: {}".format(
-        updated_name))
+    LOGGER.success("An updated cluster configuration was written to: {}".format(
+                   updated_name))
 
 
 def add_node(cloud_config,
@@ -146,6 +146,7 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
     except KeyError as exc:
         LOGGER.error(f"Unable to obtain master-pool: {exc}")
         sys.exit(1)
+    LOGGER.info("Adding new master to LoadBalancer ...")
     lb.add_member(master_pool, master.ip_address)
 
 
@@ -203,8 +204,8 @@ def delete_node(config_dict, name):
             # Delete member from LoadBalancer master pool
             pool_id = lb.master_listener['pool']['id']
             lb.del_member(mem_id[0], pool_id)
-            LOGGER.info("Removed instance '%s' from LoadBalancer '%s'", name,
-                        lb.name)
+            LOGGER.success("Removed instance '%s' from LoadBalancer '%s'", name,
+                           lb.name)
         else:
             LOGGER.debug("Members: %s", mems)
             LOGGER.error("instance '%s' not part of LoadBalancer", name)
@@ -408,12 +409,17 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         elif role == 'master':
             builder = ControlPlaneBuilder(config_dict, os_cluster_info,
                                           cloud_config)
-
-            add_master(bootstrap_only, builder, zone, flavor, config,
-                       config_dict, os_cluster_info, k8s)
+            try:
+                add_master(bootstrap_only, builder, zone, flavor, config,
+                           config_dict, os_cluster_info, k8s)
+            except (RuntimeError, ValueError) as exc:
+                LOGGER.error(f"Error: {exc}")
+                sys.exit(1)
 
         else:
             LOGGER.warn("Unknown role")
+
+        LOGGER.success("Adding new node finished successfully")
 
 
 def main():

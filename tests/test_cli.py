@@ -25,7 +25,7 @@ def test_help():
     RC file.
     """
     cmd = ['koris', '--help']
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=_get_clean_env())
     stdout, stderr = proc.communicate()
     output = stdout.decode("utf-8").strip()
