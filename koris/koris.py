@@ -16,7 +16,7 @@ from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 import urllib3
 import yaml
-
+import builtins
 
 from mach import mach1
 
@@ -26,9 +26,9 @@ from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
 
-from .util.hue import (bad, red,            # pylint: disable=no-name-in-module
-                       info as infomsg)     # pylint: disable=no-name-in-module
-from .util.util import (get_logger, )
+from .util.hue import red, info as infomsg  # pylint: disable=no-name-in-module
+from .util.util import get_logger
+from .util.logger import Logger
 
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
 from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
@@ -39,7 +39,7 @@ from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
 ssl._create_default_https_context = ssl._create_unverified_context
 
 KORIS_DOC_URL = "https://pi.docs.noris.net/koris/"
-LOGGER = get_logger(__name__)
+
 
 
 def update_config(config_dict, config, amount, role='nodes'):
@@ -227,9 +227,25 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
     """
     def __init__(self):
         self.parser.add_argument(  # pylint: disable=no-member
-            "--version", action="store_true",
+            "--version", "-V", action="store_true",
             help="show version and exit",
             default=argparse.SUPPRESS)
+
+        verbosity_help = "".join([
+            "set the verbosity level (",
+            "0 = quiet, ",
+            "1 = error, ",
+            "2 = warning, ",
+            "3 = info, ",
+            "4 = debug)"]
+        )
+        self.parser.add_argument("--verbosity",  # pylint: disable=no-member
+                                 "-v",
+                                 help=verbosity_help,
+                                 choices=['0', '1', '2', '3', '4', 'quiet',
+                                          'error', 'warning', 'info', 'debug'],
+                                 type=str,
+                                 default=3)
 
         try:
             html_string = str(urlopen(KORIS_DOC_URL, timeout=1.5).read())
@@ -240,6 +256,19 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
     def _get_version(self):
         print("%s version: %s" % (self.__class__.__name__, __version__))
+
+    def _get_verbosity(self):
+        pass
+
+    def test(self):
+        """
+        testing
+        """
+        LOGGER = Logger(name=__name__)
+        LOGGER.error("error")
+        LOGGER.warn("warn")
+        LOGGER.info("info")
+        LOGGER.debug("debug")
 
     def apply(self, config):
         """
@@ -414,6 +443,22 @@ def main():
                            'OpenStack RC file has to be sourced in the '\
                            'shell. See online documentation for more '\
                            'information.'
+
+    # Setting verbosity level
+    level = k.parser.parse_args().verbosity
+    level_to_int = {
+        'quiet': 0,
+        'error': 1,
+        'warning': 2,
+        'info': 3,
+        'debug': 4}
+
+    try:
+        level = int(level)
+    except ValueError:
+        level = level_to_int[level]
+
+    builtins.LOG_LEVEL = level
 
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically

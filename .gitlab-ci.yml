@@ -8,6 +8,7 @@ stages:
  - security-checks
  - compliance-checks
  - cleanup
+ - coverage-report
  - pages
  - build
 
@@ -30,8 +31,19 @@ unittest:
   stage: unittest
   image: oz123/koris-alpine:0.1.5
   script:
+    - "pip3 install -r requirements_ci.txt"
     - pip3 install -q -e .
     - make coverage PY=python3
+    - "make rename-coverage NAME=\"unit-test\""
+  artifacts:
+    paths:
+      - ".coverage.unit-test"
+    expire_in: 1 week
+  # the following is a regex that is never matched. We need this,
+  # since we do not want to export the code coverage for the
+  # badge in this step but in the "coverage" step at the end
+  # of the pipeline.
+  coverage: '/a^/'
 
 
 # --[ WAIT FOR RESOURCES ]--
@@ -39,6 +51,7 @@ wait-for-resources:
   stage: wait-for-resources
   image: oz123/koris-alpine:0.1.5
   script:
+   - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
    - python3 tests/scripts/wait_for_pipeline.py
   except:
@@ -66,14 +79,16 @@ build-cluster:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.5
   script:
+  - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
-  - make launch-cluster
-  - make show-nodes
+  - "make launch-cluster"
+  - "make rename-coverage NAME=\"build-cluster\""
+  - "make show-nodes"
   artifacts:
     paths:
-      - "certs-*"
       - "*-admin.conf"
       - "tests/koris_test.yml"
+      - ".coverage.build-cluster"
     expire_in: 1 week
   except:
     variables:
@@ -114,7 +129,6 @@ integration-test:
   - "make clean-lb-after-integration-test"
   artifacts:
     paths:
-      - "certs-*"
       - "*-admin.conf"
       - "tests/koris_test.yml"
     expire_in: 1 week
@@ -195,14 +209,18 @@ add-nodes:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+  - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
   - "make add-nodes NUM=2"
   - "make assert-node ACTION=labels NUM=4"
   - "make assert-node ACTION=labels NUM=5"
+  - "make rename-coverage NAME=\"add-nodes\""
   artifacts:
     paths:
       - "tests/koris_test.add_node.yml"
       - "tests/koris_test.yml"
+      - ".coverage.add-nodes"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -216,15 +234,19 @@ add-master:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - "pip3 install  -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - "make add-master"
     - "make assert-members NUM=4"
     - "make assert-masters NUM=4"
     - "make assert-control-plane NUM=4"
+    - "make rename-coverage NAME=\"add-master\""
   artifacts:
     paths:
       - "tests/koris_test.add_master.yml"
       - "tests/koris_test.yml"
+      - ".coverage.add-master"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -272,6 +294,7 @@ delete-added-nodes:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - "pip3 install -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - make delete-node NODE_TYPE=node NUM=5 KORIS_CONF="tests/koris_test.add_node"
     - make assert-node NODE_TYPE=node ACTION=deleted NUM=5
@@ -279,10 +302,13 @@ delete-added-nodes:
     - make delete-node NODE_TYPE=node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
     - make assert-node NODE_TYPE=node ACTION=deleted NUM=4
     - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=4
+    - "make rename-coverage NAME=\"delete-nodes\""
   artifacts:
     paths:
       - "tests/koris_test.delete_node.yml"
       - "tests/koris_test.yml"
+      - ".coverage.delete-nodes"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -298,14 +324,19 @@ delete-added-master:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - "pip3 install -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
     - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
     - make assert-members NUM=3
+    - "make rename-coverage NAME=\"delete-master\""
+
   artifacts:
     paths:
       - "tests/koris_test.delete_master.yml"
       - "tests/koris_test.yml"
+      - ".coverage.delete-master"
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -365,6 +396,7 @@ compliance-checks:
   artifacts:
     paths:
       - results
+    expire_in: 1 week
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -380,13 +412,19 @@ cleanup:
     LANG: "C.UTF-8"
   script:
   - apk add make
+  - "pip3 install  -r requirements_ci.txt"
   - "pip3 install -q -e ."
   - make clean-all
+  - "make rename-coverage NAME=\"destroy\""
   when: always
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
+  artifacts:
+    paths:
+      - ".coverage.destroy"
+    expire_in: 1 week
 
 clean-bare-metal:
   stage: cleanup
@@ -402,6 +440,29 @@ clean-bare-metal:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
+
+
+# --[ COVERAGE REPORT ]--
+
+coverage-report:
+  stage: coverage-report
+  image: oz123/koris-alpine:0.1.5
+  script:
+   - "pip3 install -r requirements_ci.txt"
+   - pip3 install -q -e .
+   - python3 tests/scripts/coverage_report.py
+   - python3 -m coverage report -m 
+   - python3 -m coverage html
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+  when: always
+  artifacts:
+    paths:
+      - ".coverage"
+      - "htmlcov"
+    expire_in: 1 week
 
 
 # --[ PAGES ]--

@@ -66,6 +66,7 @@ clean-pyc: ## remove Python file artifacts
 clean-test: ## remove test and coverage artifacts
 	rm -fr .tox/
 	rm -f .coverage
+	rm -f .coverage.*
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
@@ -92,6 +93,10 @@ coverage: ## check code coverage quickly with the default Python
 	#coverage report -m
 	#coverage html
 	#$(BROWSER) htmlcov/index.html
+
+rename-coverage: NAME ?= ".coverage.default"
+rename-coverage:
+	mv .coverage .coverage.$(NAME)
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	sphinx-apidoc -o docs/ koris
@@ -154,12 +159,12 @@ compliance-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
-	koris apply tests/koris_test.yml
+	$(PY) -m coverage run -m koris apply tests/koris_test.yml
 
 add-nodes: FLAVOR ?= ECS.UC1.4-4
 add-nodes: NUM ?= 2
 add-nodes:
-	KUBECONFIG=${KUBECONFIG} koris add --amount $(NUM) --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris add --amount $(NUM) --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
 	# wait for the 2 nodes to join.
 	# assert cluster has now 5 nodes
 	echo "waiting for nodes to join"; \
@@ -182,13 +187,13 @@ delete-node: NUM ?= 4
 delete-node: NODE_TYPE ?= node
 delete-node: KORIS_CONF ?= tests/koris_test
 delete-node:
-	KUBECONFIG=${KUBECONFIG} koris delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml
 	mv ${KORIS_CONF}.updated.yml tests/koris_test.delete_$(NODE_TYPE).yml
 
 add-master: FLAVOR ?= ECS.UC1.4-4
 add-master: KORIS_CONF ?= tests/koris_test
 add-master:
-	KUBECONFIG=${KUBECONFIG} koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) $(KORIS_CONF).yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris add --role master --zone de-nbg6-1a --flavor $(FLAVOR) $(KORIS_CONF).yml
 	# wait for the master to join.
 	@echo "OK"
 	@mv $(KORIS_CONF).updated.yml tests/koris_test.add_master.yml
@@ -361,7 +366,7 @@ update-config:
 	@cat tests/koris_test.yml
 
 clean-cluster: update-config
-	koris destroy tests/koris_test.yml --force
+	$(PY) -m coverage run -m koris destroy tests/koris_test.yml --force
 
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
@@ -372,7 +377,7 @@ clean-all:
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
-	@koris destroy tests/koris_test.yml --force
+	$(PY) -m coverage run -m koris destroy tests/koris_test.yml --force
 	@git checkout tests/koris_test.yml
 	@rm -fv ${KUBECONFIG}
 	@rm -vfR certs-${CLUSTER_NAME}
