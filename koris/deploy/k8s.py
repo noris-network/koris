@@ -28,8 +28,8 @@ import yaml
 
 from koris.ssl import read_cert
 from koris.ssl import discovery_hash as ssl_discovery_hash
-from koris.util.util import get_logger, retry
-from koris.util.hue import red, bad  # pylint: disable=no-name-in-module
+from koris.util.util import retry
+from koris.util.logger import Logger
 from koris import MASTER_LISTENER_NAME
 
 if getattr(sys, 'frozen', False):
@@ -40,7 +40,7 @@ else:
     MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
                                       'koris/deploy/manifests')
 
-LOGGER = get_logger(__name__, level=logging.INFO)
+LOGGER = Logger(__name__)
 
 
 def _get_node_addr(addresses, addr_type):
@@ -336,7 +336,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         cond = {'Ready': 'True'}
         master_listener = lb_inst.master_listener
         if not master_listener:
-            LOGGER.error(bad(red(f"No {MASTER_LISTENER_NAME} found, aborting")))
+            LOGGER.error(f"No {MASTER_LISTENER_NAME} found, aborting")
             sys.exit(1)
 
         try:
@@ -345,7 +345,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             pool_id = master_listener['pool']['id']
         except KeyError as exc:
             err = f"Unable to extract info of {MASTER_LISTENER_NAME}: {exc}"
-            LOGGER.error(bad(red(err)))
+            LOGGER.error(err)
             sys.exit(1)
 
         while len(lb_inst.master_listener['pool']['members']) < n_masters:
@@ -450,7 +450,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if kctl.returncode:
             raise ValueError("Could not apply master adder pod!")
 
-        LOGGER.info("Waiting for the pod to run ...")
+        LOGGER.info("Waiting for pod to run ...")
         result = self.api.list_namespaced_pod(
             "kube-system",
             label_selector='k8s-app=master-adder')
@@ -710,5 +710,5 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                                     grace_period_seconds=grace_period)
 
         LOGGER.debug(resp)
-        LOGGER.debug("Kubernetes node '%s' has been deleted successfully",
-                     nodename)
+        LOGGER.success("Kubernetes node '%s' has been deleted successfully",
+                       nodename)

@@ -18,9 +18,9 @@ from cryptography.hazmat.primitives import serialization
 
 from koris import __version__
 from koris.ssl import b64_cert, b64_key
-from koris.util.util import get_logger
+from koris.util.logger import Logger
 
-LOGGER = get_logger(__name__)
+LOGGER = Logger(__name__)
 
 
 BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"

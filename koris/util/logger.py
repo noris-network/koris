@@ -6,7 +6,7 @@ import time
 
 # pylint: disable=no-name-in-module
 from koris.util.hue import (bad, red, info as infomsg, yellow, run, grey,
-                            que, blue, good, green)
+                            que, good, green)
 
 LOG_LEVELS = [x for x in range(5)]
 DEFAULT_LOG_LEVEL = 3
@@ -331,6 +331,6 @@ class Logger(metaclass=Singleton):
         """
 
         if color:
-            msg = que(blue(msg))
+            msg = que(msg)
 
         print(msg)

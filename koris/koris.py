@@ -26,10 +26,7 @@ import koris
 from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
-
-from .util.hue import red  # pylint: disable=no-name-in-module
 from .util.logger import Logger
-
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
 from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
                               delete_instance, OSClusterInfo, get_connection,
@@ -126,7 +123,7 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
     try:
         k8s.bootstrap_master(name, ip_address)
     except ValueError as err:
-        print(red(f"Error: {err}"))
+        LOGGER.error(f"Error: {err}")
 
         # Cleanup
         LOGGER.info("Deleting instance %s from OpenStack ...", name)
@@ -134,21 +131,20 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
 
         sys.exit(1)
     except urllib3.exceptions.MaxRetryError:
-        LOGGER.warning(
-            red("Connection failed! Are you using the correct "
-                "kubernetes context?"))
+        LOGGER.error(("Connection failed! Are you using the correct "
+                      "kubernetes context?"))
         sys.exit(1)
 
     # Adding master to LB
     conn = get_connection()
     lb = LoadBalancer(config_dict, conn)
     if not lb.get():
-        red("No LoadBalancer found")
+        LOGGER.error("No LoadBalancer found")
         sys.exit(1)
     try:
         master_pool = lb.master_listener['pool']['id']
     except KeyError as exc:
-        red(f"Unable to obtain master-pool: {exc}")
+        LOGGER.error(f"Unable to obtain master-pool: {exc}")
         sys.exit(1)
     lb.add_member(master_pool, master.ip_address)
 
@@ -276,7 +272,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         except InstanceExists:
             pass
         except BuilderError as err:
-            print(red(f"Error: {err}"))
+            LOGGER.error(f"Error: {err}")
             delete_cluster(config, nova, neutron, cinder,
                            True)
 
@@ -290,7 +286,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         nova, neutron, cinder = get_clients()
 
         LOGGER.question(
-            "Deleting cluster '{}':".format(
+            "Deleting cluster '{}'".format(
                 config['cluster-name']))
 
         delete_cluster(config, nova, neutron, cinder, force)
@@ -315,20 +311,20 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         allowed_resource = ["node", "cluster"]
         if resource not in allowed_resource:
-            print(red('Error: resource must be '
-                      '[%s]' % " | ".join(allowed_resource)))
+            LOGGER.error('Error: resource must be '
+                         '[%s]' % " | ".join(allowed_resource))
             sys.exit(1)
 
         if resource == "node":
             if not name or name is None:
-                print(bad(red("Must specifiy --name when deleting a node")))
+                LOGGER.error("Must specifiy --name when deleting a node")
                 sys.exit(1)
 
             change_config = True
             try:
                 delete_node(config_dict, name)
             except (ValueError) as exc:
-                print(bad(red(f"Error: {exc}")))
+                LOGGER.error(f"Error: {exc}")
                 sys.exit(1)
             except InstanceNotFound:
                 change_config = False
@@ -341,8 +337,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                     update_config(config_dict, config, -1, "nodes")
 
         else:
-            print(red("Feature not implemented yet."
-                      "Please use 'koris destroy' for time being!"))
+            LOGGER.error("Feature not implemented yet."
+                         "Please use 'koris destroy' for time being!")
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
@@ -369,16 +365,16 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         if bootstrap_only:
             if len(bootstrap_only) != 2:
-                print("To bootstrap a node you must specify both name and IP")
+                LOGGER.error(("To bootstrap a node you must specify both"
+                              "name and IP"))
                 sys.exit(1)
 
-            print(
-                "Bootstraping host {} with address {}, "
-                "assuming it's present".format(name, ip_address))
+            LOGGER.info(("Bootstraping host {} with address {}, "
+                         "assuming it's present".format(name, ip_address)))
 
         elif len(list(filter(None, [flavor, zone]))) < 2:
-            print("You  must specify both flavor and zone if you want to create"
-                  " an instance")
+            LOGGER.error(("You  must specify both flavor and zone if you want"
+                          "to create an instance"))
             sys.exit(1)
 
         with open(config, 'r') as stream:
@@ -391,8 +387,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                                         config_dict)
 
         if not k8s.validate_context(os_cluster_info.conn):
-            print(bad(red("Error: cluster not part of your sourced"
-                          "OpenStack tenant")))
+            LOGGER.error(("Error: cluster not part of your sourced"
+                          "OpenStack tenant"))
             sys.exit(1)
 
         try:
@@ -417,7 +413,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                        config_dict, os_cluster_info, k8s)
 
         else:
-            print("Unknown role")
+            LOGGER.warn("Unknown role")
 
 
 def main():

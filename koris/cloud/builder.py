@@ -19,18 +19,16 @@ from koris.deploy.k8s import K8S
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
-from koris.util.hue import (  # pylint: disable=no-name-in-module
-    red, info, yellow, bad, lightgreen, lightcyan as cyan)
 from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
                               create_dex_conf, ValidationError)
-from koris.util.util import get_logger
+from koris.util.logger import Logger
 from koris.ssl import b64_cert, b64_key
 from .openstack import OSClusterInfo, InstanceExists
 from .openstack import (Instance, OSCloudConfig, LoadBalancer, get_connection,
                         get_clients)
 
 
-LOGGER = get_logger(__name__)
+LOGGER = Logger(__name__)
 
 
 def get_server_range(servers, cluster_name, role, amount):
@@ -57,8 +55,7 @@ class NodeBuilder:
         cloud_config (OSCloudConfig) - the cloud config generator
     """
     def __init__(self, config, osinfo, cloud_config=None):
-        LOGGER.info(info(cyan(
-            "Gathering node information from OpenStack ...")))
+        LOGGER.debug("Gathering node information from OpenStack ...")
         self.config = config
         self._info = osinfo
         self.cloud_config = cloud_config
@@ -216,8 +213,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     """
 
     def __init__(self, config, osinfo, cloud_config=None):
-        LOGGER.info(info(cyan(
-            "Gathering control plane information from OpenStack ...")))
+        LOGGER.debug("Gathering control plane information from OpenStack ...")
         self._config = config
         self._info = osinfo
         self.cloud_config = cloud_config
@@ -347,12 +343,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     """
     def __init__(self, config):
         if not (config['n-masters'] % 2 and config['n-masters'] >= 1):
-            print(red("You must have an odd number (>=1) of masters!"))
+            LOGGER.error("You must have an odd number (>=1) of masters!")
             sys.exit(2)
 
         self.nova, self.neutron, self.cinder = get_clients()
         self.info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
-        LOGGER.debug(info("Done collecting information from OpenStack"))
+        LOGGER.debug("Collecting of information from OpenStack successful")
 
         self.nodes_builder = NodeBuilder(config, self.info)
         self.masters_builder = ControlPlaneBuilder(config, self.info)
@@ -418,11 +414,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         """create network for cluster if not already present"""
 
         if self.info.secgroup.exists:
-            LOGGER.info(info(yellow(
-                "A Security group named %s-sec-group already exists" % config[
-                    'cluster-name'])))
             LOGGER.info(
-                info(yellow("I will add my own rules, please manually review all others")))  # noqa
+                "A Security group named %s-sec-group already exists" % config[
+                    'cluster-name'])
+            LOGGER.info("Addind security group rules to existing group ...")
 
         self.info.secgroup.configure()
 
@@ -452,7 +447,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # Check if dex has to be deployed
         if 'addons' in config and 'dex' in config['addons']:
             self.deploy_dex = True
-            LOGGER.info(info(lightgreen("Addons: Dex will be configured")))
+            LOGGER.info("Addons: Dex will be configured")
 
         # generate ssh key pair for first master node. It is used to connect
         # to the other nodes so that they can join the cluster
@@ -490,14 +485,14 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             try:
                 self.dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
             except (ValidationError, TypeError, KeyError) as exc:
-                LOGGER.error(bad(red(f"Unable to parse dex config: {exc}")))
-                LOGGER.error(bad(red("Skipping Dex deployment")))
+                LOGGER.error(f"Unable to parse dex config: {exc}")
+                LOGGER.error("Skipping Dex deployment")
                 self.deploy_dex = False
                 self.dex_conf = None
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
-        LOGGER.info("Waiting for the master machines to be launched...")
+        LOGGER.info("Waiting for master machines to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(
             ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
             bootstrap_token, lb_dns,
@@ -517,15 +512,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             lbinst.configure([first_master_ip]))
 
         # create the worker nodes
-        LOGGER.info("Waiting for the worker machines to be launched and the "
-                    "loadbalancer to be configured...")
+        LOGGER.info("Waiting for worker machines to be launched and the "
+                    "LoadBalancer to be configured...")
         node_tasks = self.nodes_builder.create_initial_nodes(
             cloud_config,
             ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
 
         node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
-        LOGGER.debug(info("Done creating nodes tasks"))
+        LOGGER.debug("Done creating nodes tasks")
 
         node_ips = [x.ip_address for x in results if isinstance(x, Instance)]
 
@@ -569,21 +564,19 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # available.
         k8s = K8S(kubeconfig)
 
-        LOGGER.handlers[0].terminator = ""
-        LOGGER.info("Kubernetes API Server is still not ready ...")
+        LOGGER.logger.handlers[0].terminator = ""
+        LOGGER.info("Waiting for Kubernetes API Server to become available ...")
         while not k8s.is_ready:
             time.sleep(2)
-            LOGGER.info(".")
+            LOGGER.info(".", color=False)
 
-        LOGGER.handlers[0].terminator = "\n"
-
-        LOGGER.info("\nKubernetes API is ready!"
-                    "\nWaiting for all masters to become Ready")
+        LOGGER.logger.handlers[0].terminator = "\n"
+        LOGGER.info("", color=None)
+        LOGGER.success("Kubernetes API is ready!")
+        LOGGER.info("Waiting for all masters to become Ready ...")
 
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst)
 
-        LOGGER.info("Configured load balancer to use all API servers")
-
-        # At this point, we're ready with our cluster
-        LOGGER.info("Kubernetes cluster is ready to use !!!")
+        LOGGER.success("Configured LoadBalancer to use all API servers")
+        LOGGER.success("Kubernetes cluster is ready to use !")
         loop.close()
