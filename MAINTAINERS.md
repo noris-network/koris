@@ -10,5 +10,11 @@ To do a release X.Y.Z do the following steps:
 
 1. `make start-relese VER=vX.Y.Z`
 2. edit `ChangeLog` and rename it to TAGMESSAGE`
-3. `make do-release VER=vX.Y.Z` ACCESS_TOKEN=<your-secret-key>
-4. `make finish release`
+3. `make complete-release VER=vX.Y.Z ACCESS_TOKEN=<your-secret-key>`
+
+
+If for some reason you encounter an error in any of the stages, you can
+do:
+
+`make abort-release VER=vX.Y.Z`
+

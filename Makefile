@@ -411,12 +411,18 @@ build-exec-in-docker:
 	docker run --rm -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG)
 
 start-release:
-	make -f release.mk start-release
+	make -f release.mk $@  # $@ is the name of the target
 
-do-release:
+complete-release:
 	make -f release.mk do-release
-
-finish-release:
+	sleep 2 # this is required because if we don't wait, GL api will miss running jobs
+	make -f release.mk abort-pipeline
 	make -f release.mk finish-release
+	sleep 2 # this is required because if we don't wait, GL api will miss running jobs
+	make -f release.mk abort-pipeline
+
+
+abort-release:
+	make -f release.mk $@
 
 # vim: tabstop=4 shiftwidth=4
