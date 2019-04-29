@@ -15,7 +15,7 @@ FILES = [".coverage.unit-test", ".coverage.build-cluster",
          ".coverage.destroy"]
 
 
-def main(argv):
+def main():
     actual_files = []
 
     # only combine files that are actually existing, print warning for every
@@ -28,7 +28,7 @@ def main(argv):
 
     # call python combine
     cmd = ["python3", "-m", "coverage", "combine"]
-    cmd = cmd.extend(actual_files)
+    cmd.extend(actual_files)
     print(cmd)
     subprocess.run(cmd, check=True)
 
@@ -36,4 +36,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()
