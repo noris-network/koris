@@ -49,8 +49,8 @@ def update_config(config_dict, config, amount, role='nodes'):
     with open(updated_name, 'w') as stream:
         yaml.dump(config_dict, stream=stream)
 
-    LOGGER.success("An updated cluster configuration was written to: {}".format(
-                   updated_name))
+    LOGGER.success(("An updated cluster configuration was written to: "
+                    f"{updated_name}"))
 
 
 def add_node(cloud_config,
@@ -224,7 +224,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
     """
     def __init__(self):
         self.parser.add_argument(  # pylint: disable=no-member
-            "--version", "-V", action="store_true",
+            "--version", action="store_true",
             help="show version and exit",
             default=argparse.SUPPRESS)
 
