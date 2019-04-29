@@ -447,7 +447,7 @@ coverage-report:
    - pip3 install -q -e .
    - python3 tests/scripts/coverage_report.py
    - python3 -m coverage combine 
-   - > python3 -m coverage report -m 
+   - python3 -m coverage report -m 
       .coverage.unit-test 
       .coverage.build-cluster 
       .coverage.add-master 
