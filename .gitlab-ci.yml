@@ -39,6 +39,11 @@ unittest:
     paths:
       - ".coverage.unit-test"
     expire_in: 1 week
+  # the following is a regex that is never matched. We need this,
+  # since we do not want to export the code coverage for the
+  # badge in this step but in the "coverage" step at the end
+  # of the pipeline.
+  coverage: '/a^/'
 
 
 # --[ WAIT FOR RESOURCES ]--
@@ -445,16 +450,15 @@ coverage-report:
   script:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
-   - python3 tests/scripts/coverage_report.py
    - python3 -m coverage combine 
+     .coverage.unit-test 
+     .coverage.build-cluster 
+     .coverage.add-master 
+     .coverage.add-nodes 
+     .coverage.delete-master 
+     .coverage.delete-nodes 
+     .coverage.destroy
    - python3 -m coverage report -m 
-      .coverage.unit-test 
-      .coverage.build-cluster 
-      .coverage.add-master 
-      .coverage.add-nodes 
-      .coverage.delete-master 
-      .coverage.delete-nodes 
-      .coverage.destroy
    - python3 -m coverage html
   except:
     variables:
