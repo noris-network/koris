@@ -10,12 +10,12 @@ fancy colors
 
 
 COMMANDS = {
-    # Lables
+    # Labels
     'info': (33, '[!] '),
     'que': (34, '[?] '),
     'bad': (31, '[-] '),
     'good': (32, '[+] '),
-    'run': (97, '[~] '),
+    'run': (37, '[~] '),
 
     # Colors
     'green': 32,

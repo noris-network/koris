@@ -12,12 +12,13 @@ import sys
 
 from cinderclient.exceptions import BadRequest, NotFound
 
-from koris.util.hue import red, yellow  # pylint: disable=no-name-in-module
+from koris.util.hue import que, bold  # pylint: disable=no-name-in-module
 from koris.cloud.openstack import OSClusterInfo, LoadBalancer
 from koris.cloud import OpenStackAPI
-from .util.util import get_kubeconfig_yaml, get_logger
+from .util.util import get_kubeconfig_yaml
+from .util.logger import Logger
 
-LOGGER = get_logger(__name__)
+LOGGER = Logger(__name__)
 
 
 def delete_cluster(config, nova, neutron, cinder, force=False):
@@ -27,8 +28,7 @@ def delete_cluster(config, nova, neutron, cinder, force=False):
     security groups rules and security groups
     """
     if not force:
-        print(red("Are you really sure ? [y/N]"))
-        ans = input(red("ARE YOU REALLY SURE???"))
+        ans = input(que(bold("Are you sure? [y/N]: ")))
     else:
         ans = 'y'
 
@@ -50,8 +50,8 @@ def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,
                                      client_cert, client_key)
 
     path = '-'.join((cluster_name, 'admin.conf'))
-    LOGGER.info(yellow("You can use your config with:"))
-    LOGGER.info(yellow("kubectl get nodes --kubeconfig=%s" % path))
+    LOGGER.success("You can use your config with:")
+    LOGGER.success("kubectl get nodes --kubeconfig=%s" % path)
     with open(path, "w") as fh:
         fh.write(kubeconfig)
 

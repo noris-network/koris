@@ -28,8 +28,8 @@ import yaml
 
 from koris.ssl import read_cert
 from koris.ssl import discovery_hash as ssl_discovery_hash
-from koris.util.util import get_logger, retry
-from koris.util.hue import red, bad  # pylint: disable=no-name-in-module
+from koris.util.util import retry
+from koris.util.logger import Logger
 from koris import MASTER_LISTENER_NAME
 
 if getattr(sys, 'frozen', False):
@@ -40,7 +40,7 @@ else:
     MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
                                       'koris/deploy/manifests')
 
-LOGGER = get_logger(__name__, level=logging.INFO)
+LOGGER = Logger(__name__)
 
 
 def _get_node_addr(addresses, addr_type):
@@ -336,7 +336,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         cond = {'Ready': 'True'}
         master_listener = lb_inst.master_listener
         if not master_listener:
-            LOGGER.error(bad(red(f"No {MASTER_LISTENER_NAME} found, aborting")))
+            LOGGER.error(f"No {MASTER_LISTENER_NAME} found, aborting")
             sys.exit(1)
 
         try:
@@ -345,7 +345,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             pool_id = master_listener['pool']['id']
         except KeyError as exc:
             err = f"Unable to extract info of {MASTER_LISTENER_NAME}: {exc}"
-            LOGGER.error(bad(red(err)))
+            LOGGER.error(err)
             sys.exit(1)
 
         while len(lb_inst.master_listener['pool']['members']) < n_masters:
@@ -377,14 +377,28 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             new_master_ip (str): the IP address of the master to provision
         """
         LOGGER.info("Retrieving etcd cluster state ...")
-
         etcd_cluster = self.etcd_cluster_status(pod, master_ip)
+        LOGGER.debug(f"etcd cluster: {etcd_cluster}")
         cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
                '"/usr/local/bin/add-master-script '
                '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
                                     etcd_cluster, master_name, master_ip))
-        kctl = sp.Popen(cmd, shell=True)
-        kctl.communicate()
+
+        LOGGER.info("Bootstrapping new master node ...")
+        cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
+               '"/usr/local/bin/add-master-script '
+               '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
+                                    etcd_cluster, master_name, master_ip))
+        kctl = sp.Popen(cmd,
+                        stdout=sp.PIPE,
+                        stderr=sp.PIPE,
+                        shell=True,
+                        universal_newlines=True)
+
+        out, err = kctl.communicate()
+        LOGGER.debug(f"STDOUT: {out}")
+        LOGGER.debug(f"STDERR: {err}")
+
         if kctl.returncode:
             raise ValueError("unable to execute adder script in adder pod")
 
@@ -426,9 +440,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         master_name, master_ip = self.get_random_master()
 
         podname = self.launch_master_adder()
-        LOGGER.info("Executing adder script on new master node...")
+        LOGGER.info("Preparing bootstrap of new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
                             new_master_ip)
+        LOGGER.success("Bootstrap of new master finished successfully")
 
     def launch_master_adder(self):
         """Launch the add_master_deployment.
@@ -450,7 +465,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if kctl.returncode:
             raise ValueError("Could not apply master adder pod!")
 
-        LOGGER.info("Waiting for the pod to run ...")
+        LOGGER.info("Waiting for pod to run ...")
         result = self.api.list_namespaced_pod(
             "kube-system",
             label_selector='k8s-app=master-adder')
@@ -612,6 +627,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                           stdout=True, tty=False)
 
         LOGGER.debug("%s", response)
+        LOGGER.debug("Removed '%s' from etcd", name)
 
     def node_status(self, nodename):
         """Returns the status of a Node.
@@ -710,5 +726,5 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                                     grace_period_seconds=grace_period)
 
         LOGGER.debug(resp)
-        LOGGER.debug("Kubernetes node '%s' has been deleted successfully",
-                     nodename)
+        LOGGER.success("Kubernetes node '%s' has been deleted successfully",
+                       nodename)

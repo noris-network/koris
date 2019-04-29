@@ -17,19 +17,16 @@ from urllib.error import URLError, HTTPError
 import urllib3
 import yaml
 
-
 from mach import mach1
 
 from koris.util.util import KorisVersionCheck
 
+import koris
+
 from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
-
-from .util.hue import (bad, red,            # pylint: disable=no-name-in-module
-                       info as infomsg)     # pylint: disable=no-name-in-module
-from .util.util import (get_logger, )
-
+from .util.logger import Logger
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
 from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
                               delete_instance, OSClusterInfo, get_connection,
@@ -39,7 +36,7 @@ from .cloud.openstack import (OSCloudConfig, BuilderError, InstanceExists,
 ssl._create_default_https_context = ssl._create_unverified_context
 
 KORIS_DOC_URL = "https://pi.docs.noris.net/koris/"
-LOGGER = get_logger(__name__)
+LOGGER = Logger(__name__)
 
 
 def update_config(config_dict, config, amount, role='nodes'):
@@ -52,8 +49,8 @@ def update_config(config_dict, config, amount, role='nodes'):
     with open(updated_name, 'w') as stream:
         yaml.dump(config_dict, stream=stream)
 
-    print(infomsg("An updated cluster configuration was written to: {}".format(
-        updated_name)))
+    LOGGER.success(("An updated cluster configuration was written to: "
+                    f"{updated_name}"))
 
 
 def add_node(cloud_config,
@@ -126,7 +123,7 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
     try:
         k8s.bootstrap_master(name, ip_address)
     except ValueError as err:
-        print(red(f"Error: {err}"))
+        LOGGER.error(f"Error: {err}")
 
         # Cleanup
         LOGGER.info("Deleting instance %s from OpenStack ...", name)
@@ -134,22 +131,22 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
 
         sys.exit(1)
     except urllib3.exceptions.MaxRetryError:
-        LOGGER.warning(
-            red("Connection failed! Are you using the correct "
-                "kubernetes context?"))
+        LOGGER.error(("Connection failed! Are you using the correct "
+                      "kubernetes context?"))
         sys.exit(1)
 
     # Adding master to LB
     conn = get_connection()
     lb = LoadBalancer(config_dict, conn)
     if not lb.get():
-        red("No LoadBalancer found")
+        LOGGER.error("No LoadBalancer found")
         sys.exit(1)
     try:
         master_pool = lb.master_listener['pool']['id']
     except KeyError as exc:
-        red(f"Unable to obtain master-pool: {exc}")
+        LOGGER.error(f"Unable to obtain master-pool: {exc}")
         sys.exit(1)
+    LOGGER.info("Adding new master to LoadBalancer ...")
     lb.add_member(master_pool, master.ip_address)
 
 
@@ -207,8 +204,8 @@ def delete_node(config_dict, name):
             # Delete member from LoadBalancer master pool
             pool_id = lb.master_listener['pool']['id']
             lb.del_member(mem_id[0], pool_id)
-            LOGGER.info("Removed instance '%s' from LoadBalancer '%s'", name,
-                        lb.name)
+            LOGGER.success("Removed instance '%s' from LoadBalancer '%s'", name,
+                           lb.name)
         else:
             LOGGER.debug("Members: %s", mems)
             LOGGER.error("instance '%s' not part of LoadBalancer", name)
@@ -231,6 +228,21 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             help="show version and exit",
             default=argparse.SUPPRESS)
 
+        verbosity_help = "".join([
+            "set the verbosity level (",
+            "0 = quiet, ",
+            "1 = error, ",
+            "2 = warning, ",
+            "3 = info, ",
+            "4 = debug)"])
+        self.parser.add_argument("--verbosity",  # pylint: disable=no-member
+                                 "-v",
+                                 help=verbosity_help,
+                                 choices=['0', '1', '2', '3', '4', 'quiet',
+                                          'error', 'warning', 'info', 'debug'],
+                                 type=str,
+                                 default=3)
+
         try:
             html_string = str(urlopen(KORIS_DOC_URL, timeout=1.5).read())
         except (HTTPError, URLError):
@@ -240,6 +252,9 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
     def _get_version(self):
         print("%s version: %s" % (self.__class__.__name__, __version__))
+
+    def _get_verbosity(self):
+        pass
 
     def apply(self, config):
         """
@@ -258,7 +273,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         except InstanceExists:
             pass
         except BuilderError as err:
-            print(red(f"Error: {err}"))
+            LOGGER.error(f"Error: {err}")
             delete_cluster(config, nova, neutron, cinder,
                            True)
 
@@ -271,16 +286,16 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         nova, neutron, cinder = get_clients()
 
-        print(red(
-            "You are about to destroy your cluster '{}'!!!".format(
-                config['cluster-name'])))
+        LOGGER.question(
+            "Deleting cluster '{}'".format(
+                config['cluster-name']))
 
         delete_cluster(config, nova, neutron, cinder, force)
         certs_location = 'certs-' + config['cluster-name']
         try:
             shutil.rmtree(certs_location)
         except FileNotFoundError:
-            print(red("Certificates {} already deleted".format(certs_location)))
+            LOGGER.warn(f"Certificates {certs_location} already deleted")
         sys.exit(0)
 
     def delete(self, config: str, resource: str, name: str = ""):
@@ -297,20 +312,20 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         allowed_resource = ["node", "cluster"]
         if resource not in allowed_resource:
-            print(red('Error: resource must be '
-                      '[%s]' % " | ".join(allowed_resource)))
+            LOGGER.error('Error: resource must be '
+                         '[%s]' % " | ".join(allowed_resource))
             sys.exit(1)
 
         if resource == "node":
             if not name or name is None:
-                print(bad(red("Must specifiy --name when deleting a node")))
+                LOGGER.error("Must specifiy --name when deleting a node")
                 sys.exit(1)
 
             change_config = True
             try:
                 delete_node(config_dict, name)
             except (ValueError) as exc:
-                print(bad(red(f"Error: {exc}")))
+                LOGGER.error(f"Error: {exc}")
                 sys.exit(1)
             except InstanceNotFound:
                 change_config = False
@@ -323,8 +338,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                     update_config(config_dict, config, -1, "nodes")
 
         else:
-            print(red("Feature not implemented yet."
-                      "Please use 'koris destroy' for time being!"))
+            LOGGER.error("Feature not implemented yet."
+                         "Please use 'koris destroy' for time being!")
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
@@ -351,16 +366,16 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
         if bootstrap_only:
             if len(bootstrap_only) != 2:
-                print("To bootstrap a node you must specify both name and IP")
+                LOGGER.error(("To bootstrap a node you must specify both"
+                              "name and IP"))
                 sys.exit(1)
 
-            print(
-                "Bootstraping host {} with address {}, "
-                "assuming it's present".format(name, ip_address))
+            LOGGER.info(("Bootstraping host {} with address {}, "
+                         "assuming it's present".format(name, ip_address)))
 
         elif len(list(filter(None, [flavor, zone]))) < 2:
-            print("You  must specify both flavor and zone if you want to create"
-                  " an instance")
+            LOGGER.error(("You  must specify both flavor and zone if you want"
+                          "to create an instance"))
             sys.exit(1)
 
         with open(config, 'r') as stream:
@@ -373,8 +388,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                                         config_dict)
 
         if not k8s.validate_context(os_cluster_info.conn):
-            print(bad(red("Error: cluster not part of your sourced"
-                          "OpenStack tenant")))
+            LOGGER.error(("Error: cluster not part of your sourced"
+                          "OpenStack tenant"))
             sys.exit(1)
 
         try:
@@ -394,12 +409,17 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         elif role == 'master':
             builder = ControlPlaneBuilder(config_dict, os_cluster_info,
                                           cloud_config)
-
-            add_master(bootstrap_only, builder, zone, flavor, config,
-                       config_dict, os_cluster_info, k8s)
+            try:
+                add_master(bootstrap_only, builder, zone, flavor, config,
+                           config_dict, os_cluster_info, k8s)
+            except (RuntimeError, ValueError) as exc:
+                LOGGER.error(f"Error: {exc}")
+                sys.exit(1)
 
         else:
-            print("Unknown role")
+            LOGGER.warn("Unknown role")
+
+        LOGGER.success("Adding new node finished successfully")
 
 
 def main():
@@ -414,6 +434,24 @@ def main():
                            'OpenStack RC file has to be sourced in the '\
                            'shell. See online documentation for more '\
                            'information.'
+
+    # Setting verbosity level
+    level = k.parser.parse_args().verbosity
+    level_to_int = {
+        'quiet': 0,
+        'error': 1,
+        'warning': 2,
+        'info': 3,
+        'debug': 4}
+    try:
+        level = int(level)
+    except ValueError:
+        level = level_to_int[level]
+
+    koris.util.logger.Logger.LOG_LEVEL = level
+
+    # Calling again because the instance was set on import
+    LOGGER.__init__(__name__)
 
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically

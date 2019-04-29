@@ -5,7 +5,6 @@ functions and classes to interact with openstack
 import asyncio
 import base64
 import copy
-import logging
 import os
 import sys
 import textwrap
@@ -29,14 +28,12 @@ from keystoneauth1 import identity
 from keystoneauth1 import session
 
 from koris.cloud import OpenStackAPI
-from koris.util.hue import (red, info, yellow,  # pylint: disable=no-name-in-module
-                            bad, lightcyan as cyan)  # pylint: disable=no-name-in-module
-from koris.util.util import (get_logger, host_names,
-                             retry)
+from koris.util.util import (host_names, retry)
+from koris.util.logger import Logger
 from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 
-LOGGER = get_logger(__name__, level=logging.DEBUG)
+LOGGER = Logger(__name__)
 
 
 # OpenStack clients. Initialized at time of calling get_clients. You should not
@@ -63,12 +60,12 @@ def get_clients():
             CINDER = cclient.Client('3.0', session=sess)
 
         except TypeError:
-            print(red("Did you source your OS rc file in v3?"))
-            print(red("If your file has the key OS_ENDPOINT_TYPE it's the"
-                      " wrong one!"))
+            LOGGER.error("Did you source your OS rc file in v3?")
+            LOGGER.error("If your file has the key OS_ENDPOINT_TYPE it's the"
+                         " wrong one!")
             sys.exit(1)
         except KeyError:
-            print(red("Did you source your OS rc file?"))
+            LOGGER.error("Did you source your OS rc file?")
             sys.exit(1)
     return NOVA, NEUTRON, CINDER
 
@@ -139,7 +136,8 @@ def delete_instance(name, conn, ignore_not_found=True):
     for port in ports:
         conn.network.delete_port(port)
 
-    LOGGER.info("OpenStack instance '%s' has been deleted successfully", name)
+    LOGGER.success("OpenStack instance '%s' has been deleted successfully",
+                   name)
 
 
 class BuilderError(Exception):
@@ -249,29 +247,29 @@ class Instance:  # pylint: disable=too-many-arguments
                 userdata=userdata
             )
         except (Exception) as err:
-            print(info(red("Something weired happend, I so I didn't create %s" %
-                           self.name)))
-            print(info(red("Removing cluser ...")))
-            print(info(yellow("The exception is", str((err)))))
+            LOGGER.error("Something weired happend, I so I didn't create %s" %
+                         self.name)
+            LOGGER.info("Removing cluster ...")
+            LOGGER.info(f"Exception: {err}")
             raise BuilderError(str(err))
 
         inst_status = instance.status
-        print("waiting for 5 seconds for the machine to be launched ... ")
+        LOGGER.debug("Waiting 5 seconds for machine to be launched ... ")
         await asyncio.sleep(5)
 
         while inst_status == 'BUILD':
-            LOGGER.info(
+            LOGGER.debug(
                 "Instance: %s is in in %s state, sleeping for 5 more seconds",
                 instance.name, inst_status)
             await asyncio.sleep(5)
             instance = self.nova.servers.get(instance.id)
             inst_status = instance.status
 
-        print("Instance: " + instance.name + " is in " + inst_status + " state")
+        LOGGER.debug(f"Instance '{instance.name} is in state: {inst_status}")
 
         self._ip_address = instance.interface_list()[0].fixed_ips[0]['ip_address']
-        LOGGER.info(
-            "Instance booted! Name: %s, IP: %s, Status : %s",
+        LOGGER.success(
+            "Instance '%s' booted successfully. IP: %s, Status : %s",
             self.name, instance.status, self._ip_address)
 
         self.exists = True
@@ -284,7 +282,7 @@ class Instance:  # pylint: disable=too-many-arguments
             nics = [nic for nic in server.interface_list()]
             server.delete()
             list(netclient.delete_port(nic.id) for nic in nics)
-            LOGGER.info("deleted %s ...", server.name)
+            LOGGER.success("Instance '%s' deleted successfully", server.name)
         except NovaNotFound:
             pass
 
@@ -304,7 +302,7 @@ class LoadBalancer:
         self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
         self.config = config
         if not self.floatingip:
-            LOGGER.warning(info(yellow("No floating IP, I hope it's OK")))
+            LOGGER.warning("No floating IP, I hope it's OK")
         self.name = "%s-lb" % config['cluster-name']
 
         try:
@@ -478,13 +476,13 @@ class LoadBalancer:
             listener = self.add_listener(name=MASTER_LISTENER_NAME)
             listener_id = listener.id
         else:
-            LOGGER.info("Reusing listener %s", self._data.listeners[0].id)
+            LOGGER.debug("Reusing listener %s", self._data.listeners[0].id)
             listener_id = self._data.listeners[0].id
 
         if not self._data.pools:
             pool = self.add_pool(listener_id, name=MASTER_POOL_NAME)
         else:
-            LOGGER.info("Reusing pool, removing all members ...")
+            LOGGER.debug("Reusing pool, removing all members ...")
             # (aknipping) This should be handled differently. If there are multiple
             # pools present, we want to specify which it should be added too. Maybe with a
             # default pool name that is independent of the cluster name?
@@ -496,7 +494,7 @@ class LoadBalancer:
             LOGGER.info("Adding member %s ...", member)
             self.add_member(pool.id, member)
         if pool.get('healthmonitor_id'):
-            LOGGER.info("Reusing existing health monitor")
+            LOGGER.debug("Reusing existing health monitor")
         else:
             self.add_health_monitor(pool.id)
 
@@ -519,10 +517,10 @@ class LoadBalancer:
         if not lb or 'DELETE' in lb['provisioning_status']:
             lb, fip_addr = self.create()
         else:
-            LOGGER.info("Reusing existing LoadBalancer ...")
+            LOGGER.debug("Reusing existing LoadBalancer ...")
             self._existing_floating_ip = None
             fip_addr = self._floating_ip_address(lb)
-            LOGGER.info("Loadbalancer IP: %s", fip_addr)
+            LOGGER.success("Loadbalancer IP: %s", fip_addr)
             self._id = lb.id
             self._subnet_id = lb.vip_subnet_id
             self._data = lb
@@ -591,7 +589,8 @@ class LoadBalancer:
         self._subnet_id = subnet_id
         self._data = lb
 
-        LOGGER.info("Created loadbalancer '%s' (%s)", self.name, self._id)
+        LOGGER.success("LoadBalancer '%s' (%s) created successfully",
+                       self.name, self._id)
 
         fip_addr = None
 
@@ -620,7 +619,7 @@ class LoadBalancer:
             lb = self.get()
 
         if not lb or 'DELETE' in lb.operating_status:
-            LOGGER.warning("LB %s was not found", self.name)
+            LOGGER.warning("LoadBalancer %s was not found", self.name)
         else:
             self._del_loadbalancer()
 
@@ -644,8 +643,8 @@ class LoadBalancer:
         # Assign IP to LB
         fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
 
-        LOGGER.info("Loadbalancer external IP: %s",
-                    fip.floating_ip_address)
+        LOGGER.success("Loadbalancer external IP: %s",
+                       fip.floating_ip_address)
 
         return fip.floating_ip_address
 
@@ -665,11 +664,12 @@ class LoadBalancer:
                                                      name=name)
 
         if not listener:
-            LOGGER.error("Unable to add listener '%s' to LoadBalancer %s", name, self._id)
+            LOGGER.error("Unable to add listener '%s' to LoadBalancer %s",
+                         name, self._id)
             return None
 
-        LOGGER.info("Added %s listener '%s' (%s) on port %i to LoadBalancer %s", protocol,
-                    name, listener.id, protocol_port, self._id)
+        LOGGER.debug("Added %s listener '%s' (%s) on port %i to LB %s",
+                     protocol, name, listener.id, protocol_port, self._id)
         return listener
 
     @retry(exceptions=(StateInvalidClient, OSConflict), tries=30, delay=5, backoff=1,
@@ -691,8 +691,8 @@ class LoadBalancer:
             LOGGER.error("Unable to add pool '%s' to listener %s", name, listener_id)
             return None
 
-        LOGGER.info("Added %s pool '%s' (%s) with %s to listener %s", protocol, name,
-                    pool.id, lb_algorithm, listener_id)
+        LOGGER.debug("Added %s pool '%s' (%s) with %s to listener %s",
+                     protocol, name, pool.id, lb_algorithm, listener_id)
         return pool
 
     @retry(exceptions=(StateInvalidClient, OSConflict), tries=24, delay=10,
@@ -715,7 +715,8 @@ class LoadBalancer:
             LOGGER.error("Unable to add health monitor '%s' to pool %s", name, pool_id)
             return None
 
-        LOGGER.info("Added health monitor '%s' (%s) to pool %s", name, hm.id, pool_id)
+        LOGGER.debug("Added health monitor '%s' (%s) to pool %s", name, hm.id,
+                     pool_id)
         return hm
 
     @retry(exceptions=(StateInvalidClient, OSConflict, BadRequest), tries=24,
@@ -733,8 +734,8 @@ class LoadBalancer:
             LOGGER.error("Unable to add member '%s' to pool %s", ip_addr, pool_id)
             return None
 
-        LOGGER.info("Added member '%s' (%s) to pool %s on port %i", ip_addr,
-                    member.id, pool_id, protocol_port)
+        LOGGER.debug("Added member '%s' (%s) to pool %s on port %i", ip_addr,
+                     member.id, pool_id, protocol_port)
 
         return member
 
@@ -746,7 +747,8 @@ class LoadBalancer:
                 self._id,
                 ignore_missing=False,
                 cascade=True)
-            LOGGER.info("Deleted LoadBalancer '%s' (%s)", self.name, self._id)
+            LOGGER.success("LoadBalancer '%s' (%s) deleted successfully",
+                           self.name, self._id)
         except OSNotFound:
             LOGGER.debug("Could not find  LoadBalancer %s", self._id)
 
@@ -788,7 +790,7 @@ class SecurityGroup:
             self.client.create_security_group_rule({'security_group_rule': kwargs})
         except NeutronConflict:
             kwargs.pop('security_group_id')
-            print(info("Rule with %s already exists" % str(kwargs)))
+            LOGGER.debug("Rule with %s already exists" % str(kwargs))
 
     async def del_sec_rule(self, connection):
         """
@@ -837,7 +839,7 @@ class SecurityGroup:
         else:
             cidr = self.client.list_subnets()['subnets'][-1]['cidr']
 
-        LOGGER.debug(info(cyan("Configuring security group ...")))
+        LOGGER.debug("Configuring security group ...")
         # allow communication to the API server from within the cluster
         # on port 80
         self.add_sec_rule(direction='ingress', protocol='TCP',
@@ -912,10 +914,9 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
             net_name = self.config.get('private_net')['name']
         network = self.conn.get_network(net_name)
         if network:
-            print(info(yellow(
-                "The network [%s] already exists. Skipping" % net_name)))  # noqa
+            LOGGER.info(f"Network [{net_name}] already exists. Skipping ...")
         else:
-            print(info(red("Creating network [%s]" % net_name)))
+            LOGGER.info("Creating network [%s]" % net_name)
             network = self.conn.create_network(name=net_name,
                                                admin_state_up=True)
 
@@ -990,10 +991,9 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         subnet = [s for s in subnets if s['name'] == subnet_name]
         subnet = subnet[0] if subnet else {}
         if subnet:
-            print(info(yellow("subnetwork [%s] already exists. Skipping..." %
-                              subnet_name)))
+            LOGGER.info(f"Subnet [{subnet_name}] already exists. Skipping...")
         else:
-            print(info(red("creating a subnetwork %s" % subnet_name)))
+            LOGGER.info("Creating subnet %s" % subnet_name)
             subnet['ip_version'] = 4
             subnet['network_id'] = self.net_id
             subnet['name'] = subnet_name
@@ -1032,10 +1032,9 @@ class OSRouter:  # pylint: disable=too-few-public-methods
 
         router = self.net_client.list_routers(name=router_name)['routers']
         if router:
-            print(info(yellow(
-                "The router [%s] already exists. Skipping" % router_name)))  # noqa
+            LOGGER.info(f"Router [{router_name}] already exists. Skipping ...")
         else:
-            print(info(cyan("Creating router")))
+            LOGGER.info(f"Creating router [{router_name}]")
             payload = {
                 "router": {
                     "name": router_name,
@@ -1055,7 +1054,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
             conn = OpenStackAPI.connect()
             ext_net = OSNetwork.find_external_network(conn)
             if ext_net is None:
-                print(bad(red("No external network found")))
+                LOGGER.error("No external network found")
                 sys.exit(1)
 
             # dynamically find network id matching router network in config
@@ -1067,7 +1066,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
                 network_id = [net['id']
                               for net in networks if net['name'] == network_name][0]
             except IndexError:
-                print(bad(red("Wrong router network in config")))
+                LOGGER.error("Wrong router network in config")
                 sys.exit(1)
             self.net_client.add_gateway_router(router['id'], {"network_id": network_id})
 
