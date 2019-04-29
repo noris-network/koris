@@ -7,7 +7,6 @@ A script to generate a comprehensive coverage report based on a set of
 
 import os
 import subprocess
-import sys
 
 FILES = [".coverage.unit-test", ".coverage.build-cluster",
          ".coverage.add-master", ".coverage.add-nodes",
