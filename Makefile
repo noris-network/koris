@@ -200,7 +200,14 @@ add-master:
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
-	if [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; then echo "can't find $(NUM) masters"exit 1; else echo "all masters are fine"; fi
+	if [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; \
+	then \
+		echo "can't find $(NUM) masters"; \
+		kubectl get nodes --kubeconfig=${KUBECONFIG}; \
+		exit 1; \
+	else \
+		echo "OK"; \
+	fi
 
 assert-control-plane: NUM ?= 4
 assert-control-plane: \
