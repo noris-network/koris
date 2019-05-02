@@ -435,17 +435,7 @@ def main():
 
     # Setting verbosity level
     level = k.parser.parse_args().verbosity
-    level_to_int = {
-        'quiet': 0,
-        'error': 1,
-        'warning': 2,
-        'info': 3,
-        'debug': 4}
-    try:
-        LOGGER.level = int(level)
-    except ValueError:
-        LOGGER.level = level_to_int[level]
-
+    LOGGER.level = level
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically
     # creates the CLI parser. It also adds the method run to the class.

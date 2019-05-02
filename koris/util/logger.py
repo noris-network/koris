@@ -183,6 +183,18 @@ class Logger(metaclass=Singleton):
 
     @level.setter
     def level(self, level):
+        level_to_int = {
+            'quiet': 0,
+            'error': 1,
+            'warning': 2,
+            'info': 3,
+            'debug': 4}
+
+        try:
+            level = level_to_int[level]
+        except KeyError:
+            level = int(level)
+
         set_level(self.logger, level)
 
     def error(self, msg, *args, color=True, **kwargs):
