@@ -895,29 +895,42 @@ def read_os_auth_variables(trim=True):
 
 
 class OSNetwork:  # pylint: disable=too-few-public-methods
-    """
-    create network if not defined
+    """Manages a Network on OpenStack
+
+    Args:
+        config (dict): A dictionary containing the koris config parameters.
+        conn: An OpenStack connection object.
     """
     def __init__(self, config, conn):
         self.config = config
         self.conn = conn
 
-    def get_or_create(self):
-        """
-        neutron: must be a nuetron client instance
-
-        return: dict with network properties
-        """
         if 'private_net' not in self.config:
-            net_name = "koris-%s-net" % self.config['cluster-name']
+            self.name = "koris-%s-net" % self.config['cluster-name']
         else:
-            net_name = self.config.get('private_net')['name']
-        network = self.conn.get_network(net_name)
+            self.name = self.config.get('private_net')['name']
+
+    def get(self):
+        """Retrieves a Network from OpenStack.
+
+        Returns:
+            The network as a dictionary, or None if non-existant.
+        """
+
+        return self.conn.get_network(self.name)
+
+    def get_or_create(self):
+        """Retrieves or creates a Network.
+
+        Returns:
+            A dict with networking information.
+        """
+        network = self.get()
         if network:
-            LOGGER.info(f"Network [{net_name}] already exists. Skipping ...")
+            LOGGER.info(f"Using Network [{self.name}] ...")
         else:
-            LOGGER.info("Creating network [%s]" % net_name)
-            network = self.conn.create_network(name=net_name,
+            LOGGER.info("Creating network [%s] ... " % self.name)
+            network = self.conn.create_network(name=self.name,
                                                admin_state_up=True)
 
         if 'private_net' in self.config:
@@ -958,19 +971,19 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
 
 
 class OSSubnet:  # pylint: disable=too-few-public-methods
-    """
-    create subnet if not defined
+    """Manages a Subnet on OpenStack.
+
+    Args:
+        config (dict): A dictionary containing the koris config parameters.
     """
     def __init__(self, neutron_client, network_id, config, conn=None):
         self.net_client = neutron_client
         self.net_id = network_id
         self.config = config
         self.conn = conn
+        self.name = self._set_name()
 
-    def get_or_create(self):
-        """
-        return: dict with network properties
-        """
+    def _set_name(self):
         subnet_name = None
         for key in ['subnet', 'subnets']:
             if key in self.config['private_net']:
@@ -981,6 +994,14 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
 
         if not subnet_name:
             subnet_name = "%s-subnet" % self.config['cluster-name']
+
+        return subnet_name
+
+    def get_or_create(self):
+        """
+        return: dict with network properties
+        """
+
 
         subnets = self.net_client.list_subnets()['subnets']
 
@@ -1157,15 +1178,12 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-        self.net = OSNetwork(config, self.conn).get_or_create()
-        subnet = OSSubnet(neutron_client, self.net['id'], config).get_or_create()
-        OSRouter(neutron_client, self.net['id'], subnet, config).get_or_create()
-        self.subnet_id = subnet['id']
-        secgroup = SecurityGroup(neutron_client, config['cluster-name'],
-                                 subnet=subnet['name'])
-
-        secgroup.get_or_create_sec_group(config['cluster-name'])
-        self.secgroup = secgroup
+        self.net = OSNetwork(config, self.conn).get()
+        self.subnet = OSSubnet(neutron_client, self.net['id'], config).get()
+        self.router = OSRouter(neutron_client, self.net['id'], self.subnet, config).get()
+        self.subnet_id = self.subnet['id']
+        self.secgroup = SecurityGroup(neutron_client, config['cluster-name'],
+                                      subnet=self.subnet['name']).get()
         self.secgroups = [secgroup.id]
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
@@ -1173,17 +1191,39 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.azones = config['availibility-zones']
         self.storage_class = config['storage_class']
         self._image_name = config['image']
-        self._novaclient = nova_client
-        self._neutronclient = neutron_client
-        self._cinderclient = cinder_client
+        self._nova = nova_client
+        self._neutron = neutron_client
+        self._cinder = cinder_client
 
+    def setup_networking(self, config):
+        """Creates Network, Subnet, Router and Security Group if necessary.
+
+        Args:
+            config (dict): A dictionary containing the koris config parameters.
+        """
+
+        if not self.net:
+            self.net = OSNetwork(config, self.conn).get_or_create()
+
+        if not self.subnet:
+            self.subnet = OSSubnet(self._neutron, self.net['id'], config).get_or_create()
+
+        if not self.router:
+            self.router = OSRouter(self._neutron,
+                                   self.net['id'],
+                                   self.subnet,
+                                   config).get_or_create()
+        if not self.secgroup:
+            self.secgroup = SecurityGroup(self._neutron,
+                                          config['cluster-name'],
+                                          self.subnet['name'])
     @property
     def image(self):
         """find the koris image in OpenStackAPI"""
         try:
-            return self._novaclient.glance.find_image(self._image_name)
+            return self._nova.glance.find_image(self._image_name)
         except NoUniqueMatch:
-            return self._novaclient.glance.find_image(
+            return self._nova.glance.find_image(
                 [l.id for l in self.conn.list_images() if l.name == self._image_name][0])
 
     @lru_cache()
@@ -1196,9 +1236,9 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         """
         volume_config = {'image': self.image, 'class': self.storage_class}
         try:
-            _server = self._novaclient.servers.find(name=hostname)
-            inst = Instance(self._cinderclient,
-                            self._novaclient,
+            _server = self._nova.servers.find(name=hostname)
+            inst = Instance(self._cinder,
+                            self._nova,
                             _server.name,
                             self.net,
                             zone,
@@ -1208,15 +1248,15 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             inst.ports.append(_server.interface_list()[0])
             inst.exists = True
         except NovaNotFound:
-            inst = Instance(self._cinderclient,
-                            self._novaclient,
+            inst = Instance(self._cinder,
+                            self._nova,
                             hostname,
                             self.net,
                             zone,
                             role,
                             volume_config,
                             flavor)
-            inst.attach_port(self._neutronclient,
+            inst.attach_port(self._neutron,
                              self.net['id'],
                              self.secgroups)
         return inst
@@ -1224,17 +1264,17 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
     @property
     def netclient(self):
         """return the current network client"""
-        return self._neutronclient
+        return self._neutron
 
     @property
     def compute_client(self):
         """return the current compute client"""
-        return self._novaclient
+        return self._nova
 
     @property
     def storage_client(self):
         """return the current storage client"""
-        return self._cinderclient
+        return self._cinder
 
     @property
     def nodes_names(self):

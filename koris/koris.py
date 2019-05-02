@@ -264,8 +264,9 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             config = yaml.safe_load(stream)
 
         nova, neutron, cinder = get_clients()
-
-        builder = ClusterBuilder(config)
+        oscinfo = OSClusterInfo(nova, neutron, cinder, config)
+        oscinfo.setup_networking(config)
+        builder = ClusterBuilder(config, oscinfo, nova, neutron, cinder)
         try:
             builder.run(config)
         except InstanceExists:

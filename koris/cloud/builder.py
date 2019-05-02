@@ -341,14 +341,13 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     """
     Plan and build a kubernetes cluster in the cloud
     """
-    def __init__(self, config):
+    def __init__(self, config, oscinfo, nova, neutron, cinder):
         if not (config['n-masters'] % 2 and config['n-masters'] >= 1):
             LOGGER.error("You must have an odd number (>=1) of masters!")
             sys.exit(2)
 
-        self.nova, self.neutron, self.cinder = get_clients()
-        self.info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
-        LOGGER.debug("Collecting of information from OpenStack successful")
+        self.nova, self.neutron, self.cinder = nova, neutron, cinder
+        self.info = oscinfo
 
         self.nodes_builder = NodeBuilder(config, self.info)
         self.masters_builder = ControlPlaneBuilder(config, self.info)
