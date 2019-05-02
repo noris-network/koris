@@ -21,8 +21,6 @@ from mach import mach1
 
 from koris.util.util import KorisVersionCheck
 
-import koris
-
 from . import __version__
 from .cli import delete_cluster
 from .deploy.k8s import K8S
@@ -444,14 +442,9 @@ def main():
         'info': 3,
         'debug': 4}
     try:
-        level = int(level)
+        LOGGER.level = int(level)
     except ValueError:
-        level = level_to_int[level]
-
-    koris.util.logger.Logger.LOG_LEVEL = level
-
-    # Calling again because the instance was set on import
-    LOGGER.__init__(__name__)
+        LOGGER.level = level_to_int[level]
 
     # pylint misses the fact that Kolt is decorater with mach.
     # the mach decortaor analyzes the methods in the class and dynamically

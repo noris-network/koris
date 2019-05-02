@@ -181,6 +181,10 @@ class Logger(metaclass=Singleton):
 
         return self.logger.level
 
+    @level.setter
+    def level(self, level):
+        set_level(self.logger, level)
+
     def error(self, msg, *args, color=True, **kwargs):
         """Logs a message on error level.
 
