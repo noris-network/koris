@@ -774,32 +774,33 @@ class SecurityGroup:
     A class to create and configure a security group in openstack
     """
 
-    def __init__(self, neutron_client, name, subnet=None):
-        self.client = neutron_client
-        self.name = name
+    def __init__(self, name, conn, subnet):
+        self.name = f"{name}-sec-group"
+        self.conn = conn
         self.subnet = subnet
         self.id = None
-        self.exists = False
 
-    def add_sec_rule(self, **kwargs):
-        """
-        add a security group rule
-        """
+    def add_rule(self, **kwargs):
+        """Adds a security group rule."""
         try:
             kwargs.update({'security_group_id': self.id})
-            self.client.create_security_group_rule({'security_group_rule': kwargs})
-        except NeutronConflict:
+            LOGGER.debug("Adding rule %s", str(kwargs))
+            self.conn.network.create_security_group_rule(**kwargs)
+        except OSConflict:
             kwargs.pop('security_group_id')
             LOGGER.debug("Rule with %s already exists" % str(kwargs))
 
-    async def del_sec_rule(self, connection):
-        """
-        delete security rule
-        """
-        connection.delete_security_group_rule(self.id)
+    async def del_sec_rule(self):
+        """Deletes a security rule."""
+        self.conn.delete_security_group_rule(self.id)
+
+    def get(self):
+        """Retrieves the SecurityGroup from OpenStack."""
+
+        return self.conn.network.find_security_group(self.name)
 
     @lru_cache()
-    def get_or_create_sec_group(self, name):
+    def get_or_create(self):
         """
         Create a security group for all machines
 
@@ -810,21 +811,16 @@ class SecurityGroup:
         Return:
             a security group dict
         """
-        name = "%s-sec-group" % name
-        secgroup = self.client.list_security_groups(
-            retrieve_all=False, **{'name': name})
-        secgroup = next(secgroup)['security_groups']
 
+        secgroup = self.get()
         if secgroup:
-            self.exists = True
-            self.id = secgroup[0]['id']
-            return secgroup[0]
+            LOGGER.info(f"Using SecurityGroup [{secgroup.name}] ...")
+        else:
+            LOGGER.info(f"Creating SecurityGroup [{self.name}] ...")
+            self.conn.network.create_security_group(name=self.name)
 
-        secgroup = self.client.create_security_group(
-            {'security_group': {'name': name}})['security_group']
-
-        self.id = secgroup['id']
-        return {}
+        self.id = secgroup.id
+        return secgroup
 
     def configure(self):
         """
@@ -834,44 +830,45 @@ class SecurityGroup:
             neutron (neutron client)
             sec_group (dict) the sec. group info dict (Munch)
         """
-        if self.subnet:
-            cidr = self.client.find_resource('subnet', self.subnet)['cidr']
-        else:
-            cidr = self.client.list_subnets()['subnets'][-1]['cidr']
+        # if self.subnet:
+        #     cidr = self.client.find_resource('subnet', self.subnet)['cidr']
+        # else:
+        #     cidr = self.client.list_subnets()['subnets'][-1]['cidr']
+        cidr = self.subnet['cidr']
 
-        LOGGER.debug("Configuring security group ...")
+        LOGGER.debug("Configuring Security Group ...")
         # allow communication to the API server from within the cluster
         # on port 80
-        self.add_sec_rule(direction='ingress', protocol='TCP',
-                          port_range_max=80, port_range_min=80,
-                          remote_ip_prefix=cidr)
+        self.add_rule(direction='ingress', protocol='TCP',
+                      port_range_max=80, port_range_min=80,
+                      remote_ip_prefix=cidr)
         # Allow all incoming TCP/UDP inside the cluster range
-        self.add_sec_rule(direction='ingress', protocol='UDP',
-                          remote_ip_prefix=cidr)
-        self.add_sec_rule(direction='ingress', protocol='TCP',
-                          remote_ip_prefix=cidr)
+        self.add_rule(direction='ingress', protocol='UDP',
+                      remote_ip_prefix=cidr)
+        self.add_rule(direction='ingress', protocol='TCP',
+                      remote_ip_prefix=cidr)
         # allow all outgoing
         # we are behind a physical firewall anyway
-        self.add_sec_rule(direction='egress', protocol='UDP')
-        self.add_sec_rule(direction='egress', protocol='TCP')
+        self.add_rule(direction='egress', protocol='UDP')
+        self.add_rule(direction='egress', protocol='TCP')
         # Allow IPIP communication
-        self.add_sec_rule(direction='egress', protocol=4, remote_ip_prefix=cidr)
-        self.add_sec_rule(direction='ingress', protocol=4, remote_ip_prefix=cidr)
+        self.add_rule(direction='egress', protocol=4, remote_ip_prefix=cidr)
+        self.add_rule(direction='ingress', protocol=4, remote_ip_prefix=cidr)
         # allow accessing the API server
-        self.add_sec_rule(direction='ingress', protocol='TCP',
-                          port_range_max=6443, port_range_min=6443)
+        self.add_rule(direction='ingress', protocol='TCP',
+                      port_range_max=6443, port_range_min=6443)
         # allow node ports
         # OpenStack load balancer talks to these too
-        self.add_sec_rule(direction='egress', protocol='TCP',
-                          port_range_max=32767, port_range_min=30000)
-        self.add_sec_rule(direction='ingress', protocol='TCP',
-                          port_range_max=32767, port_range_min=30000)
+        self.add_rule(direction='egress', protocol='TCP',
+                      port_range_max=32767, port_range_min=30000)
+        self.add_rule(direction='ingress', protocol='TCP',
+                      port_range_max=32767, port_range_min=30000)
         # allow SSH
-        self.add_sec_rule(direction='egress', protocol='TCP',
-                          port_range_max=22, port_range_min=22,
-                          remote_ip_prefix=cidr)
-        self.add_sec_rule(direction='ingress', protocol='TCP',
-                          port_range_max=22, port_range_min=22)
+        self.add_rule(direction='egress', protocol='TCP',
+                      port_range_max=22, port_range_min=22,
+                      remote_ip_prefix=cidr)
+        self.add_rule(direction='ingress', protocol='TCP',
+                      port_range_max=22, port_range_min=22)
 
 
 def read_os_auth_variables(trim=True):
@@ -976,14 +973,13 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
     Args:
         config (dict): A dictionary containing the koris config parameters.
     """
-    def __init__(self, neutron_client, network_id, config, conn=None):
-        self.net_client = neutron_client
+    def __init__(self, network_id, config, conn):
         self.net_id = network_id
         self.config = config
         self.conn = conn
-        self.name = self._set_name()
+        self.name = self._get_name()
 
-    def _set_name(self):
+    def _get_name(self):
         subnet_name = None
         for key in ['subnet', 'subnets']:
             if key in self.config['private_net']:
@@ -997,34 +993,42 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
 
         return subnet_name
 
+    def get(self):
+        """Retrieves a Subnet from OpenStack.
+
+        Returns:
+            An OpenStack Subnetwork Class or None.
+        """
+
+        return self.conn.network.find_subnet(self.name)
+
     def get_or_create(self):
+        """Retrieves or creates a Subnet on OpenStack.
+
+        Returns:
+            A dictionary containing the Subnet Information.
         """
-        return: dict with network properties
-        """
 
-
-        subnets = self.net_client.list_subnets()['subnets']
-
-        # using OpenStack we needed more than one subnetwork.
-        # in Kuberentes we delegate networking security to policies.
-        # Thus, all the Pods are in the same subnet, but traffic
-        # is only allowed between matching labels
-        subnet = [s for s in subnets if s['name'] == subnet_name]
-        subnet = subnet[0] if subnet else {}
+        subnet = self.get()
         if subnet:
-            LOGGER.info(f"Subnet [{subnet_name}] already exists. Skipping...")
+            LOGGER.info(f"Using Subnet [{self.name}]... ")
         else:
-            LOGGER.info("Creating subnet %s" % subnet_name)
+            LOGGER.info("Creating Subnet %s ..." % self.name)
+
+            if 'subnet' in self.config.get('private_net', {}):
+                subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
+            else:
+                subnet['cidr'] = '192.168.1.0/16'
+
             subnet['ip_version'] = 4
             subnet['network_id'] = self.net_id
-            subnet['name'] = subnet_name
-            # set cidr if not specified in config
-            if 'subnet' not in self.config.get('private_net', {}):
-                subnet['cidr'] = '192.168.1.0/16'
-            else:
-                subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
-            subnet = self.net_client.create_subnet({'subnet': subnet})
-            subnet = subnet['subnet']
+            subnet['name'] = self.name
+
+            self.conn.network.create_subnet(name=subnet['name'],
+                                            ip_version=subnet['ip_version'],
+                                            network_id=subnet['network_id'],
+                                            cidr=subnet['cidr'])
+
             self.config['private_net']['subnet'] = subnet
 
         return subnet
@@ -1034,62 +1038,92 @@ class OSRouter:  # pylint: disable=too-few-public-methods
     """
     create router if not defined
     """
-    def __init__(self, neutron_client, network_id, subnet, config):
-        self.net_client = neutron_client
+    def __init__(self, network_id, subnet, config, conn):
         self.net_id = network_id
         self.subnet = subnet
         self.config = config
+        self.conn = conn
+        self.name = self._get_name()
+        self.ext_net = self._get_ext_net()
 
-    def get_or_create(self):
-        """
-        return: dict with router properties
-        """
-        if 'router' not in self.config.get('private_net',
-                                           {}).get('subnet', {}):
-            router_name = "%s-router" % self.config['cluster-name']
-        else:
+    def _get_name(self):
+        """Returns the name of the default Router."""
+
+        if 'router' in self.config.get('private_net',
+                                       {}).get('subnet', {}):
             router_name = self.config.get(
                 'private_net')['subnet']['router']['name']
-
-        router = self.net_client.list_routers(name=router_name)['routers']
-        if router:
-            LOGGER.info(f"Router [{router_name}] already exists. Skipping ...")
         else:
-            LOGGER.info(f"Creating router [{router_name}]")
-            payload = {
-                "router": {
-                    "name": router_name,
-                }
-            }
-            router = self.net_client.create_router(payload)['router']
+            router_name = "%s-router" % self.config['cluster-name']
+
+        return router_name
+
+    def _get_ext_net(self):
+        """Sets the external network on the Router.
+
+        Raises:
+            RuntimeError if external network doesn't exist.
+
+        Returns:
+            The external network.
+        """
+
+        ext_net = OSNetwork.find_external_network(self.conn)
+        if ext_net is None:
+            LOGGER.error("No external network found")
+            raise RuntimeError("no external network found")
+
+        return ext_net
+
+    def get(self):
+        """Retrieves a Router by the default name from OpenStack."""
+
+        return self.conn.network.find_router(self.name)
+
+    def get_or_create(self):
+        """Retrieves or creates a Router on OpenStack.
+
+        Returns:
+
+        """
+
+        router = self.get()
+        if router:
+            LOGGER.info(f"Using Router [{self.name}] ...")
+        else:
+            LOGGER.info(f"Creating Router [{self.name}] ...")
+
+            LOGGER.debug("Setting up Router ...")
+            router = self.conn.network.create_router(name=self.name,
+                                                     admin_state_up=True)
+            LOGGER.debug(router)
+
+            LOGGER.debug("Creating new Port for Router ...")
             router_ip = IPNetwork(self.subnet.get('cidr', "192.168.1.0/16"))[1]
-            port_payload = {'port': {"admin_state_up": True,
-                                     "network_id": self.net_id,
-                                     "fixed_ips": [{
-                                         "ip_address": str(router_ip),  # noqa
-                                         "subnet_id": self.subnet['id']}],
-                                     "name": router_name + "-PORT"}}
-            port = self.net_client.create_port(port_payload)['port']
-            self.net_client.add_interface_router(router['id'], {'port_id': port['id']})
+            fixed_ips = [{
+                "ip_address": str(router_ip),
+                "subnet_id": self.subnet['id']
+            }]
+            port = self.conn.network.create_port(name=f"{self.name}-port",
+                                                 network_id=self.net_id,
+                                                 admin_state_up=True,
+                                                 fixed_ips=fixed_ips)
+            LOGGER.debug(port)
 
-            conn = OpenStackAPI.connect()
-            ext_net = OSNetwork.find_external_network(conn)
-            if ext_net is None:
-                LOGGER.error("No external network found")
-                sys.exit(1)
+            LOGGER.debug("Attaching Port to Router as interface ...")
+            cmd = self.conn.network.add_interface_to_router(
+                router=router,
+                subnet_id=self.subnet['id'],
+                port_id=port.id
+            )
+            LOGGER.debug(cmd)
 
-            # dynamically find network id matching router network in config
-            network_name = self.config['private_net'].get(
-                'router', {"name": "router-%s" % self.config['cluster-name'],
-                           "network": ext_net.name})['network']
-            networks = self.net_client.list_networks()['networks']
-            try:
-                network_id = [net['id']
-                              for net in networks if net['name'] == network_name][0]
-            except IndexError:
-                LOGGER.error("Wrong router network in config")
-                sys.exit(1)
-            self.net_client.add_gateway_router(router['id'], {"network_id": network_id})
+            LOGGER.debug("Adding external Gateway to Router ...")
+            cmd = self.conn.network.update_router(
+                router,
+                external_gateway_info={"network_id": self.ext_net.id}
+            )
+            LOGGER.debug(cmd)
 
         return router
 
@@ -1179,12 +1213,18 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
         self.net = OSNetwork(config, self.conn).get()
-        self.subnet = OSSubnet(neutron_client, self.net['id'], config).get()
-        self.router = OSRouter(neutron_client, self.net['id'], self.subnet, config).get()
+        self.subnet = OSSubnet(self.net['id'],
+                               config,
+                               self.conn).get()
+        self.router = OSRouter(self.net['id'],
+                               self.subnet,
+                               config,
+                               self.conn).get()
         self.subnet_id = self.subnet['id']
-        self.secgroup = SecurityGroup(neutron_client, config['cluster-name'],
+        self.secgroup = SecurityGroup(config['cluster-name'],
+                                      self.conn,
                                       subnet=self.subnet['name']).get()
-        self.secgroups = [secgroup.id]
+        self.secgroups = [self.secgroup.id]
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
@@ -1206,17 +1246,17 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             self.net = OSNetwork(config, self.conn).get_or_create()
 
         if not self.subnet:
-            self.subnet = OSSubnet(self._neutron, self.net['id'], config).get_or_create()
+            self.subnet = OSSubnet(self.net['id'], config, self.conn).get_or_create()
 
         if not self.router:
-            self.router = OSRouter(self._neutron,
-                                   self.net['id'],
+            self.router = OSRouter(self.net['id'],
                                    self.subnet,
-                                   config).get_or_create()
+                                   config,
+                                   self.conn).get_or_create()
         if not self.secgroup:
-            self.secgroup = SecurityGroup(self._neutron,
-                                          config['cluster-name'],
-                                          self.subnet['name'])
+            self.secgroup = SecurityGroup(config['cluster-name'],
+                                          self.conn,
+                                          self.subnet).get_or_create()
     @property
     def image(self):
         """find the koris image in OpenStackAPI"""
