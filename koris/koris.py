@@ -264,9 +264,11 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             config = yaml.safe_load(stream)
 
         nova, neutron, cinder = get_clients()
-        oscinfo = OSClusterInfo(nova, neutron, cinder, config)
+        conn = get_connection()
+        oscinfo = OSClusterInfo(nova, neutron, cinder, config, conn)
         oscinfo.setup_networking(config)
-        builder = ClusterBuilder(config, oscinfo, nova, neutron, cinder)
+        builder = ClusterBuilder(config, oscinfo, nova, neutron, cinder, conn)
+
         try:
             builder.run(config)
         except InstanceExists:
@@ -293,8 +295,10 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         certs_location = 'certs-' + config['cluster-name']
         try:
             shutil.rmtree(certs_location)
+            LOGGER.succsess("Certificates in %s"
+                            "deleted successfully", certs_location)
         except FileNotFoundError:
-            LOGGER.warn(f"Certificates {certs_location} already deleted")
+            pass
         sys.exit(0)
 
     def delete(self, config: str, resource: str, name: str = ""):
@@ -381,10 +385,11 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             config_dict = yaml.safe_load(stream)
 
         nova, neutron, cinder = get_clients()
+        conn = get_connection()
 
         k8s = K8S(os.getenv("KUBECONFIG"))
         os_cluster_info = OSClusterInfo(nova, neutron, cinder,
-                                        config_dict)
+                                        config_dict, conn)
 
         if not k8s.validate_context(os_cluster_info.conn):
             LOGGER.error(("Error: cluster not part of your sourced"

@@ -13,8 +13,7 @@ import sys
 from cinderclient.exceptions import BadRequest, NotFound
 
 from koris.util.hue import que, bold  # pylint: disable=no-name-in-module
-from koris.cloud.openstack import OSClusterInfo, LoadBalancer
-from koris.cloud import OpenStackAPI
+from koris.cloud.openstack import OSClusterInfo, LoadBalancer, get_connection
 from .util.util import get_kubeconfig_yaml
 from .util.logger import Logger
 
@@ -33,7 +32,8 @@ def delete_cluster(config, nova, neutron, cinder, force=False):
         ans = 'y'
 
     if ans.lower() == 'y':
-        remove_cluster(config, nova, neutron, cinder)
+        conn = get_connection()
+        remove_cluster(config, nova, neutron, cinder, conn)
     else:
         sys.exit(1)
 
@@ -58,10 +58,11 @@ def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,
     return path
 
 
-def remove_cluster(config, nova, neutron, cinder):
+# pylint: disable=too-many-locals
+def remove_cluster(config, nova, neutron, cinder, conn):
     """Delete a cluster from OpenStack"""
 
-    cluster_info = OSClusterInfo(nova, neutron, cinder, config)
+    cluster_info = OSClusterInfo(nova, neutron, cinder, config, conn)
     cp_hosts = cluster_info.distribute_management()
     workers = cluster_info.distribute_nodes()
 
@@ -70,7 +71,7 @@ def remove_cluster(config, nova, neutron, cinder):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
 
-    connection = OpenStackAPI.connect()
+    connection = get_connection()
     LoadBalancer(config, connection).delete()
     secg = connection.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})

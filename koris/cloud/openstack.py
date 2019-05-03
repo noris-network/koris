@@ -288,14 +288,12 @@ class Instance:  # pylint: disable=too-many-arguments
 
 
 class LoadBalancer:
-    """
-    A class to create a LoadBalancer in OpenStack.
+    """A class to create a LoadBalancer in OpenStack.
 
     Openstack allows one to create a loadbalancer and configure it later.
     Thus we create a LoadBalancer, so we have it's IP. The IP
     of the LoadBalancer, is then stored in the SSL certificates.
     During the boot of the machines, we configure the LoadBalancer.
-
     """
 
     def __init__(self, config, conn):
@@ -306,9 +304,9 @@ class LoadBalancer:
         self.name = "%s-lb" % config['cluster-name']
 
         try:
-            self.subnet = config.get('private_net')['subnet'].get('name', self.name)
+            self.subnet_name = config.get('private_net')['subnet'].get('name', self.name)
         except (KeyError, TypeError):
-            self.subnet = self.name
+            self.subnet_name = None
 
         # these attributes are set after creation
         self._id = None
@@ -464,8 +462,7 @@ class LoadBalancer:
         return pool
 
     async def configure(self, master_ips):
-        """
-        Configure a load balancer created in earlier step
+        """Configure a load balancer created in earlier step
 
         Args:
             master_ips (list): A list of the master IP addresses
@@ -491,7 +488,7 @@ class LoadBalancer:
                 self.del_member(member_id, pool.id)
 
         for member in master_ips:
-            LOGGER.info("Adding member %s ...", member)
+            LOGGER.debug("Adding member %s ...", member)
             self.add_member(pool.id, member)
         if pool.get('healthmonitor_id'):
             LOGGER.debug("Reusing existing health monitor")
@@ -510,7 +507,7 @@ class LoadBalancer:
         return lb
 
     def get_or_create(self):
-        """Retrieve, else create  a LoadBalancer"""
+        """Retrieve or create a LoadBalancer"""
 
         lb = self.get()
 
@@ -574,17 +571,20 @@ class LoadBalancer:
         """
         # see examle of how to create an LB
         # https://developer.openstack.org/api-ref/load-balancer/v2/index.html#id6
-        if self.subnet:
-            subnet_id = self.conn.get_subnet(self.subnet).id
+
+        if self.subnet_name:
+            subnet_id = self.conn.get_subnet(self.subnet_name).id
         else:
             # match created subnet id with the corresponding one in subnets
-            net_conn = get_connection()
-            network = OSNetwork(self.config, net_conn).get_or_create()
+            network = OSNetwork(self.config, self.conn).get_or_create()
             subnets = list(self.conn.network.subnets(network_id=network.id))
             subnet_id = subnets[0].id
 
-        lb = self.conn.load_balancer.create_load_balancer(vip_subnet_id=subnet_id,
-                                                          name=f"{self.name}")
+        lb = self.conn.load_balancer.create_load_balancer(
+            vip_subnet_id=subnet_id,
+            name=f"{self.name}"
+        )
+
         self._id = lb.id
         self._subnet_id = subnet_id
         self._data = lb
@@ -770,8 +770,15 @@ class LoadBalancer:
 
 
 class SecurityGroup:
-    """
-    A class to create and configure a security group in openstack
+    """A class to create and configure a security group in OpenStack.
+
+    This class behaves differently as the OSNetwork, OSSubnet and OSRouter
+    classes as we need to additional functions on it, such as ``configure``.
+
+    Args:
+        name (str): The name of the Security Group
+        conn: An OpenStack Connection object
+        subnet: An OpenStack Subnet object
     """
 
     def __init__(self, name, conn, subnet):
@@ -784,32 +791,40 @@ class SecurityGroup:
         """Adds a security group rule."""
         try:
             kwargs.update({'security_group_id': self.id})
-            LOGGER.debug("Adding rule %s", str(kwargs))
+            LOGGER.debug("Adding rule %s ...", str(kwargs))
             self.conn.network.create_security_group_rule(**kwargs)
         except OSConflict:
             kwargs.pop('security_group_id')
-            LOGGER.debug("Rule with %s already exists" % str(kwargs))
+            LOGGER.debug("Rule %s already exists" % str(kwargs))
 
     async def del_sec_rule(self):
         """Deletes a security rule."""
         self.conn.delete_security_group_rule(self.id)
 
-    def get(self):
-        """Retrieves the SecurityGroup from OpenStack."""
+    @property
+    def exists(self):
+        """Checks if this SecurityGroup has been created in OpenStack."""
 
-        return self.conn.network.find_security_group(self.name)
+        return self.get() is not None
+
+    def get(self):
+        """Retrieves the SecurityGroup from OpenStack.
+
+        If it exists, will also set the ``id`` attribute of the class.
+        """
+
+        sg = self.conn.network.find_security_group(self.name)
+        if sg:
+            self.id = sg.id
+
+        return sg
 
     @lru_cache()
     def get_or_create(self):
-        """
-        Create a security group for all machines
-
-        Args:
-            neutron (neutron client)
-            name (str) - the cluster name
+        """Retrieves or creates a security group for all machines.
 
         Return:
-            a security group dict
+            An OpenStack Security Group Object.
         """
 
         secgroup = self.get()
@@ -817,23 +832,14 @@ class SecurityGroup:
             LOGGER.info(f"Using SecurityGroup [{secgroup.name}] ...")
         else:
             LOGGER.info(f"Creating SecurityGroup [{self.name}] ...")
-            self.conn.network.create_security_group(name=self.name)
+            secgroup = self.conn.network.create_security_group(name=self.name)
 
         self.id = secgroup.id
+        LOGGER.debug("Created SecurityGroup: %s", secgroup)
         return secgroup
 
     def configure(self):
-        """
-        Create a future for configuring the security group ``name``
-
-        Args:
-            neutron (neutron client)
-            sec_group (dict) the sec. group info dict (Munch)
-        """
-        # if self.subnet:
-        #     cidr = self.client.find_resource('subnet', self.subnet)['cidr']
-        # else:
-        #     cidr = self.client.list_subnets()['subnets'][-1]['cidr']
+        """Configures the SecurityGroup for cluster usage."""
         cidr = self.subnet['cidr']
 
         LOGGER.debug("Configuring Security Group ...")
@@ -892,7 +898,10 @@ def read_os_auth_variables(trim=True):
 
 
 class OSNetwork:  # pylint: disable=too-few-public-methods
-    """Manages a Network on OpenStack
+    """Manages a Network on OpenStack.
+
+    The name will be taken from the config or set to
+    ``cluster-name``-net.
 
     Args:
         config (dict): A dictionary containing the koris config parameters.
@@ -903,7 +912,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
         self.conn = conn
 
         if 'private_net' not in self.config:
-            self.name = "koris-%s-net" % self.config['cluster-name']
+            self.name = "%s-net" % self.config['cluster-name']
         else:
             self.name = self.config.get('private_net')['name']
 
@@ -911,7 +920,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
         """Retrieves a Network from OpenStack.
 
         Returns:
-            The network as a dictionary, or None if non-existant.
+            An OpenStack Network object, or None.
         """
 
         return self.conn.get_network(self.name)
@@ -920,12 +929,10 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
         """Retrieves or creates a Network.
 
         Returns:
-            A dict with networking information.
+            An OpenStack Network object.
         """
         network = self.get()
-        if network:
-            LOGGER.info(f"Using Network [{self.name}] ...")
-        else:
+        if not network:
             LOGGER.info("Creating network [%s] ... " % self.name)
             network = self.conn.create_network(name=self.name,
                                                admin_state_up=True)
@@ -935,6 +942,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
         else:
             self.config['private_net'] = network
 
+        LOGGER.debug("Network: %s", network)
         return network
 
     # pylint: disable=inconsistent-return-statements
@@ -942,10 +950,11 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
     def find_external_network(conn, default="ext02", fallback="ext01"):
         """Finds and returns an external network in OpenStack.
 
-        This function will look for all external networks, then try to find the one with
-        name passed as the "default" parameter. In case this can't be found, it will try
-        to return the external network with the "fallback" parameter. In case this can't
-        be found, it will return the first external network it finds.
+        This function will look for all external networks, then try to find the
+        one with name passed as the "default" parameter. In case this can't be
+        found, it will try to return the external network with the "fallback"
+        parameter. In case this can't be found, it will return the first
+        external network it finds.
 
         Args:
             conn (:class:`OpenStackAPI.connection.connection`): An OpenStack Connection.
@@ -971,7 +980,9 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
     """Manages a Subnet on OpenStack.
 
     Args:
+        network_id (str): The UUID of the Network to create the Subnet in.
         config (dict): A dictionary containing the koris config parameters.
+        conn: An OpenStack Connection object.
     """
     def __init__(self, network_id, config, conn):
         self.net_id = network_id
@@ -980,9 +991,17 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         self.name = self._get_name()
 
     def _get_name(self):
+        """Sets the name for Subnet.
+
+        This value will either be taken from the config or set as
+        ``cluster-name``-subnet.
+
+        Returns:
+            The name as string.
+        """
         subnet_name = None
         for key in ['subnet', 'subnets']:
-            if key in self.config['private_net']:
+            if key in self.config.get('private_net', ''):
                 try:
                     subnet_name = self.config.get('private_net')['subnet']['name']
                 except KeyError:
@@ -997,7 +1016,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         """Retrieves a Subnet from OpenStack.
 
         Returns:
-            An OpenStack Subnetwork Class or None.
+            An OpenStack Subnetwork Object or None.
         """
 
         return self.conn.network.find_subnet(self.name)
@@ -1005,38 +1024,47 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
     def get_or_create(self):
         """Retrieves or creates a Subnet on OpenStack.
 
+        If a new Subnetwork is created, additional information will be saved
+        in the config.
+
         Returns:
-            A dictionary containing the Subnet Information.
+            An OpenStack Subnetwork Object.
         """
 
-        subnet = self.get()
-        if subnet:
-            LOGGER.info(f"Using Subnet [{self.name}]... ")
-        else:
-            LOGGER.info("Creating Subnet %s ..." % self.name)
-
+        out = self.get()
+        if not out:
+            LOGGER.info("Creating Subnet [%s] ..." % self.name)
+            subnet = {}
             if 'subnet' in self.config.get('private_net', {}):
                 subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
             else:
-                subnet['cidr'] = '192.168.1.0/16'
+                subnet['cidr'] = '192.168.0.0/16'
 
             subnet['ip_version'] = 4
             subnet['network_id'] = self.net_id
             subnet['name'] = self.name
 
-            self.conn.network.create_subnet(name=subnet['name'],
-                                            ip_version=subnet['ip_version'],
-                                            network_id=subnet['network_id'],
-                                            cidr=subnet['cidr'])
+            out = self.conn.network.create_subnet(
+                name=subnet['name'],
+                ip_version=subnet['ip_version'],
+                network_id=subnet['network_id'],
+                cidr=subnet['cidr']
+            )
 
             self.config['private_net']['subnet'] = subnet
 
-        return subnet
+        LOGGER.debug("Subnet: %s", out)
+        return out
 
 
 class OSRouter:  # pylint: disable=too-few-public-methods
-    """
-    create router if not defined
+    """A class managing a Router on OpenStack.
+
+    Args:
+        network_id (str): The UUID of the OpenStack Network.
+        subnet: An OpenStack Subnetwork Object.
+        config (dcit): A dictionary containing koris config parameters.
+        conn: An OpenStack Connection Object.
     """
     def __init__(self, network_id, subnet, config, conn):
         self.net_id = network_id
@@ -1054,7 +1082,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
             router_name = self.config.get(
                 'private_net')['subnet']['router']['name']
         else:
-            router_name = "%s-router" % self.config['cluster-name']
+            router_name = "%s-rt" % self.config['cluster-name']
 
         return router_name
 
@@ -1065,7 +1093,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
             RuntimeError if external network doesn't exist.
 
         Returns:
-            The external network.
+            The external network as OpenStack Network Object.
         """
 
         ext_net = OSNetwork.find_external_network(self.conn)
@@ -1083,14 +1111,15 @@ class OSRouter:  # pylint: disable=too-few-public-methods
     def get_or_create(self):
         """Retrieves or creates a Router on OpenStack.
 
-        Returns:
+        Function will create the router, create a new port and add it as an
+        interface to the router, then adding and external gateway.
 
+        Returns:
+            An OpenStack Router object.
         """
 
         router = self.get()
-        if router:
-            LOGGER.info(f"Using Router [{self.name}] ...")
-        else:
+        if not router:
             LOGGER.info(f"Creating Router [{self.name}] ...")
 
             LOGGER.debug("Setting up Router ...")
@@ -1099,7 +1128,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
             LOGGER.debug(router)
 
             LOGGER.debug("Creating new Port for Router ...")
-            router_ip = IPNetwork(self.subnet.get('cidr', "192.168.1.0/16"))[1]
+            router_ip = IPNetwork(self.subnet.get('cidr', "192.168.0.0/16"))[1]
             fixed_ips = [{
                 "ip_address": str(router_ip),
                 "subnet_id": self.subnet['id']
@@ -1108,7 +1137,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
                                                  network_id=self.net_id,
                                                  admin_state_up=True,
                                                  fixed_ips=fixed_ips)
-            LOGGER.debug(port)
+            LOGGER.debug("Created Port: %s", port)
 
             LOGGER.debug("Attaching Port to Router as interface ...")
             cmd = self.conn.network.add_interface_to_router(
@@ -1116,14 +1145,14 @@ class OSRouter:  # pylint: disable=too-few-public-methods
                 subnet_id=self.subnet['id'],
                 port_id=port.id
             )
-            LOGGER.debug(cmd)
+            LOGGER.debug("Updated Router: %s", cmd)
 
             LOGGER.debug("Adding external Gateway to Router ...")
             cmd = self.conn.network.update_router(
                 router,
                 external_gateway_info={"network_id": self.ext_net.id}
             )
-            LOGGER.debug(cmd)
+            LOGGER.debug("Router: %s", cmd)
 
         return router
 
@@ -1193,38 +1222,57 @@ def distribute_host_zones(hosts, zones):
 
 
 class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
-    """
-    collect various information on the cluster
+    """Class containing various information of the cluster.
 
+    This tries to retrieve the Network, Subnetwork, Router and Security Group
+    from OpenStack. If any of those can't be retrieved, the attributes are
+    set to ``None``. The function :meth:`.setup_networking` can initialize
+    all resources.
+
+    It is the responsibility of the client to check if the resources are
+    available and set them up, if necessary.
+
+    Args:
+        nova_client: An OpenStack NOVA Client
+        neutron_client: An OpenStack NEUTRON Client
+        cinder_client: An OpenStack CINDER Client
+        config (dict): A dictionary containing koris config parameters.
+        conn: An OpenStack Connection Object.
     """
     def __init__(self, nova_client, neutron_client,
                  cinder_client,
                  config,
-                 conn=None):
+                 conn):
 
-        if not conn:
-            self.conn = get_connection()
-        else:
-            self.conn = conn
-
+        self.conn = conn
         self.keypair = nova_client.keypairs.get(config['keypair'])
-
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
         self.master_flavor = nova_client.flavors.find(
             name=config['master_flavor'])
-        self.net = OSNetwork(config, self.conn).get()
-        self.subnet = OSSubnet(self.net['id'],
-                               config,
-                               self.conn).get()
-        self.router = OSRouter(self.net['id'],
-                               self.subnet,
-                               config,
-                               self.conn).get()
-        self.subnet_id = self.subnet['id']
-        self.secgroup = SecurityGroup(config['cluster-name'],
-                                      self.conn,
-                                      subnet=self.subnet['name']).get()
-        self.secgroups = [self.secgroup.id]
+
+        try:
+            self.net = OSNetwork(config, self.conn).get()
+            self.subnet = OSSubnet(self.net['id'],
+                                   config,
+                                   self.conn).get()
+            self.router = OSRouter(self.net['id'],
+                                   self.subnet,
+                                   config,
+                                   self.conn).get()
+            self.subnet_id = self.subnet['id']
+            self.secgroup = SecurityGroup(config['cluster-name'],
+                                          self.conn,
+                                          subnet=self.subnet)
+            sg = self.secgroup.get()
+            self.secgroups = [sg.id]
+        except (TypeError, KeyError, AttributeError):
+            self.net = None
+            self.subnet = None
+            self.router = None
+            self.subnet_id = None
+            self.secgroup = None
+            self.secgroups = []
+
         self.name = config['cluster-name']
         self.n_nodes = config['n-nodes']
         self.n_masters = config['n-masters']
@@ -1234,29 +1282,54 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self._nova = nova_client
         self._neutron = neutron_client
         self._cinder = cinder_client
+        self.config = config
 
-    def setup_networking(self, config):
+    def setup_networking(self, config=None):
         """Creates Network, Subnet, Router and Security Group if necessary.
+
+        This function is ephemeral, as it checks if the resources are existing,
+        before creating them.
 
         Args:
             config (dict): A dictionary containing the koris config parameters.
         """
 
+        if not config:
+            config = self.config
+
         if not self.net:
             self.net = OSNetwork(config, self.conn).get_or_create()
+        else:
+            LOGGER.debug(f"Using existing Network [{self.net.name}] ...")
 
         if not self.subnet:
-            self.subnet = OSSubnet(self.net['id'], config, self.conn).get_or_create()
+            self.subnet = OSSubnet(self.net['id'],
+                                   config,
+                                   self.conn).get_or_create()
+        else:
+            LOGGER.debug(f"Using existing Subnet [{self.subnet.name}] ...")
 
         if not self.router:
             self.router = OSRouter(self.net['id'],
                                    self.subnet,
                                    config,
                                    self.conn).get_or_create()
+        else:
+            LOGGER.debug(f"Using existing Router [{self.router.name}] ...")
+
         if not self.secgroup:
-            self.secgroup = SecurityGroup(config['cluster-name'],
-                                          self.conn,
-                                          self.subnet).get_or_create()
+            self.secgroup = SecurityGroup(name=config['cluster-name'],
+                                          conn=self.conn,
+                                          subnet=self.subnet)
+
+        if not self.secgroup.exists:
+            sg = self.secgroup.get_or_create()
+        else:
+            LOGGER.debug(f"Using existing SecurityGroup [{self.secgroup.name}] ...")
+
+        if not self.secgroups:
+            self.secgroups = [sg.id]
+
     @property
     def image(self):
         """find the koris image in OpenStackAPI"""
@@ -1268,8 +1341,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
     @lru_cache()
     def _get_or_create(self, hostname, zone, role, flavor):
-        """
-        Find if a instance exists Openstack.
+        """Find if a instance exists Openstack.
 
         If instance is found return Instance instance with the info.
         If not found create a NIC and assign it to an Instance instance.
@@ -1277,6 +1349,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         volume_config = {'image': self.image, 'class': self.storage_class}
         try:
             _server = self._nova.servers.find(name=hostname)
+            LOGGER.debug("Found instance %s", hostname)
             inst = Instance(self._cinder,
                             self._nova,
                             _server.name,
@@ -1288,6 +1361,8 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             inst.ports.append(_server.interface_list()[0])
             inst.exists = True
         except NovaNotFound:
+            LOGGER.debug("Creatig new instance %s", hostname)
+            self.setup_networking()
             inst = Instance(self._cinder,
                             self._nova,
                             hostname,
