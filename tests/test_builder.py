@@ -48,6 +48,8 @@ class Test_raise_system_exit(unittest.TestCase):
         config_bad = copy.deepcopy(CONFIG)
         config_bad['cluster-name'] = "illegal:)chars"
 
+        conn.network.networks.return_value = {"name": "ext01"}
+
         info = OSClusterInfo(NOVA, NEUTRON, CINDER, config_bad, conn)
         with self.assertRaises(SystemExit):
             # assert this raises system exit
@@ -83,7 +85,7 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 NOVA = mock.Mock()
 NEUTRON = mock.Mock()
 CINDER = mock.Mock()
-
+CONN = mock.Mock()
 
 CONFIG2 = {
     "private_net": {},
@@ -105,6 +107,7 @@ NOVA.flavors.find = mock.MagicMock(return_value=Flavor('ECS.C1.4-8'))
 NEUTRON.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
 NEUTRON.create_port = mock.MagicMock(
     return_value=DUMMYPORT)
+
 
 NEUTRON.create_security_group = mock.MagicMock(
     return_value={"security_group": {'id':
@@ -204,10 +207,11 @@ def test_create_network_settings_from_config(patch):
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    sub = OSSubnet(NEUTRON, '12', CONFIG)
+
+    sub = OSSubnet('12', CONFIG, CONN)
     subs = sub.get_or_create()
-    assert 'name' in subs
-    assert 'cidr' in subs
+    assert subs.name is not None
+    assert subs.cidr is not None
 
 
 @mock.patch('koris.cloud.OpenStackAPI')
@@ -216,10 +220,10 @@ def test_create_network_settings_not_in_config(*args):
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    sub = OSSubnet(NEUTRON, '12', CONFIG2)
+    sub = OSSubnet('12', CONFIG, CONN)
     subs = sub.get_or_create()
-    assert 'name' in subs
-    assert 'cidr' in subs
+    assert subs.name is not None
+    assert subs.cidr is not None
 
 
 @mock.patch('koris.cloud.OpenStackAPI')

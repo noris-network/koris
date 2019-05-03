@@ -31,6 +31,7 @@ export PRINT_HELP_PYSCRIPT
 
 
 PY ?= python3
+PYTEST_FLAGS ?=
 REV ?= HEAD
 BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
 REV_NUMBER = $(shell git rev-parse --short ${REV})
@@ -82,7 +83,7 @@ test: test-python test-bash
 
 test-python: ## run tests quickly with the default Python
 	@echo "Running Python Unit tests ..."
-	py.test
+	py.test $(PYTEST_FLAGS)
 
 test-bash:
 	@echo "Checking bash script syntax ..."
