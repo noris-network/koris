@@ -331,7 +331,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                 LOGGER.error("Must specifiy --name when deleting a node")
                 sys.exit(1)
 
-            LOGGER.question("Deleting %s %s", resource, name)
+            LOGGER.question(f"Deleting {resource} {name}", resource, name)
             ans = confirm(force)
             if ans != 'y':
                 sys.exit(1)
