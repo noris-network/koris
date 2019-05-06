@@ -71,19 +71,18 @@ def remove_cluster(config, nova, neutron, cinder, conn):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
 
-    connection = get_connection()
-    LoadBalancer(config, connection).delete()
-    secg = connection.list_security_groups(
+    LoadBalancer(config, conn).delete()
+    secg = conn.list_security_groups(
         {"name": '%s-sec-group' % config['cluster-name']})
     if secg:
         for sg in secg:
             for rule in sg.security_group_rules:
-                connection.delete_security_group_rule(rule['id'])
+                conn.delete_security_group_rule(rule['id'])
 
-            for port in connection.list_ports():
+            for port in conn.list_ports():
                 if sg.id in port.security_groups:
-                    connection.delete_port(port.id)
-    connection.delete_security_group(
+                    conn.delete_port(port.id)
+    conn.delete_security_group(
         '%s-sec-group' % config['cluster-name'])
 
     # Delete volumes
@@ -102,4 +101,4 @@ def remove_cluster(config, nova, neutron, cinder, conn):
             continue
 
     # delete the cluster key pair
-    connection.delete_keypair(config['cluster-name'])
+    conn.delete_keypair(config['cluster-name'])

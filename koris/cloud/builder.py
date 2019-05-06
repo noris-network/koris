@@ -66,6 +66,8 @@ class NodeBuilder:
         """
         add additional nodes
         """
+
+        self._info.setup_networking()
         nodes = [Instance(self._info.storage_client,
                           self._info.compute_client,
                           '%s-%s-%d' % (self.config['cluster-name'], role, n),

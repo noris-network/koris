@@ -787,7 +787,7 @@ class SecurityGroup:
         self.subnet = subnet
         self.id = None
 
-    def add_rule(self, **kwargs):
+    def add_sec_rule(self, **kwargs):
         """Adds a security group rule."""
         try:
             kwargs.update({'security_group_id': self.id})
@@ -845,36 +845,36 @@ class SecurityGroup:
         LOGGER.debug("Configuring Security Group ...")
         # allow communication to the API server from within the cluster
         # on port 80
-        self.add_rule(direction='ingress', protocol='TCP',
-                      port_range_max=80, port_range_min=80,
-                      remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=80, port_range_min=80,
+                          remote_ip_prefix=cidr)
         # Allow all incoming TCP/UDP inside the cluster range
-        self.add_rule(direction='ingress', protocol='UDP',
-                      remote_ip_prefix=cidr)
-        self.add_rule(direction='ingress', protocol='TCP',
-                      remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol='UDP',
+                          remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          remote_ip_prefix=cidr)
         # allow all outgoing
         # we are behind a physical firewall anyway
-        self.add_rule(direction='egress', protocol='UDP')
-        self.add_rule(direction='egress', protocol='TCP')
+        self.add_sec_rule(direction='egress', protocol='UDP')
+        self.add_sec_rule(direction='egress', protocol='TCP')
         # Allow IPIP communication
-        self.add_rule(direction='egress', protocol=4, remote_ip_prefix=cidr)
-        self.add_rule(direction='ingress', protocol=4, remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='egress', protocol=4, remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol=4, remote_ip_prefix=cidr)
         # allow accessing the API server
-        self.add_rule(direction='ingress', protocol='TCP',
-                      port_range_max=6443, port_range_min=6443)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=6443, port_range_min=6443)
         # allow node ports
         # OpenStack load balancer talks to these too
-        self.add_rule(direction='egress', protocol='TCP',
-                      port_range_max=32767, port_range_min=30000)
-        self.add_rule(direction='ingress', protocol='TCP',
-                      port_range_max=32767, port_range_min=30000)
+        self.add_sec_rule(direction='egress', protocol='TCP',
+                          port_range_max=32767, port_range_min=30000)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=32767, port_range_min=30000)
         # allow SSH
-        self.add_rule(direction='egress', protocol='TCP',
-                      port_range_max=22, port_range_min=22,
-                      remote_ip_prefix=cidr)
-        self.add_rule(direction='ingress', protocol='TCP',
-                      port_range_max=22, port_range_min=22)
+        self.add_sec_rule(direction='egress', protocol='TCP',
+                          port_range_max=22, port_range_min=22,
+                          remote_ip_prefix=cidr)
+        self.add_sec_rule(direction='ingress', protocol='TCP',
+                          port_range_max=22, port_range_min=22)
 
 
 def read_os_auth_variables(trim=True):
@@ -968,6 +968,8 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
         """
 
         # Retrieve all external networks as list
+
+        # import pdb; pdb.set_trace()
         ext_networks = list(conn.network.networks(is_router_external=True))
 
         for net_name in [default, fallback]:
@@ -988,9 +990,9 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         self.net_id = network_id
         self.config = config
         self.conn = conn
-        self.name = self._get_name()
+        self.name = self._name()
 
-    def _get_name(self):
+    def _name(self):
         """Sets the name for Subnet.
 
         This value will either be taken from the config or set as
@@ -1032,27 +1034,29 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
         """
 
         out = self.get()
-        if not out:
-            LOGGER.info("Creating Subnet [%s] ..." % self.name)
-            subnet = {}
-            if 'subnet' in self.config.get('private_net', {}):
-                subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
-            else:
-                subnet['cidr'] = '192.168.0.0/16'
+        if out:
+            LOGGER.debug("Subnet: %s", out)
+            return out
 
-            subnet['ip_version'] = 4
-            subnet['network_id'] = self.net_id
-            subnet['name'] = self.name
+        LOGGER.info("Creating Subnet [%s] ..." % self.name)
+        subnet = {}
+        if 'subnet' in self.config.get('private_net', {}):
+            subnet['cidr'] = self.config.get('private_net').get('subnet')['cidr']
+        else:
+            subnet['cidr'] = '192.168.0.0/16'
 
-            out = self.conn.network.create_subnet(
-                name=subnet['name'],
-                ip_version=subnet['ip_version'],
-                network_id=subnet['network_id'],
-                cidr=subnet['cidr']
-            )
+        subnet['ip_version'] = 4
+        subnet['network_id'] = self.net_id
+        subnet['name'] = self.name
 
-            self.config['private_net']['subnet'] = subnet
+        out = self.conn.network.create_subnet(
+            name=subnet['name'],
+            ip_version=subnet['ip_version'],
+            network_id=subnet['network_id'],
+            cidr=subnet['cidr']
+        )
 
+        self.config['private_net']['subnet'] = subnet
         LOGGER.debug("Subnet: %s", out)
         return out
 
@@ -1071,10 +1075,10 @@ class OSRouter:  # pylint: disable=too-few-public-methods
         self.subnet = subnet
         self.config = config
         self.conn = conn
-        self.name = self._get_name()
+        self.name = self._name()
         self.ext_net = self._get_ext_net()
 
-    def _get_name(self):
+    def _name(self):
         """Returns the name of the default Router."""
 
         if 'router' in self.config.get('private_net',
@@ -1328,6 +1332,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             LOGGER.debug(f"Using existing SecurityGroup [{self.secgroup.name}] ...")
 
         if not self.secgroups:
+            sg = self.secgroup.get_or_create()
             self.secgroups = [sg.id]
 
     @property
