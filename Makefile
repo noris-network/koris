@@ -31,6 +31,7 @@ export PRINT_HELP_PYSCRIPT
 
 
 PY ?= python3
+PYTEST_FLAGS ?=
 REV ?= HEAD
 BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
 REV_NUMBER = $(shell git rev-parse --short ${REV})
@@ -82,7 +83,7 @@ test: test-python test-bash
 
 test-python: ## run tests quickly with the default Python
 	@echo "Running Python Unit tests ..."
-	py.test
+	py.test $(PYTEST_FLAGS)
 
 test-bash:
 	@echo "Checking bash script syntax ..."
@@ -187,7 +188,7 @@ delete-node: NUM ?= 4
 delete-node: NODE_TYPE ?= node
 delete-node: KORIS_CONF ?= tests/koris_test
 delete-node:
-	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris -v debug delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris -v debug delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml -f
 	mv ${KORIS_CONF}.updated.yml tests/koris_test.delete_$(NODE_TYPE).yml
 
 add-master: FLAVOR ?= ECS.UC1.4-4

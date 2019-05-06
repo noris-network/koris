@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 import unittest
 
+from munch import Munch
+
 import koris.cloud.openstack
 
 from koris.cloud.openstack import OSClusterInfo, OSSubnet
@@ -48,6 +50,8 @@ class Test_raise_system_exit(unittest.TestCase):
         config_bad = copy.deepcopy(CONFIG)
         config_bad['cluster-name'] = "illegal:)chars"
 
+        conn.network.networks.return_value = {"name": "ext01"}
+
         info = OSClusterInfo(NOVA, NEUTRON, CINDER, config_bad, conn)
         with self.assertRaises(SystemExit):
             # assert this raises system exit
@@ -81,9 +85,9 @@ class DummyServer:  # pylint: disable=too-few-public-methods
 
 
 NOVA = mock.Mock()
-NEUTRON = mock.Mock()
+NEUTRON = mock.MagicMock()
 CINDER = mock.Mock()
-
+CONN = mock.Mock()
 
 CONFIG2 = {
     "private_net": {},
@@ -105,6 +109,7 @@ NOVA.flavors.find = mock.MagicMock(return_value=Flavor('ECS.C1.4-8'))
 NEUTRON.find_resource = mock.MagicMock(return_value={'id': 'acedfr3c4223ee21'})
 NEUTRON.create_port = mock.MagicMock(
     return_value=DUMMYPORT)
+
 
 NEUTRON.create_security_group = mock.MagicMock(
     return_value={"security_group": {'id':
@@ -171,7 +176,14 @@ SUBNETS = {
 
 
 def dummy_create_network(*args, **kwargs):
-    return {"id": "asdfadsfdasf"}
+    return Munch({"id": "x", "name": "test"})
+
+
+def dummy_ext_network(*args, **kwargs):
+    out = Munch()
+    out.id = "x"
+    out.name = "ext01"
+    yield out
 
 
 @pytest.fixture
@@ -194,6 +206,8 @@ def os_info():  # pylint disable=redefined-outer-name
     conn = mock.Mock()
     conn.get_network = dummy_create_network
     conn.create_network = dummy_create_network
+    conn.network.networks = dummy_ext_network
+
     osinfo = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG, conn)
     return osinfo
 
@@ -204,10 +218,11 @@ def test_create_network_settings_from_config(patch):
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    sub = OSSubnet(NEUTRON, '12', CONFIG)
+
+    sub = OSSubnet('12', CONFIG, CONN)
     subs = sub.get_or_create()
-    assert 'name' in subs
-    assert 'cidr' in subs
+    assert subs.name is not None
+    assert subs.cidr is not None
 
 
 @mock.patch('koris.cloud.OpenStackAPI')
@@ -216,10 +231,10 @@ def test_create_network_settings_not_in_config(*args):
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    sub = OSSubnet(NEUTRON, '12', CONFIG2)
+    sub = OSSubnet('12', CONFIG, CONN)
     subs = sub.get_or_create()
-    assert 'name' in subs
-    assert 'cidr' in subs
+    assert subs.name is not None
+    assert subs.cidr is not None
 
 
 @mock.patch('koris.cloud.OpenStackAPI')
@@ -265,7 +280,8 @@ def test_controlplane_builder(os_info):  # pylint disable=redefined-outer-name
     assert masters[0].name == 'master-1-test'
 
 
-def test_create_nodes(os_info):  # pylint disable=redefined-outer-name
+@mock.patch('koris.cloud.OpenStackAPI')
+def test_create_nodes(patch, os_info):  # pylint disable=redefined-outer-name
     """ test create nodes"""
     NOVA.servers.list = mock.MagicMock(
         return_value=[DummyServer("test-node-%d" % i,
@@ -283,7 +299,7 @@ def test_create_nodes(os_info):  # pylint disable=redefined-outer-name
     assert nodes[2].name == 'test-node-6'
 
 
-def test_instance_naming_creation():
+def test_instance_naming_creation(os_info):
     """
     test instance naming uses the pattern
     <cluster-name>-<type>-<number>
@@ -293,8 +309,7 @@ def test_instance_naming_creation():
     NEUTRON.create_subnet = mock.MagicMock(
         return_value={"subnet": SUBNETS}
     )
-    conn = MagicMock()
-    info = OSClusterInfo(NOVA, NEUTRON, CINDER, CONFIG, conn)
-    instance_names = info.nodes_names
+
+    instance_names = os_info.nodes_names
     for i in range(len(instance_names)):
         assert instance_names[i] == 'test-node-{}'.format(i + 1)

@@ -378,7 +378,7 @@ def test_distribute_host_zones():
 
 def test_loadbalancer_with_invalid_subnet():
     lb = LoadBalancer(CONFIG, MagicMock())
-    assert lb.subnet == CONFIG['private_net']['subnet']['name']
+    assert lb.subnet_name == CONFIG['private_net']['subnet']['name']
 
     config = copy.deepcopy(CONFIG)
     del config['private_net']
@@ -386,4 +386,4 @@ def test_loadbalancer_with_invalid_subnet():
     lb = LoadBalancer(config, MagicMock())
 
     assert lb
-    assert lb.subnet == lb.name
+    assert lb.subnet_name is None

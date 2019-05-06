@@ -8,34 +8,26 @@ misc functions to interact with the cluster, usually called from
 Don't use directly
 """
 import asyncio
-import sys
 
 from cinderclient.exceptions import BadRequest, NotFound
 
-from koris.util.hue import que, bold  # pylint: disable=no-name-in-module
 from koris.cloud.openstack import OSClusterInfo, LoadBalancer
-from koris.cloud import OpenStackAPI
+from .util.hue import que, bold  # pylint: disable=no-name-in-module
 from .util.util import get_kubeconfig_yaml
 from .util.logger import Logger
+
 
 LOGGER = Logger(__name__)
 
 
-def delete_cluster(config, nova, neutron, cinder, force=False):
-    """Completly delete a cluster from openstack.
-
-    This function removes all compute instance, volume, loadbalancer,
-    security groups rules and security groups
-    """
+def confirm(force):
+    """Asks the user for confirmation."""
     if not force:
         ans = input(que(bold("Are you sure? [y/N]: ")))
     else:
         ans = 'y'
 
-    if ans.lower() == 'y':
-        remove_cluster(config, nova, neutron, cinder)
-    else:
-        sys.exit(1)
+    return ans.lower()
 
 
 def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,
@@ -58,35 +50,36 @@ def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,
     return path
 
 
-def remove_cluster(config, nova, neutron, cinder):
+# pylint: disable=too-many-locals
+def remove_cluster(config, nova, neutron, cinder, conn):
     """Delete a cluster from OpenStack"""
 
-    cluster_info = OSClusterInfo(nova, neutron, cinder, config)
-    cp_hosts = cluster_info.distribute_management()
-    workers = cluster_info.distribute_nodes()
+    cluster_info = OSClusterInfo(nova, neutron, cinder, config, conn)
+    masters = cluster_info.get_instances("node")
+    workers = cluster_info.get_instances("master")
 
-    tasks = [host.delete(neutron) for host in cp_hosts]
-    tasks += [host.delete(neutron) for host in workers]
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.wait(tasks))
+    tasks = [host.delete(neutron) for host in masters if host]
+    tasks += [host.delete(neutron) for host in workers if host]
+    if tasks:
+        LOGGER.debug("Deleting Instances ...")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.wait(tasks))
+        loop.close()
 
-    connection = OpenStackAPI.connect()
-    LoadBalancer(config, connection).delete()
-    secg = connection.list_security_groups(
-        {"name": '%s-sec-group' % config['cluster-name']})
+    LoadBalancer(config, conn).delete()
+
+    sg_name = '%s-sec-group' % config['cluster-name']
+    secg = conn.list_security_groups({"name": sg_name})
     if secg:
+        LOGGER.debug("Deleting SecurityGroup %s ...", sg_name)
         for sg in secg:
             for rule in sg.security_group_rules:
-                connection.delete_security_group_rule(rule['id'])
+                conn.delete_security_group_rule(rule['id'])
 
-            for port in connection.list_ports():
+            for port in conn.list_ports():
                 if sg.id in port.security_groups:
-                    connection.delete_port(port.id)
-    connection.delete_security_group(
-        '%s-sec-group' % config['cluster-name'])
-
-    # Delete volumes
-    loop.close()
+                    conn.delete_port(port.id)
+    conn.delete_security_group(sg_name)
 
     # This needs to be replaced with OpenStackAPI in the future
     for vol in cinder.volumes.list():
@@ -101,4 +94,4 @@ def remove_cluster(config, nova, neutron, cinder):
             continue
 
     # delete the cluster key pair
-    connection.delete_keypair(config['cluster-name'])
+    conn.delete_keypair(config['cluster-name'])

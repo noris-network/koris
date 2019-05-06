@@ -23,9 +23,7 @@ from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
                               create_dex_conf, ValidationError)
 from koris.util.logger import Logger
 from koris.ssl import b64_cert, b64_key
-from .openstack import OSClusterInfo, InstanceExists
-from .openstack import (Instance, OSCloudConfig, LoadBalancer, get_connection,
-                        get_clients)
+from .openstack import (Instance, OSCloudConfig, LoadBalancer, InstanceExists)
 
 
 LOGGER = Logger(__name__)
@@ -68,6 +66,8 @@ class NodeBuilder:
         """
         add additional nodes
         """
+
+        self._info.setup_networking()
         nodes = [Instance(self._info.storage_client,
                           self._info.compute_client,
                           '%s-%s-%d' % (self.config['cluster-name'], role, n),
@@ -341,14 +341,14 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
     """
     Plan and build a kubernetes cluster in the cloud
     """
-    def __init__(self, config):
+    def __init__(self, config, oscinfo, nova, neutron, cinder, conn):
         if not (config['n-masters'] % 2 and config['n-masters'] >= 1):
             LOGGER.error("You must have an odd number (>=1) of masters!")
             sys.exit(2)
 
-        self.nova, self.neutron, self.cinder = get_clients()
-        self.info = OSClusterInfo(self.nova, self.neutron, self.cinder, config)
-        LOGGER.debug("Collecting of information from OpenStack successful")
+        self.nova, self.neutron, self.cinder = nova, neutron, cinder
+        self.conn = conn
+        self.info = oscinfo
 
         self.nodes_builder = NodeBuilder(config, self.info)
         self.masters_builder = ControlPlaneBuilder(config, self.info)
@@ -410,26 +410,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         return ssh_key
 
-    def create_network(self, config):
-        """create network for cluster if not already present"""
+    def create_network(self):
+        """Sets up networking for the cluster."""
 
-        if self.info.secgroup.exists:
-            LOGGER.info(
-                "A Security group named %s-sec-group already exists" % config[
-                    'cluster-name'])
-            LOGGER.info("Addind security group rules to existing group ...")
-
+        self.info.setup_networking()
         self.info.secgroup.configure()
 
-        try:
-            subnet = self.neutron.find_resource(
-                'subnet', config['private_net']['subnet']['name'])
-        except KeyError:
-            subnet = self.neutron.list_subnets()['subnets'][-1]
-            config['private_net']['subnet'] = subnet
-
+        subnet = self.info.subnet
         cloud_config = OSCloudConfig(subnet['id'])
-        LOGGER.info("Using subnet %s", subnet['name'])
+
         return cloud_config
 
     def run(self, config):  # pylint: disable=too-many-locals,too-many-statements
@@ -437,9 +426,12 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         execute the complete cluster build
         """
 
-        cloud_config = self.create_network(config)
+        LOGGER.info("Setting up networking ...")
+        cloud_config = self.create_network()
         # generate CA key pair for the cluster, that is used to authenticate
         # the clients that can use kubeadm
+
+        LOGGER.info("Creating Kubernetes CA ...")
         ca_bundle = self.create_ca()
         ssh_key = self.create_ssh_keypair()
         cert_dir = "-".join(("certs", config["cluster-name"]))
@@ -455,9 +447,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create a load balancer for accessing the API server of the cluster;
         # do not add a listener, since we created no machines yet.
-        LOGGER.info("Creating the load balancer...")
-        lb_conn = get_connection()
-        lbinst = LoadBalancer(config, lb_conn)
+        LOGGER.info("Creating the LoadBalancer ...")
+        lbinst = LoadBalancer(config, self.conn)
         lb, floatingip = lbinst.get_or_create()
         lb_port = "6443"
 
@@ -492,7 +483,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
-        LOGGER.info("Waiting for master machines to be launched...")
+        LOGGER.info("Waiting for master instances to be launched...")
         master_tasks = self.masters_builder.create_masters_tasks(
             ssh_key, ca_bundle, cloud_config, lb_ip, lb_port,
             bootstrap_token, lb_dns,
@@ -506,21 +497,21 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         # add a listener for the first master node, since this is the node we
         # call kubeadm init on
-        LOGGER.info("Configuring the LoadBalancer...")
+        LOGGER.info("Configuring the LoadBalancer ...")
         first_master_ip = results[0].ip_address
         configure_lb_task = loop.create_task(
             lbinst.configure([first_master_ip]))
 
         # create the worker nodes
-        LOGGER.info("Waiting for worker machines to be launched and the "
+        LOGGER.info("Waiting for worker instances to be launched and the "
                     "LoadBalancer to be configured...")
         node_tasks = self.nodes_builder.create_initial_nodes(
-            cloud_config,
-            ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash)
+            cloud_config, ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash
+        )
 
         node_tasks.append(configure_lb_task)
         results = loop.run_until_complete(asyncio.gather(*node_tasks))
-        LOGGER.debug("Done creating nodes tasks")
+        LOGGER.debug("Finished node tasks")
 
         node_ips = [x.ip_address for x in results if isinstance(x, Instance)]
 
