@@ -8,34 +8,26 @@ misc functions to interact with the cluster, usually called from
 Don't use directly
 """
 import asyncio
-import sys
 
 from cinderclient.exceptions import BadRequest, NotFound
 
-from koris.util.hue import que, bold  # pylint: disable=no-name-in-module
-from koris.cloud.openstack import OSClusterInfo, LoadBalancer, get_connection
+from koris.cloud.openstack import OSClusterInfo, LoadBalancer
+from .util.hue import que, bold  # pylint: disable=no-name-in-module
 from .util.util import get_kubeconfig_yaml
 from .util.logger import Logger
+
 
 LOGGER = Logger(__name__)
 
 
-def delete_cluster(config, nova, neutron, cinder, force=False):
-    """Completly delete a cluster from openstack.
-
-    This function removes all compute instance, volume, loadbalancer,
-    security groups rules and security groups
-    """
+def confirm(force):
+    """Asks the user for confirmation."""
     if not force:
         ans = input(que(bold("Are you sure? [y/N]: ")))
     else:
         ans = 'y'
 
-    if ans.lower() == 'y':
-        conn = get_connection()
-        remove_cluster(config, nova, neutron, cinder, conn)
-    else:
-        sys.exit(1)
+    return ans.lower()
 
 
 def write_kubeconfig(cluster_name, lb_ip, lb_port, ca_cert,

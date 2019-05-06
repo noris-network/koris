@@ -22,7 +22,7 @@ from mach import mach1
 from koris.util.util import KorisVersionCheck
 
 from . import __version__
-from .cli import delete_cluster
+from .cli import remove_cluster, confirm
 from .deploy.k8s import K8S
 from .util.logger import Logger
 from .cloud.builder import ClusterBuilder, NodeBuilder, ControlPlaneBuilder
@@ -275,8 +275,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             pass
         except BuilderError as err:
             LOGGER.error(f"Error: {err}")
-            delete_cluster(config, nova, neutron, cinder,
-                           True)
+            remove_cluster(config, nova, neutron, cinder, conn)
 
     def destroy(self, config: str, force: bool = False):
         """
@@ -291,7 +290,13 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             "Deleting cluster '{}'".format(
                 config['cluster-name']))
 
-        delete_cluster(config, nova, neutron, cinder, force)
+        ans = confirm(force)
+        if ans != 'y':
+            sys.exit(1)
+
+        conn = get_connection()
+        remove_cluster(config, nova, neutron, cinder, conn)
+
         certs_location = 'certs-' + config['cluster-name']
         try:
             shutil.rmtree(certs_location)
@@ -301,13 +306,15 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             pass
         sys.exit(0)
 
-    def delete(self, config: str, resource: str, name: str = ""):
+    def delete(self, config: str, resource: str, name: str = "",
+               force: bool = False):
         """
         Delete a node from the cluster, or the complete cluster.
 
         config - koris configuration file.
         resource - the type of resource to delete. [node | cluster]
         name - the name of the resource to delete.
+        force - Force deletion of resource.
         """
 
         with open(config, 'r') as stream:
@@ -322,6 +329,11 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         if resource == "node":
             if not name or name is None:
                 LOGGER.error("Must specifiy --name when deleting a node")
+                sys.exit(1)
+
+            LOGGER.question("Deleting %s %s", resource, name)
+            ans = confirm(force)
+            if ans != 'y':
                 sys.exit(1)
 
             change_config = True
@@ -341,8 +353,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                     update_config(config_dict, config, -1, "nodes")
 
         else:
-            LOGGER.error("Feature not implemented yet."
-                         "Please use 'koris destroy' for time being!")
+            self.destroy(config, force)
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
