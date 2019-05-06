@@ -63,18 +63,23 @@ def remove_cluster(config, nova, neutron, cinder, conn):
     """Delete a cluster from OpenStack"""
 
     cluster_info = OSClusterInfo(nova, neutron, cinder, config, conn)
-    cp_hosts = cluster_info.distribute_management()
-    workers = cluster_info.distribute_nodes()
+    masters = cluster_info.get_instances("node")
+    workers = cluster_info.get_instances("master")
 
-    tasks = [host.delete(neutron) for host in cp_hosts]
-    tasks += [host.delete(neutron) for host in workers]
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.wait(tasks))
+    tasks = [host.delete(neutron) for host in masters if host]
+    tasks += [host.delete(neutron) for host in workers if host]
+    if tasks:
+        LOGGER.debug("Deleting Instances ...")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.wait(tasks))
+        loop.close()
 
     LoadBalancer(config, conn).delete()
-    secg = conn.list_security_groups(
-        {"name": '%s-sec-group' % config['cluster-name']})
+
+    sg_name = '%s-sec-group' % config['cluster-name']
+    secg = conn.list_security_groups({"name": sg_name})
     if secg:
+        LOGGER.debug("Deleting SecurityGroup %s ...", sg_name)
         for sg in secg:
             for rule in sg.security_group_rules:
                 conn.delete_security_group_rule(rule['id'])
@@ -82,11 +87,7 @@ def remove_cluster(config, nova, neutron, cinder, conn):
             for port in conn.list_ports():
                 if sg.id in port.security_groups:
                     conn.delete_port(port.id)
-    conn.delete_security_group(
-        '%s-sec-group' % config['cluster-name'])
-
-    # Delete volumes
-    loop.close()
+    conn.delete_security_group(sg_name)
 
     # This needs to be replaced with OpenStackAPI in the future
     for vol in cinder.volumes.list():

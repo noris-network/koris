@@ -621,6 +621,7 @@ class LoadBalancer:
         if not lb or 'DELETE' in lb.operating_status:
             LOGGER.warning("LoadBalancer %s was not found", self.name)
         else:
+            LOGGER.debug("Deleting LoadBalancer %s ...", self.name)
             self._del_loadbalancer()
 
     def associate_floating_ip(self, loadbalancer):
@@ -1344,14 +1345,11 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             return self._nova.glance.find_image(
                 [l.id for l in self.conn.list_images() if l.name == self._image_name][0])
 
-    @lru_cache()
-    def _get_or_create(self, hostname, zone, role, flavor):
-        """Find if a instance exists Openstack.
+    def _get(self, hostname, zone, role):
+        """Retrieves an Instance from OpenStack."""
 
-        If instance is found return Instance instance with the info.
-        If not found create a NIC and assign it to an Instance instance.
-        """
         volume_config = {'image': self.image, 'class': self.storage_class}
+        inst = None
         try:
             _server = self._nova.servers.find(name=hostname)
             LOGGER.debug("Found instance %s", hostname)
@@ -1363,22 +1361,45 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                             role,
                             volume_config,
                             _server.flavor)
-            inst.ports.append(_server.interface_list()[0])
+            try:
+                inst.ports.append(_server.interface_list()[0])
+            except IndexError:
+                LOGGER.warning("No network found for %s", hostname)
+
             inst.exists = True
         except NovaNotFound:
-            LOGGER.debug("Creatig new instance %s", hostname)
-            self.setup_networking()
-            inst = Instance(self._cinder,
-                            self._nova,
-                            hostname,
-                            self.net,
-                            zone,
-                            role,
-                            volume_config,
-                            flavor)
-            inst.attach_port(self._neutron,
-                             self.net['id'],
-                             self.secgroups)
+            pass
+
+        return inst
+
+    @lru_cache()
+    def _get_or_create(self, hostname, zone, role, flavor):
+        """Find if a instance exists Openstack.
+
+        If instance is found return Instance instance with the info.
+        If not found create a NIC and assign it to an Instance instance.
+        """
+        volume_config = {'image': self.image, 'class': self.storage_class}
+
+        inst = self._get(hostname, zone, role)
+        if inst:
+            LOGGER.debug("Found instance %s", hostname)
+            return inst
+
+        LOGGER.debug("Creatig new instance %s", hostname)
+        self.setup_networking()
+        inst = Instance(self._cinder,
+                        self._nova,
+                        hostname,
+                        self.net,
+                        zone,
+                        role,
+                        volume_config,
+                        flavor)
+        inst.attach_port(self._neutron,
+                         self.net['id'],
+                         self.secgroups)
+
         return inst
 
     @property
@@ -1423,3 +1444,15 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         for hosts, zone in hz:
             for host in hosts:
                 yield self._get_or_create(host, zone, 'node', self.node_flavor.id)
+
+    def get_instances(self, role="node"):
+        """Retrieve all nodes as Instances"""
+
+        if role == "node":
+            hz = list(distribute_host_zones(self.nodes_names, self.azones))
+        else:
+            hz = list(distribute_host_zones(self.management_names, self.azones))
+
+        for hosts, zone in hz:
+            for host in hosts:
+                yield self._get(host, zone, role)
