@@ -465,7 +465,7 @@ function get_flannel(){
          curl --retry 10 -sfLO https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
     done
     sed -i "s@\"Type\": \"vxlan\"@\"Type\": \"ipip\"@g" kube-flannel.yml
-    sed -i "s@10.244.0.0/16@"${POD_SUBNET}"@g" kube-flannel.yml
+    sed -i "s@10.244.0.0/16@${POD_SUBNET}@g" kube-flannel.yml
 }
 
 # get the correct network plugin
@@ -559,7 +559,7 @@ EOF
 
 # enforce docker version
 function get_docker_ubuntu() {
-    dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
+    dpkg -l software-properties-common | grep ^ii || sudo apt install "${TRANSPORT_PACKAGES}" -y
     curl --retry 10 -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
@@ -569,14 +569,21 @@ function get_docker_ubuntu() {
 
 # enforce kubeadm version
 function get_kubeadm_ubuntu() {
-    dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
+    dpkg -l software-properties-common | grep ^ii || sudo apt install "${TRANSPORT_PACKAGES}" -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
     apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
 }
 
+function get_yq() {
+	if [ -z "$(type -P yq)" ]; then
+		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/2.3.0/yq_linux_amd64 -o /usr/local/bin/yq
+		chmod +x /usr/local/bin/yq
+	fi
+}
+
 function get_docker(){
-    if [ -z $(which apt) ]; then
+	if [ -z "$(type -P apt)" ]; then
         get_docker_centos;
     else
         get_docker_ubuntu;
@@ -584,7 +591,7 @@ function get_docker(){
 }
 
 function get_kubeadm(){
-    if [ -z $(which apt) ]; then
+    if [ -z "$(type -P apt)" ]; then
         get_kubeadm_centos;
     else
         get_kubeadm_ubuntu;
@@ -598,6 +605,7 @@ function main() {
     get_net_plugin &
     pid_get_net_plugin=$!
 
+    get_yq &
     get_docker
     get_kubeadm &
     pid_get_kubeadm=$!
