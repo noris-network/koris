@@ -123,6 +123,10 @@ apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 TMPL
+else
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+apiServerExtraArgs:
+TMPL
 fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
@@ -136,6 +140,32 @@ cat <<TMPL > dex.tmpl
 TMPL
     cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
 fi
+
+# add audit policy
+cat <<AUDITPOLICY >> kubeadm-"${HOST_NAME}".yaml
+  audit-log-maxsize: "24"
+  audit-log-maxbackup: "30"
+  audit-log-maxage: "90"
+  audit-log-path: /var/log/kubernetes/audit.log
+  audit-policy-file: /etc/kubernetes/audit-policy.yml
+AUDITPOLICY
+
+# add volumes for audit logs
+cat << AV >> auditVolumes.yml
+apiServerExtraVolumes:
+- name: var-log-kubernetes
+  hostPath: /var/log/kubernetes
+  mountPath: /var/log/kubernetes
+  writable: true
+  pathType: DirectoryOrCreate
+- name: "audit-policy"
+  hostPath: "/etc/kubernetes/audit-policy.yml"
+  mountPath: "/etc/kubernetes/audit-policy.yml"
+  writable: false
+  pathType: File
+AV
+
+yq m -i -a kubeadm-"${HOST_NAME}".yaml auditVolumes.yml
 
 if [[ ${ADDTOKEN} -eq 1 ]]; then
 cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
