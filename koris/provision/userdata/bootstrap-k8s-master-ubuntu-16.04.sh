@@ -368,6 +368,19 @@ EOF
     echo "done distributing keys to $host";
 }
 
+# add audit minimal audit policy
+function create_audit_policy(){
+if [ ! -r /etc/kubernetes/audit-policy.yml ]; then
+   cat << EOF > /etc/kubernetes/audit-policy.yml
+# Log all requests at the Metadata level.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+- level: Metadata
+EOF
+fi
+}
+
 
 # bootstrap the first master.
 # the process is slightly different than for the rest of the N masters
@@ -381,6 +394,7 @@ function bootstrap_first_master() {
    echo "******* Preparing kubeadm config for $1 *******"
    create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
 
+   create_audit_policy
    local CONFIG=kubeadm-"${HOST_NAME}".yaml
 
    echo "*********** Bootstrapping master-1 ******************"
