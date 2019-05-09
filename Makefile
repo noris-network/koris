@@ -213,7 +213,9 @@ assert-masters:  ##
 assert-audit-log: USER ?= ubuntu
 assert-audit-log:
 	 for HOSTIP in $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master= -o json | jq -r '.items[].status.addresses[] | select(.type | contains("InternalIP")) | .address'); do \
-		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} test -f /var/log/kubernetes/audit.log || { echo "no audit.log found for $${HOSTIP}" ; exit 1; }; \
+		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} hostname
+		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} test -d /var/log/kubernetes || { echo "no /var/log/kubernetes found for $${HOSTIP}" ; exit 1; }; \
+		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} test -f /etc/kubernetes/audit-policy.yml || { echo "no /etc/kubernetes/audit-policy.yml found for $${HOSTIP}" ; exit 1; }; \
 	 done
 
 assert-control-plane: NUM ?= 4
