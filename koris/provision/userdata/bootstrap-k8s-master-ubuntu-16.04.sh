@@ -269,6 +269,7 @@ function add_master_script_config_map() {
       typeset -f wait_for_etcd;
       typeset -f get_docker;
       typeset -f get_kubeadm;
+      typeset -f bootstrap_deps_node
       # shellcheck disable=SC2034
       typeset -f add_master;
       echo "if [ ! -z \${DEBUGADDMASTER} ]; then set -x; fi"

@@ -210,6 +210,12 @@ assert-masters:  ##
 		echo "OK"; \
 	fi
 
+assert-audit-log: USER ?= ubuntu
+assert-audit-log:
+	 for HOSTIP in $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master= -o json | jq -r '.items[].status.addresses[] | select(.type | contains("InternalIP")) | .address'); do \
+	 	ssh -l $(USER) $${HOSTIP} test -f /var/log/kubernetes/audit.log || { echo "no audit.log found for $${HOSTIP}" ; exit 1; }; \
+	 done
+
 assert-control-plane: NUM ?= 4
 assert-control-plane: \
 	assert-kube-apiservers \
