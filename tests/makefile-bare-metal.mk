@@ -138,3 +138,11 @@ integration-test-bare-metal: $(IT_TARGETS)
 
 
 clean-all: clean-lb clean-masters clean-volumes-masters clean-nodes clean-volumes-nodes
+
+assert-audit-policy:
+	for idx in {1..3}; do \
+		MASTER=$$(openstack server show $(CLUSTERNAME)-master-$${idx} -f value -c addresses | cut -f 2 -d "="); \
+		echo "Checking $${CLUSTERNAME}-master-$${idx}"; \
+		ssh $(SSHOPTS) -l $(USER) $${MASTER} test -f /var/log/kubernetes; \
+		ssh $(SSHOPTS) -l $(USER) $${MASTER} test -f /etc/kubernetes/audit-policy.yml ; \
+	done
