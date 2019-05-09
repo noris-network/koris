@@ -229,6 +229,9 @@ function make_secrets() {
     # shellcheck disable=SC2086
     kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
 
+    # shellcheck disable=SC2086
+    kubectl ${k8senv} create configmap audit-policy --from-file="/etc/kubernetes/audit-policy.yml"
+
     if [[ ${OPENSTACK} -eq 1 ]]; then
         # shellcheck disable=SC2086
         kubectl ${del_args} cloud.config
@@ -256,6 +259,8 @@ function add_master_script_config_map() {
       echo "set -e";
       echo "export KUBE_VERSION=${KUBE_VERSION}";
 
+      # shellcheck disable=SC2034
+      typeset -f get_yq;
       # shellcheck disable=SC2034
       typeset -f copy_keys;
       # shellcheck disable=SC2034
