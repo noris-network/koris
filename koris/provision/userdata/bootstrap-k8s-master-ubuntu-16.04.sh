@@ -327,6 +327,7 @@ function copy_keys() {
 	put /etc/kubernetes/admin.conf /home/${USER}/kubernetes/
 	chmod 0600 /home/${USER}/kubernetes/admin.conf
 	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
+	put /etc/kubernetes/audit-policy.yml /home/${USER}/kubernetes/
 EOF
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
@@ -428,9 +429,6 @@ function add_master {
 
     local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
 
-    echo "******* Preparing kubeadm config for $1 ******"
-    create_kubeadm_config ${HOST_NAME} ${HOST_IP} ${CURRENT_CLUSTER} "existing"
-
     echo "*********** Bootstrapping $1 ******************"
     until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
@@ -439,6 +437,10 @@ function add_master {
     if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
         bootstrap_deps_node $1
     fi
+
+    echo "******* Preparing kubeadm config for $1 ******"
+    create_kubeadm_config ${HOST_NAME} ${HOST_IP} ${CURRENT_CLUSTER} "existing"
+
 
     scp ${SFTPOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
@@ -456,7 +458,6 @@ function add_master {
         --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380; do \
 	    sleep 2; \
 	done
-
 
     # launch etcd
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config "${CONFIG}"
@@ -576,6 +577,7 @@ swapoff -a;
 KUBE_VERSION=${KUBE_VERSION};
 DOCKER_VERSION=${DOCKER_VERSION};
 first_master=${first_master}
+$(typeset -f get_yq);
 $(typeset -f get_docker_ubuntu);
 $(typeset -f get_docker_centos);
 $(typeset -f get_kubeadm_ubuntu);
