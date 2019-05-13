@@ -269,7 +269,7 @@ class Instance:  # pylint: disable=too-many-arguments
 
         self._ip_address = instance.interface_list()[0].fixed_ips[0]['ip_address']
         LOGGER.success(
-            "Instance '%s' booted successfully. IP: %s, Status : %s",
+            "Instance '%s' booted successfully. Status: %s, IP: %s",
             self.name, instance.status, self._ip_address)
 
         self.exists = True
