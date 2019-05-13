@@ -26,6 +26,16 @@ LOGGER = Logger(__name__)
 BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 
+def get_audit_policy():
+    """read the"""
+    path = resource_filename(Requirement('koris'),
+                             os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                          'manifests',
+                                          'audit-policy.yml'))
+    with open(path) as policy:
+        return policy.read()
+
+
 class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
     """
     Args:
@@ -197,6 +207,9 @@ class NthMasterInit(BaseInit):
             cert = dex['cert']
             self.write_file(path, b64_cert(cert),
                             "root", "root", "0600", lambda x: x)
+
+        # write audit policy
+        self.write_file("/etc/kubernetes/audit-policy.yml", get_audit_policy())
 
 
 # pylint: disable=too-many-arguments,too-many-locals

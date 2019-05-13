@@ -1,5 +1,5 @@
 Welcome to Koris's documentation!
-======================================
+=================================
 
 .. toctree::
    :maxdepth: 2
@@ -8,6 +8,7 @@ Welcome to Koris's documentation!
    readme
    installation
    usage
+   security
    addons
    modules
    certificates

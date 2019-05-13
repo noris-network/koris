@@ -403,7 +403,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                                         config_dict, conn)
 
         if not k8s.validate_context(os_cluster_info.conn):
-            LOGGER.error(("Error: cluster not part of your sourced"
+            LOGGER.error(("Error: cluster not part of your sourced "
                           "OpenStack tenant"))
             sys.exit(1)
 

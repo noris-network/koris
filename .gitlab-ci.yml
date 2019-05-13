@@ -106,6 +106,7 @@ bare-metal-integration:
    - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
    - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
    - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+   - make -f tests/makefile-bare-metal.mk assert-audit-policy USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
@@ -234,12 +235,16 @@ add-master:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
   script:
+    - apk add openssh
+    - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+    - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
     - "pip3 install  -r requirements_ci.txt"
     - "pip3 install -q -e ."
     - "make add-master"
     - "make assert-members NUM=4"
     - "make assert-masters NUM=4"
     - "make assert-control-plane NUM=4"
+    - "make assert-audit-log USER=ubuntu"
     - "make rename-coverage NAME=\"add-master\""
   artifacts:
     paths:

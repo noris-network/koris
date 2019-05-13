@@ -123,6 +123,10 @@ apiServerExtraArgs:
   cloud-provider: openstack
   cloud-config: /etc/kubernetes/cloud.config
 TMPL
+else
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+apiServerExtraArgs:
+TMPL
 fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
@@ -136,6 +140,32 @@ cat <<TMPL > dex.tmpl
 TMPL
     cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
 fi
+
+# add audit policy
+cat <<AUDITPOLICY >> kubeadm-"${HOST_NAME}".yaml
+  audit-log-maxsize: "24"
+  audit-log-maxbackup: "30"
+  audit-log-maxage: "90"
+  audit-log-path: /var/log/kubernetes/audit.log
+  audit-policy-file: /etc/kubernetes/audit-policy.yml
+AUDITPOLICY
+
+# add volumes for audit logs
+cat << AV >> auditVolumes.yml
+apiServerExtraVolumes:
+- name: var-log-kubernetes
+  hostPath: /var/log/kubernetes
+  mountPath: /var/log/kubernetes
+  writable: true
+  pathType: DirectoryOrCreate
+- name: "audit-policy"
+  hostPath: "/etc/kubernetes/audit-policy.yml"
+  mountPath: "/etc/kubernetes/audit-policy.yml"
+  writable: false
+  pathType: File
+AV
+
+yq m -i -a kubeadm-"${HOST_NAME}".yaml auditVolumes.yml
 
 if [[ ${ADDTOKEN} -eq 1 ]]; then
 cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
@@ -199,6 +229,9 @@ function make_secrets() {
     # shellcheck disable=SC2086
     kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
 
+    # shellcheck disable=SC2086
+    kubectl ${k8senv} create configmap audit-policy --from-file="/etc/kubernetes/audit-policy.yml"
+
     if [[ ${OPENSTACK} -eq 1 ]]; then
         # shellcheck disable=SC2086
         kubectl ${del_args} cloud.config
@@ -227,6 +260,8 @@ function add_master_script_config_map() {
       echo "export KUBE_VERSION=${KUBE_VERSION}";
 
       # shellcheck disable=SC2034
+      typeset -f get_yq;
+      # shellcheck disable=SC2034
       typeset -f copy_keys;
       # shellcheck disable=SC2034
       typeset -f create_kubeadm_config;
@@ -234,6 +269,7 @@ function add_master_script_config_map() {
       typeset -f wait_for_etcd;
       typeset -f get_docker;
       typeset -f get_kubeadm;
+      typeset -f bootstrap_deps_node
       # shellcheck disable=SC2034
       typeset -f add_master;
       echo "if [ ! -z \${DEBUGADDMASTER} ]; then set -x; fi"
@@ -297,6 +333,7 @@ function copy_keys() {
 	put /etc/kubernetes/admin.conf /home/${USER}/kubernetes/
 	chmod 0600 /home/${USER}/kubernetes/admin.conf
 	put /etc/kubernetes/koris.env /home/${USER}/kubernetes/
+	put /etc/kubernetes/audit-policy.yml /home/${USER}/kubernetes/
 EOF
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
@@ -331,6 +368,19 @@ EOF
     echo "done distributing keys to $host";
 }
 
+# add audit minimal audit policy
+function create_audit_policy(){
+if [ ! -r /etc/kubernetes/audit-policy.yml ]; then
+   cat << EOF > /etc/kubernetes/audit-policy.yml
+# Log all requests at the Metadata level.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+- level: Metadata
+EOF
+fi
+}
+
 
 # bootstrap the first master.
 # the process is slightly different than for the rest of the N masters
@@ -344,6 +394,7 @@ function bootstrap_first_master() {
    echo "******* Preparing kubeadm config for $1 *******"
    create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
 
+   create_audit_policy
    local CONFIG=kubeadm-"${HOST_NAME}".yaml
 
    echo "*********** Bootstrapping master-1 ******************"
@@ -398,9 +449,6 @@ function add_master {
 
     local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
 
-    echo "******* Preparing kubeadm config for $1 ******"
-    create_kubeadm_config ${HOST_NAME} ${HOST_IP} ${CURRENT_CLUSTER} "existing"
-
     echo "*********** Bootstrapping $1 ******************"
     until ssh ${SSHOPTS} ${USER}@$1 hostname; do
        echo "waiting for ssh on $1"
@@ -409,6 +457,10 @@ function add_master {
     if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
         bootstrap_deps_node $1
     fi
+
+    echo "******* Preparing kubeadm config for $1 ******"
+    create_kubeadm_config ${HOST_NAME} ${HOST_IP} ${CURRENT_CLUSTER} "existing"
+
 
     scp ${SFTPOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
@@ -426,7 +478,6 @@ function add_master {
         --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380; do \
 	    sleep 2; \
 	done
-
 
     # launch etcd
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config "${CONFIG}"
@@ -465,7 +516,7 @@ function get_flannel(){
          curl --retry 10 -sfLO https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
     done
     sed -i "s@\"Type\": \"vxlan\"@\"Type\": \"ipip\"@g" kube-flannel.yml
-    sed -i "s@10.244.0.0/16@"${POD_SUBNET}"@g" kube-flannel.yml
+    sed -i "s@10.244.0.0/16@${POD_SUBNET}@g" kube-flannel.yml
 }
 
 # get the correct network plugin
@@ -546,6 +597,7 @@ swapoff -a;
 KUBE_VERSION=${KUBE_VERSION};
 DOCKER_VERSION=${DOCKER_VERSION};
 first_master=${first_master}
+$(typeset -f get_yq);
 $(typeset -f get_docker_ubuntu);
 $(typeset -f get_docker_centos);
 $(typeset -f get_kubeadm_ubuntu);
@@ -559,7 +611,7 @@ EOF
 
 # enforce docker version
 function get_docker_ubuntu() {
-    dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
+    dpkg -l software-properties-common | grep ^ii || sudo apt install "${TRANSPORT_PACKAGES}" -y
     curl --retry 10 -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
@@ -569,14 +621,21 @@ function get_docker_ubuntu() {
 
 # enforce kubeadm version
 function get_kubeadm_ubuntu() {
-    dpkg -l software-properties-common | grep ^ii || sudo apt install $TRANSPORT_PACKAGES -y
+    dpkg -l software-properties-common | grep ^ii || sudo apt install "${TRANSPORT_PACKAGES}" -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
     apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
 }
 
+function get_yq() {
+	if [ -z "$(type -P yq)" ]; then
+		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/2.3.0/yq_linux_amd64 -o /usr/local/bin/yq
+		chmod +x /usr/local/bin/yq
+	fi
+}
+
 function get_docker(){
-    if [ -z $(which apt) ]; then
+	if [ -z "$(type -P apt)" ]; then
         get_docker_centos;
     else
         get_docker_ubuntu;
@@ -584,7 +643,7 @@ function get_docker(){
 }
 
 function get_kubeadm(){
-    if [ -z $(which apt) ]; then
+    if [ -z "$(type -P apt)" ]; then
         get_kubeadm_centos;
     else
         get_kubeadm_ubuntu;
@@ -598,6 +657,7 @@ function main() {
     get_net_plugin &
     pid_get_net_plugin=$!
 
+    get_yq &
     get_docker
     get_kubeadm &
     pid_get_kubeadm=$!
