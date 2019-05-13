@@ -7,19 +7,19 @@ This document describe the security features of Koris.
 Audit Logging
 -------------
 
-Per default kubernetes does not log access to the kubernetes API. In koris every
+Per default Kubernetes does not log access to the Kubernetes API. In koris every
 request to the API server is logged as a security measure. Each acceess using
-`kubectl` or an HTTPS using curl (or similar), contains information of who asked
-what, when and from where, and the kubernetes API server can log this information
-and the response sent. For more information see the `official audit logging
-documentation_`
+``kubectl`` or an HTTPS using curl (or similar), contains information of who
+asked what, when and from where, and the Kubernetes API server can log this
+information and the response sent. For more information see the
+`official audit logging documentation`_.
 
-Currently, koris clusters use the same audit policy used by Google's kubernetes
-servers. You can look at the link to examine the `policy for koris`.
+Currently, koris clusters use the same audit policy used by Google's Kubernetes
+servers. You can look at the link to examine the `policy for koris`_.
 
-Currently, all audit logs are saved in the masters' filesystem in a form of files.
+All audit logs are saved in the masters' filesystem in a form of files.
 You can find the log files under `/var/log/kubrenetes/audit.log`. Note that in
-highly available that the logs are fragmented. That means that subsequent requests
+HA clusters the logs are fragmented. That means that subsequent requests
 will have logs found in multiple files scattered among your cluster masters.
 Future versions of koris will add a central logging mechanism.
 
@@ -32,6 +32,6 @@ and the current maximum size of each log file is 24MB. These options are control
 by command line flags passed to `kube-apiserver` and are currently not configurable
 by the user of koris.
 
-.. _official audit logging documention: https://kubernetes.io/docs/tasks/debug-application-cluster/audit/#audit-policy
+.. _official audit logging documentation: https://kubernetes.io/docs/tasks/debug-application-cluster/audit/#audit-policy
 
 .. _policy for koris: https://github.com/kubernetes/kubernetes/blob/master/cluster/gce/gci/configure-helper.sh#L832
