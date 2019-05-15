@@ -1,9 +1,8 @@
 import os
 
 from unittest.mock import MagicMock
-from kubernetes import config as k8sconfig
 
-from koris.deploy.k8s import K8S, get_addons, KorisAddon
+from koris.deploy.k8s import get_addons, KorisAddon
 
 KORIS_CONFIG = {'addons': ['dex', 'ingress-nginx', 'metrics-server']}
 
@@ -41,16 +40,6 @@ def list_nodes_only_one_ready(*args, **kwargs):
     resp.items[2].status.conditions[0] = Condition('Ready', 'False')
     resp.items[1].status.conditions[0] = Condition('Ready', 'False')
     return resp
-
-
-def test_apply_addons(monkeypatch):
-    monkeypatch.setattr(k8sconfig, 'load_kube_config', lambda x: x)
-
-    def dummy_apply(*args, **kwargs):
-        pass
-
-    K8S("tests/test-admin.conf").apply_addons(KORIS_CONFIG,
-                                              apply_func=dummy_apply)
 
 
 def test_get_addons():
