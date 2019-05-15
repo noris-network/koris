@@ -219,8 +219,8 @@ assert-audit-log:
 	 done
 
 assert-metrics:
-	kubectl get nodes --kubeconfig=${KUBECONFIG}
-	kubectl get pods --kubeconfig=${KUBECONFIG}
+	kubectl top nodes --kubeconfig=${KUBECONFIG}
+	kubectl top pods --kubeconfig=${KUBECONFIG}
 
 assert-control-plane: NUM ?= 4
 assert-control-plane: \
