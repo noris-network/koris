@@ -19,7 +19,7 @@ import urllib3
 from pkg_resources import resource_filename, Requirement
 from netaddr import valid_ipv4
 
-from kubernetes import (client as k8sclient, config as k8sconfig)
+from kubernetes import client as k8sclient
 from kubernetes.stream import stream
 from kubernetes.client.rest import ApiException
 from kubernetes.client import V1DeleteOptions, api_client
@@ -252,11 +252,9 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if not manifest_path:
             manifest_path = MANIFESTSPATH
         self.manifest_path = manifest_path
-        k8sconfig.load_kube_config(config)
-        self.api = k8sclient.CoreV1Api()
-
+        kube_config.load_kube_config(config_file=config)
         config = Configuration()
-        kube_config.load_kube_config(client_configuration=config)
+        self.api = k8sclient.CoreV1Api()
         self.client = api_client.ApiClient(configuration=config)
 
     def get_bootstrap_token(self):
