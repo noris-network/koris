@@ -239,7 +239,8 @@ class FirstMasterInit(NthMasterInit):
                  masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
                  pod_subnet='10.233.0.0/16',
                  pod_network='CALICO',
-                 os_type='ubuntu', os_version="16.04", dex=None):
+                 os_type='ubuntu', os_version="16.04", dex=None,
+                 k8s_version="1.12.7"):
         super().__init__(cloud_config, ssh_key, os_type, os_version, dex=dex)
         self.ca_bundle = ca_bundle
 
@@ -252,6 +253,7 @@ class FirstMasterInit(NthMasterInit):
         self.pod_network = pod_network
         self.pod_subnet = pod_subnet
         self.role = 'master'
+        self.k8s_version = k8s_version
 
         # assemble the parts for the first master
         # use an encoder that just returns x, since b64_cert encodes already
@@ -294,11 +296,14 @@ class FirstMasterInit(NthMasterInit):
             export POD_SUBNET="{}"
             export POD_NETWORK="{}"
 
+            export KUBE_VERSION="{}"
+
         """.format(" ".join(self.master_ips), " ".join(self.master_names),
                    self.lb_dns if self.lb_dns else "",
                    self.lb_ip, self.lb_port, self.bootstrap_token,
                    self.pod_subnet,
-                   self.pod_network)
+                   self.pod_network,
+                   self.k8s_version)
         content = textwrap.dedent(content)
 
         # For Dex we need to start the apiserver with special args, such as
@@ -329,7 +334,7 @@ class NodeInit(BaseInit):
     """
     def __init__(self, ca_cert, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
-                 os_version="16.04"):
+                 os_version="16.04", k8s_version="1.12.7"):
         """
         """
         super().__init__(cloud_config)
@@ -342,6 +347,7 @@ class NodeInit(BaseInit):
         self.os_type = os_type
         self.os_version = os_version
         self.role = "node"
+        self.k8s_version = k8s_version
 
         # assemble parts for the node
         self._write_koris_env()
@@ -361,8 +367,10 @@ class NodeInit(BaseInit):
             export LOAD_BALANCER_PORT="{}"
             export BOOTSTRAP_TOKEN="{}"
             export DISCOVERY_HASH="{}"
+            export KUBE_VERSION="{}"
         """.format(b64_cert(self.ca_cert), self.lb_dns, self.lb_ip,
-                   self.lb_port, self.bootstrap_token, self.discovery_hash)
+                   self.lb_port, self.bootstrap_token, self.discovery_hash,
+                   self.k8s_version)
         content = textwrap.dedent(content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")

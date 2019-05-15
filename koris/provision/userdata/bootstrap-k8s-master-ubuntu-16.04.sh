@@ -39,7 +39,7 @@ export CLUSTER_STATE=""
 
 
 #### Versions for Kube 1.12.X
-export KUBE_VERSION=1.12.7
+# export KUBE_VERSION=1.12.7
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}

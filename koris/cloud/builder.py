@@ -157,7 +157,7 @@ class NodeBuilder:
                              lb_port,
                              bootstrap_token,
                              discovery_hash,
-                             ):
+                             k8s_version="1.12.7"):
         """
         Create all initial nodes when running ``koris apply <config>``
         """
@@ -166,7 +166,8 @@ class NodeBuilder:
         nodes = self.get_nodes()
         nodes = self._create_nodes_tasks(ca_bundle.cert,
                                          lb_ip, lb_port, bootstrap_token,
-                                         discovery_hash, nodes)
+                                         discovery_hash, nodes,
+                                         k8s_version=k8s_version)
         return nodes
 
     def _create_nodes_tasks(self,
@@ -175,7 +176,8 @@ class NodeBuilder:
                             lb_port,
                             bootstrap_token,
                             discovery_hash,
-                            nodes):
+                            nodes,
+                            k8s_version="1.12.7"):
         """
         Create future tasks for creating the cluster worker nodes
         """
@@ -189,7 +191,8 @@ class NodeBuilder:
 
             userdata = str(NodeInit(ca_cert, self.cloud_config, lb_ip, lb_port,
                                     bootstrap_token,
-                                    discovery_hash))
+                                    discovery_hash,
+                                    k8s_version=k8s_version))
             tasks.append(loop.create_task(
                 node.create(node.flavor, self._info.secgroups,
                             self._info.keypair, userdata)
@@ -230,7 +233,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
                              lb_port, bootstrap_token, lb_dns='',
                              pod_subnet="10.233.0.0/16",
-                             pod_network="CALICO", dex=None):
+                             pod_network="CALICO", dex=None,
+                             k8s_version="1.12.7"):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -255,7 +259,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                                bootstrap_token, lb_dns,
                                                pod_subnet,
                                                pod_network,
-                                               dex=dex))
+                                               dex=dex,
+                                               k8s_version=k8s_version))
             else:
                 # create userdata for following master nodes if not existing
                 userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex))
@@ -426,6 +431,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         execute the complete cluster build
         """
 
+        # Extract Kubernetes version
+        if 'version' in config and 'k8s' in config['version']:
+            k8s_version = config['version']['k8s']
+        else:
+            k8s_version = "1.12.7"
+
+        LOGGER.info("Building Kubernetes %s cluster '%s'",
+                    k8s_version, config['cluster-name'])
+
         LOGGER.info("Setting up networking ...")
         cloud_config = self.create_network()
         # generate CA key pair for the cluster, that is used to authenticate
@@ -489,7 +503,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             bootstrap_token, lb_dns,
             config.get("pod_subnet", "10.233.0.0/16"),
             config.get("pod_network", "CALICO"),
-            dex=self.dex_conf)
+            dex=self.dex_conf,
+            k8s_version=k8s_version)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -506,7 +521,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Waiting for worker instances to be launched and the "
                     "LoadBalancer to be configured...")
         node_tasks = self.nodes_builder.create_initial_nodes(
-            cloud_config, ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash
+            cloud_config, ca_bundle, lb_ip, lb_port, bootstrap_token,
+            discovery_hash, k8s_version=k8s_version
         )
 
         node_tasks.append(configure_lb_task)
