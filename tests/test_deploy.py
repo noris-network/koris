@@ -1,7 +1,9 @@
+import os
+
 from unittest.mock import MagicMock
 from kubernetes import config as k8sconfig
 
-from koris.deploy.k8s import K8S
+from koris.deploy.k8s import K8S, get_addons, KorisAddon
 
 KORIS_CONFIG = {'addons': ['dex', 'ingress-nginx', 'metrics-server']}
 
@@ -43,7 +45,32 @@ def list_nodes_only_one_ready(*args, **kwargs):
 
 def test_apply_addons(monkeypatch):
     monkeypatch.setattr(k8sconfig, 'load_kube_config', lambda x: x)
-    K8S("tests/test-admin.conf").apply_addons(KORIS_CONFIG)
+
+    def dummy_apply(*args, **kwargs):
+        pass
+
+    K8S("tests/test-admin.conf").apply_addons(KORIS_CONFIG,
+                                              apply_func=dummy_apply)
+
+
+def test_get_addons():
+
+    addons = list(get_addons({}))
+
+    assert 'metrics-server' in [addon.name for addon in addons]
+
+
+def test_apply_metrics_server():
+    metrics = KorisAddon('metrics-server')
+
+    apply_func = MagicMock()
+    dummy_client = MagicMock()
+
+    metrics.apply(dummy_client, apply_func)
+
+    apply_func.assert_called_once_with(dummy_client,
+                                       os.path.join(os.getcwd(), metrics.file),
+                                       verbose=False)
 
 # def test_all_masters_ready(monkeypatch, k8s):
 #     monkeypatch.setattr(k8s.client, 'list_node', list_nodes)

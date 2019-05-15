@@ -22,7 +22,7 @@ jsonpatch==1.23
 jsonpointer==2.0
 jsonschema==2.6.0
 keystoneauth1==3.13.1
-kubernetes==7.0.0
+kubernetes==9.0.0
 mach.py==0.4.2
 monotonic==1.4
 msgpack==0.5.6
