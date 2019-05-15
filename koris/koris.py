@@ -285,14 +285,16 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             config = yaml.safe_load(stream)
 
         nova, neutron, cinder = get_clients()
+        if not force:
+            LOGGER.question(
+                "Deleting cluster '{}'".format(
+                    config['cluster-name']))
 
-        LOGGER.question(
-            "Deleting cluster '{}'".format(
-                config['cluster-name']))
-
-        ans = confirm(force)
-        if ans != 'y':
-            sys.exit(1)
+            ans = confirm(force)
+            if ans != 'y':
+                sys.exit(1)
+        else:
+            LOGGER.warn("Deleting cluster '{}'".format(config['cluster-name']))
 
         conn = get_connection()
         remove_cluster(config, nova, neutron, cinder, conn)
@@ -326,15 +328,17 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
                          '[%s]' % " | ".join(allowed_resource))
             sys.exit(1)
 
+        if force:
+            pass
+        elif confirm(force) != 'y':
+            sys.exit(1)
+
         if resource == "node":
             if not name or name is None:
                 LOGGER.error("Must specifiy --name when deleting a node")
                 sys.exit(1)
 
             LOGGER.question(f"Deleting {resource} {name}")
-            ans = confirm(force)
-            if ans != 'y':
-                sys.exit(1)
 
             change_config = True
             try:
