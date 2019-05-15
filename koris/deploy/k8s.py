@@ -734,3 +734,40 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.debug(resp)
         LOGGER.success("Kubernetes node '%s' has been deleted successfully",
                        nodename)
+
+    def apply_addons(self, koris_config):
+        """apply all addons to the cluster
+
+        Args:
+            koris_config (dict): koris configuration loaded as dict
+        """
+        for addon in get_addons(koris_config):
+            addon.apply(self.api)
+
+
+def get_addons(config):
+    """
+    A prototype for loading addons
+
+    Args:
+        config (dict): parse yaml with an optional section, list of addons
+    """
+
+    for item in config.get('addons', {}):
+        yield KorisAddon(item)
+
+
+class KorisAddon:  # pylint: disable=too-few-public-methods
+    """
+    Dummy class that should be replaced with a proper mechanism for plugins.
+
+    This should no be used by anyone and hence left undocumented.
+    """
+
+    def __init__(self, name):
+        pass
+
+    def apply(self):
+        """
+        Apply a plugin to the cluster
+        """

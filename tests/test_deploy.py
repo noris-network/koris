@@ -1,7 +1,9 @@
 from unittest.mock import MagicMock
-import pytest
+from kubernetes import config as k8sconfig
 
 from koris.deploy.k8s import K8S
+
+KORIS_CONFIG = {'addons': ['dex', 'ingress-nginx', 'metrics-server']}
 
 
 class Interface:
@@ -39,10 +41,9 @@ def list_nodes_only_one_ready(*args, **kwargs):
     return resp
 
 
-@pytest.fixture
-def k8s():
-    return K8S("tests/test-admin.conf")
-
+def test_apply_addons(monkeypatch):
+    monkeypatch.setattr(k8sconfig, 'load_kube_config', lambda x: x)
+    K8S("tests/test-admin.conf").apply_addons(KORIS_CONFIG)
 
 # def test_all_masters_ready(monkeypatch, k8s):
 #     monkeypatch.setattr(k8s.client, 'list_node', list_nodes)
