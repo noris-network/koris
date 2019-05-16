@@ -768,9 +768,12 @@ def get_addons(config):
 
 class KorisAddon:  # pylint: disable=too-few-public-methods
     """
-    Dummy class that should be replaced with a proper mechanism for plugins.
+    Naive Addon class. Applies a kubernetes collection of resources from yml.
 
-    This should not be used by anyone and hence left undocumented.
+    Args:
+        name (str): the name of the plugin
+        manifest_path (str): the path where kubernetes resources are saved.
+
     """
 
     def __init__(self, name, manifest_path=MANIFESTSPATH):
