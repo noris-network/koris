@@ -19,10 +19,13 @@ import urllib3
 from pkg_resources import resource_filename, Requirement
 from netaddr import valid_ipv4
 
-from kubernetes import (client as k8sclient, config as k8sconfig)
+from kubernetes import client as k8sclient
 from kubernetes.stream import stream
 from kubernetes.client.rest import ApiException
-from kubernetes.client import V1DeleteOptions
+from kubernetes.client import api_client
+from kubernetes.client.configuration import Configuration
+from kubernetes.config import kube_config
+from kubernetes.utils import create_from_yaml
 
 import yaml
 
@@ -248,8 +251,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         if not manifest_path:
             manifest_path = MANIFESTSPATH
         self.manifest_path = manifest_path
-        k8sconfig.load_kube_config(config)
+        kube_config.load_kube_config(config_file=config)
+        config = Configuration()
         self.api = k8sclient.CoreV1Api()
+        self.client = api_client.ApiClient(configuration=config)
 
     def get_bootstrap_token(self):
         """Generate a Bootstrap token
@@ -735,12 +740,65 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
             raise ValueError(msg)
 
-        options = V1DeleteOptions(grace_period_seconds=grace_period)
-        resp = self.api.delete_node(nodename,
-                                    options,
-                                    pretty=True,
-                                    grace_period_seconds=grace_period)
+        resp = self.api.delete_node(nodename, grace_period_seconds=grace_period,
+                                    pretty=True)
 
         LOGGER.debug(resp)
         LOGGER.success("Kubernetes node '%s' has been deleted successfully",
                        nodename)
+
+    def apply_addons(self, koris_config, apply_func=create_from_yaml):
+        """apply all addons to the cluster
+
+        Args:
+            koris_config (dict): koris configuration loaded as dict
+        """
+
+        for addon in get_addons(koris_config):
+            LOGGER.info("Applying add-on [%s]", addon.name)
+            addon.apply(self.client, apply_func=apply_func)
+
+
+def get_addons(config):
+    """
+    A prototype for loading addons. There are optional addons, and non-optional
+    addons.
+    Currently, non-optional addons include only the metrics-server.
+
+    Args:
+        config (dict): parse yaml with an optional section, list of addons
+    """
+
+    for item in config.get('addons', {}):
+        yield KorisAddon(item)
+
+    for item in ['metrics-server']:
+        yield KorisAddon(item)
+
+
+class KorisAddon:  # pylint: disable=too-few-public-methods
+    """
+    Naive Addon class. Applies a kubernetes collection of resources from yml.
+
+    Args:
+        name (str): the name of the plugin
+        manifest_path (str): the path where kubernetes resources are saved.
+
+    """
+
+    def __init__(self, name, manifest_path=MANIFESTSPATH):
+        self.name = name
+        self.file = os.path.join(manifest_path, name + ".yml")
+
+    def apply(self, k8s_client, apply_func=create_from_yaml):
+        """
+        Apply a plugin to the cluster.
+        Currently we use the Python client to apply a plugin. This might be
+        limited, so we keep the possibilty to use a kubectl shell wrapper by
+        making this an optional argument.
+
+        Args:
+            k8s_client:  A Kubernet API client
+            apply_func: A callable that can apply a plugin to the cluster
+        """
+        apply_func(k8s_client, self.file, verbose=False)

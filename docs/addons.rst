@@ -1,7 +1,17 @@
 ======
-Addons
-======
+Add-ons
+=======
 
+Metrics Server
+--------------
+
+Per default koris installs with the cluster the `metrics server`_. This is required
+for monitoring cluster resource usages and enables the usage of `kubectl top`.
+
+This add-on is always activated and can be removed after the cluster is installed
+using `kubectl`.
+
+.. _metrics server: https://github.com/kubernetes-incubator/metrics-server
 .. _dex_docs:
 
 Dex

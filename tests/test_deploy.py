@@ -1,7 +1,10 @@
-from unittest.mock import MagicMock
-import pytest
+import os
 
-from koris.deploy.k8s import K8S
+from unittest.mock import MagicMock
+
+from koris.deploy.k8s import get_addons, KorisAddon
+
+KORIS_CONFIG = {'addons': ['dex', 'ingress-nginx', 'metrics-server']}
 
 
 class Interface:
@@ -39,10 +42,24 @@ def list_nodes_only_one_ready(*args, **kwargs):
     return resp
 
 
-@pytest.fixture
-def k8s():
-    return K8S("tests/test-admin.conf")
+def test_get_addons():
 
+    addons = list(get_addons({}))
+
+    assert 'metrics-server' in [addon.name for addon in addons]
+
+
+def test_apply_metrics_server():
+    metrics = KorisAddon('metrics-server')
+
+    apply_func = MagicMock()
+    dummy_client = MagicMock()
+
+    metrics.apply(dummy_client, apply_func)
+
+    apply_func.assert_called_once_with(dummy_client,
+                                       os.path.join(os.getcwd(), metrics.file),
+                                       verbose=False)
 
 # def test_all_masters_ready(monkeypatch, k8s):
 #     monkeypatch.setattr(k8s.client, 'list_node', list_nodes)
