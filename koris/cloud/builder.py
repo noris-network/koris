@@ -87,6 +87,7 @@ class NodeBuilder:
                              self._info.secgroups)
         return nodes
 
+    # pylint: disable=too-many-arguments,too-many-locals
     def create_nodes_tasks(self,
                            host,
                            token,
@@ -94,7 +95,8 @@ class NodeBuilder:
                            role='node',
                            flavor=None,
                            zone=None,
-                           amount=1):
+                           amount=1,
+                           k8s_version="1.12.7"):
         """
         Create tasks for adding nodes when running ``koris add --args ...``
 
@@ -128,7 +130,8 @@ class NodeBuilder:
                                       flavor=flavor)
         nodes = self._create_nodes_tasks(ca_cert,
                                          host_addr, host_port, token,
-                                         discovery_hash, nodes)
+                                         discovery_hash, nodes,
+                                         k8s_version=k8s_version)
         return nodes
 
     @staticmethod
@@ -263,7 +266,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                                k8s_version=k8s_version))
             else:
                 # create userdata for following master nodes if not existing
-                userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex))
+                userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex,
+                                             k8s_version=k8s_version))
 
             tasks.append(loop.create_task(
                 master.create(self._info.master_flavor, self._info.secgroups,
@@ -310,7 +314,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                            self._info.secgroups)
         return master
 
-    def add_master(self, zone, flavor):
+    def add_master(self, zone, flavor, k8s_version="1.12.7"):
         """Adds a new instance in OpenStack which will be provisioned as master.
 
         - Create a new machine
@@ -331,7 +335,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         key = self._info.conn.compute.find_keypair(self._info.name)
 
-        init = NthMasterInit(cloud_config, key.public_key)
+        init = NthMasterInit(cloud_config, key.public_key, k8s_version)
         userdata = str(init)
         task = loop.create_task(master.create(
             self._info.master_flavor, self._info.secgroups, self._info.keypair,

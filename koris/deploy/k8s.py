@@ -427,7 +427,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         return master_name, master_ip
 
-    def bootstrap_master(self, new_master_name, new_master_ip):
+    def bootstrap_master(self, new_master_name, new_master_ip, k8s_version):
         """Run the steps required to bootstrap a new master.
 
         These are:
@@ -444,7 +444,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         """
         master_name, master_ip = self.get_random_master()
 
-        podname = self.launch_master_adder()
+        podname = self.launch_master_adder(k8s_version)
         LOGGER.info("Preparing bootstrap of new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
                             new_master_ip)

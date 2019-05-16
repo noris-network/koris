@@ -187,7 +187,8 @@ class NthMasterInit(BaseInit):
     to be done.
     """
     def __init__(self, cloud_config, ssh_key, os_type='ubuntu',
-                 os_version="16.04", dex=None):
+                 os_version="16.04", dex=None,
+                 k8s_version="1.12.7"):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
@@ -197,6 +198,7 @@ class NthMasterInit(BaseInit):
         self.os_type = os_type
         self.os_version = os_version
         self.role = 'nth-master'
+        self.k8s_version = k8s_version
 
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key)
@@ -210,6 +212,20 @@ class NthMasterInit(BaseInit):
 
         # write audit policy
         self.write_file("/etc/kubernetes/audit-policy.yml", get_audit_policy())
+
+    def _write_koris_env(self):
+        """
+        writes the necessary koris information for the node to the file
+        /etc/kubernetes/koris.env
+        """
+        content = f"""
+            #!/bin/bash
+
+            export KUBE_VERSION="{self.k8s_version}"
+        """
+        content = textwrap.dedent(content)
+        self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
+                        "0600")
 
 
 # pylint: disable=too-many-arguments,too-many-locals
@@ -235,6 +251,7 @@ class FirstMasterInit(NthMasterInit):
         os_version (str): OS version the bootstrap script runs on
 
     """
+
     def __init__(self, ssh_key, ca_bundle, cloud_config,
                  masters, lb_ip, lb_port, bootstrap_token, lb_dns='',
                  pod_subnet='10.233.0.0/16',
@@ -297,7 +314,6 @@ class FirstMasterInit(NthMasterInit):
             export POD_NETWORK="{}"
 
             export KUBE_VERSION="{}"
-
         """.format(" ".join(self.master_ips), " ".join(self.master_names),
                    self.lb_dns if self.lb_dns else "",
                    self.lb_ip, self.lb_port, self.bootstrap_token,

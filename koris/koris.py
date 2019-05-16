@@ -81,13 +81,20 @@ def add_node(cloud_config,
         os_cluster_info,
         cloud_config=cloud_config)
 
+    if 'version' in config_dict and 'k8s' in config_dict['version']:
+        k8s_version = config_dict['version']['k8s']
+    else:
+        k8s_version = "1.12.7"
+        config_dict['version']['k8s'] = k8s_version
+
     tasks = node_builder.create_nodes_tasks(k8s.host,
                                             k8s.get_bootstrap_token(),
                                             k8s.ca_info,
                                             role=role,
                                             zone=zone,
                                             flavor=flavor,
-                                            amount=amount)
+                                            amount=amount,
+                                            k8s_version=k8s_version)
     node_builder.launch_new_nodes(tasks)
 
 
@@ -113,13 +120,19 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
         k8s (:class:`.deploy.K8S`): A K8S instance.
     """
 
+    if 'version' in config_dict and 'k8s' in config_dict['version']:
+        k8s_version = config_dict['version']['k8s']
+    else:
+        k8s_version = "1.12.7"
+        config_dict['version']['k8s'] = k8s_version
+
     if not bootstrap_only:
-        master = builder.add_master(zone, flavor)
+        master = builder.add_master(zone, flavor, k8s_version)
         name, ip_address = master.name, master.ip_address
         update_config(config_dict, config, 1, role='masters')
 
     try:
-        k8s.bootstrap_master(name, ip_address)
+        k8s.bootstrap_master(name, ip_address, k8s_version)
     except ValueError as err:
         LOGGER.error(f"Error: {err}")
 
