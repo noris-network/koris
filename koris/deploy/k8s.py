@@ -730,10 +730,8 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
             raise ValueError(msg)
 
-        options = dict(grace_period_seconds=grace_period,
-                       pretty=True)
-        resp = self.api.delete_node(nodename,
-                                    **options)
+        resp = self.api.delete_node(nodename, grace_period_seconds=grace_period,
+                                    pretty=True)
 
         LOGGER.debug(resp)
         LOGGER.success("Kubernetes node '%s' has been deleted successfully",
@@ -772,7 +770,7 @@ class KorisAddon:  # pylint: disable=too-few-public-methods
     """
     Dummy class that should be replaced with a proper mechanism for plugins.
 
-    This should no be used by anyone and hence left undocumented.
+    This should not be used by anyone and hence left undocumented.
     """
 
     def __init__(self, name, manifest_path=MANIFESTSPATH):
