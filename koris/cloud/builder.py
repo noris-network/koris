@@ -567,7 +567,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Waiting for all masters to become Ready ...")
 
         k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst)
-
+        k8s.apply_addons(config)
         LOGGER.success("Configured LoadBalancer to use all API servers")
         LOGGER.success("Kubernetes cluster is ready to use !")
         loop.close()

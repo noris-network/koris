@@ -274,6 +274,18 @@ check-added-node-labels:
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
+
+assert-metrics-server-is-running:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-metrics"
+
+
 check-added-nodes-ready:
   stage: integration-test
   image: oz123/koris-alpine:0.1.5
@@ -456,7 +468,7 @@ coverage-report:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
    - python3 tests/scripts/coverage_report.py
-   - python3 -m coverage report -m 
+   - python3 -m coverage report -m
    - python3 -m coverage html
   except:
     variables:

@@ -218,6 +218,9 @@ assert-audit-log:
 		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} test -f /etc/kubernetes/audit-policy.yml || { echo "no /etc/kubernetes/audit-policy.yml found for $${HOSTIP}" ; exit 1; }; \
 	 done
 
+assert-metrics:
+	KUBECONFIG=$(KUBECONFIG) ./tests/scripts/assert_metrics.sh
+
 assert-control-plane: NUM ?= 4
 assert-control-plane: \
 	assert-kube-apiservers \
