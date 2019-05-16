@@ -219,8 +219,9 @@ assert-audit-log:
 	 done
 
 assert-metrics:
-	kubectl top nodes --kubeconfig=${KUBECONFIG}
-	kubectl top pods --kubeconfig=${KUBECONFIG}
+	for resource in nodes pods; do \
+	for i in {1..10}; do kubectl top $${resource} --kubeconfig=${KUBECONFIG} || echo "No metrics yet for $${resource}..."; sleep 1; done; \
+	done
 
 assert-control-plane: NUM ?= 4
 assert-control-plane: \
