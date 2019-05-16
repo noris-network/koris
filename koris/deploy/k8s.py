@@ -22,7 +22,7 @@ from netaddr import valid_ipv4
 from kubernetes import client as k8sclient
 from kubernetes.stream import stream
 from kubernetes.client.rest import ApiException
-from kubernetes.client import V1DeleteOptions, api_client
+from kubernetes.client import api_client
 from kubernetes.client.configuration import Configuration
 from kubernetes.config import kube_config
 from kubernetes.utils import create_from_yaml
@@ -730,11 +730,10 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
             raise ValueError(msg)
 
-        options = V1DeleteOptions(grace_period_seconds=grace_period)
-        resp = self.api.delete_node(nodename,  # pylint: disable=too-many-function-args
-                                    options,
-                                    pretty=True,
-                                    grace_period_seconds=grace_period)
+        options = dict(grace_period_seconds=grace_period,
+                       pretty=True)
+        resp = self.api.delete_node(nodename,
+                                    **options)
 
         LOGGER.debug(resp)
         LOGGER.success("Kubernetes node '%s' has been deleted successfully",
