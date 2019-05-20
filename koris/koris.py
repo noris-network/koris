@@ -85,7 +85,7 @@ def add_node(cloud_config,
         k8s_version = config_dict['version']['k8s']
     else:
         k8s_version = "1.12.7"
-        config_dict['version']['k8s'] = k8s_version
+        config_dict.update({"version": {"k8s": k8s_version}})
 
     tasks = node_builder.create_nodes_tasks(k8s.host,
                                             k8s.get_bootstrap_token(),
@@ -124,7 +124,7 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
         k8s_version = config_dict['version']['k8s']
     else:
         k8s_version = "1.12.7"
-        config_dict['version']['k8s'] = k8s_version
+        config_dict.update({"version": {"k8s": k8s_version}})
 
     if not bootstrap_only:
         master = builder.add_master(zone, flavor, k8s_version)
