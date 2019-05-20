@@ -269,11 +269,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                 }
 
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
-                                               cloud_config, masters,
-                                               lb_ip, lb_port,
-                                               bootstrap_token, lb_dns,
-                                               pod_subnet,
-                                               pod_network,
+                                               cloud_config,
                                                dex=dex,
                                                koris_env=koris_env))
             else:
