@@ -452,7 +452,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         lb, floatingip = lbinst.get_or_create()
         lb_port = "6443"
 
-        lb_dns = config['loadbalancer'].get('dnsname') or floatingip
+        lb_dns = config.get('loadbalancer', {}).get('dnsname') or floatingip
         lb_ip = floatingip if floatingip else lb['vip_address']
 
         # calculate information needed for joining nodes to the cluster...

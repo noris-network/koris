@@ -387,3 +387,20 @@ def test_loadbalancer_with_invalid_subnet():
 
     assert lb
     assert lb.subnet_name is None
+
+
+def test_create_loadbalancer_no_floating():
+    """ test loadbalancer without floating ip """
+    lb = LoadBalancer(CONFIG, MagicMock())
+    assert lb
+    assert lb.floatingip is None
+
+
+def test_create_loadbalancer_with_floating():
+    """ test loadbalancer with floating ip """
+    config = copy.deepcopy(CONFIG)
+    fip = "1.2.3.4"
+    config['loadbalancer'] = {"floatingip": fip}
+    lb = LoadBalancer(config, MagicMock())
+    assert lb
+    assert lb.floatingip == fip

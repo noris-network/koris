@@ -297,10 +297,7 @@ class LoadBalancer:
     """
 
     def __init__(self, config, conn):
-        self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
         self.config = config
-        if not self.floatingip:
-            LOGGER.warning("No floating IP, I hope it's OK")
         self.name = "%s-lb" % config['cluster-name']
 
         try:
@@ -314,6 +311,39 @@ class LoadBalancer:
         self._data = None
         self._existing_floating_ip = None
         self.conn = conn
+
+        self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
+
+        if not self.floatingip:
+            self.floatingip = None
+            LOGGER.warning("No floating IP, I hope it's OK")
+        else:
+            self.floatingip_availability(self.floatingip)
+
+    def floatingip_availability(self, fip):
+        """
+        Find if a floating ip exists in the pool and
+        if it's available for assignement.
+
+        Args:
+            fip (str): a floating ip
+
+        exits, if floating ip not available in pool
+        exits, if floating ip already being used
+        """
+
+        fip = self.conn.network.find_ip(fip)
+
+        if not fip:
+            LOGGER.error("Floating IP %s doesn't exist, please create it first",
+                         self.floatingip)
+            sys.exit(1)
+        elif fip.status == 'ACTIVE':
+            LOGGER.error("Floating IP %s already in use, please use another one",
+                         fip.floating_ip_address)
+            sys.exit(1)
+        elif fip.status == 'DOWN':
+            LOGGER.info("Using floating IP %s", fip.floating_ip_address)
 
     @property
     def master_listener(self):
@@ -634,15 +664,17 @@ class LoadBalancer:
         if self._existing_floating_ip == self.floatingip:
             return self._existing_floating_ip
 
-        # Check if Floating IP exists in OpenStack
         fip = self.conn.network.find_ip(self.floatingip)
-        if not fip:
-            LOGGER.error("Floating IP %s doesn't exist, please create it first",
-                         self.floatingip)
-            sys.exit(1)
-
         # Assign IP to LB
-        fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
+        try:
+            fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
+        except OSNotFound:
+            LOGGER.error("The resource {} cannot be associated".format(self.floatingip))
+            try:
+                self.delete()
+            except OSConflict:
+                self.delete()
+                sys.exit(1)
 
         LOGGER.success("Loadbalancer external IP: %s",
                        fip.floating_ip_address)

@@ -42,11 +42,9 @@ user_data: 'cloud-init-parts/generic'
 image: "koris-2019-02-08"
 
 loadbalancer:
-# Set to true if LoadBalancer should have a Floating IP.
-# This requires an unassigned Floating IP in your Network.
-  floatingip: false
-# Alternatively you can specify the Floating IP you want to assign.
-  # floatingip: 1.2.3.4
+# This is optional - you can either remove loadbalancer and floatingip completely
+# or you can Specify the Floating IP you want to assign.
+  floatingip: 1.2.3.4
 
 # The noris.cloud storage class. For available options check
 # https://www.noris.cloud/services/storage/openstack-cinder/?lang=en#details
