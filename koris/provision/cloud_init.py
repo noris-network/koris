@@ -187,8 +187,7 @@ class NthMasterInit(BaseInit):
     to be done.
     """
     def __init__(self, cloud_config, ssh_key, os_type='ubuntu',
-                 os_version="16.04", dex=None,
-                 k8s_version="1.12.7"):
+                 os_version="16.04", dex=None, koris_env=None):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
@@ -198,7 +197,7 @@ class NthMasterInit(BaseInit):
         self.os_type = os_type
         self.os_version = os_version
         self.role = 'nth-master'
-        self.k8s_version = k8s_version
+        self.koris_env = koris_env
 
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key)
@@ -213,17 +212,60 @@ class NthMasterInit(BaseInit):
         # write audit policy
         self.write_file("/etc/kubernetes/audit-policy.yml", get_audit_policy())
 
-    def _write_koris_env(self):
+    def _write_koris_env(self, dex=None):
         """
         writes the necessary koris information for the node to the file
         /etc/kubernetes/koris.env
         """
+
+        kenv = self.koris_env
+
+        def gk(key, dic=kenv, default=""):  # pylint: disable=invalid-name
+            """Retrieves a key from a dictionary with a default."""
+            val = dic.get(key, default)
+
+            if val is None:
+                return default
+            return val
+
         content = f"""
             #!/bin/bash
+            export MASTERS_IPS=( {" ".join(gk('master_ips'))} )
+            export MASTERS=( {" ".join(gk('master_names'))} )
 
-            export KUBE_VERSION="{self.k8s_version}"
+            export LOAD_BALANCER_DNS="{gk('lb_dns')}"
+            export LOAD_BALANCER_IP="{gk('lb_ip')}"
+            export LOAD_BALANCER_PORT="{gk('lb_port')}"
+
+            export BOOTSTRAP_TOKEN="{gk('bootstrap_token')}"
+
+            export POD_SUBNET="{gk('pod_subnet')}"
+            export POD_NETWORK="{gk('pod_network')}"
+
+            export KUBE_VERSION="{gk('k8s_version')}"
         """
         content = textwrap.dedent(content)
+
+        # For Dex we need to start the apiserver with special args, such as
+        # the location of the Dex CA certificate in order to verify incoming
+        # tokens
+        if dex is not None:
+            dex_content = """
+                export OIDC_ISSUER_URL="https://{}:{}"
+                export OIDC_CLIENT_ID="{}"
+                export OIDC_CA_FILE="{}"
+                export OIDC_USERNAME_CLAIM="{}"
+                export OIDC_GROUPS_CLAIM="{}"
+            """.format(dex['issuer'], dex['ports']['listener'],
+                       dex['client']['id'],
+                       dex['ca_file'],
+                       dex['username_claim'],
+                       dex['groups_claim'])
+            dex_content = textwrap.dedent(dex_content)
+            content += dex_content
+        content = textwrap.dedent(content)
+
+        LOGGER.debug("Writing koris.env:\n%s", content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")
 
@@ -257,8 +299,9 @@ class FirstMasterInit(NthMasterInit):
                  pod_subnet='10.233.0.0/16',
                  pod_network='CALICO',
                  os_type='ubuntu', os_version="16.04", dex=None,
-                 k8s_version="1.12.7"):
-        super().__init__(cloud_config, ssh_key, os_type, os_version, dex=dex)
+                 koris_env=None):
+        super().__init__(cloud_config, ssh_key, os_type, os_version,
+                         dex=dex, koris_env=koris_env)
         self.ca_bundle = ca_bundle
 
         self.master_ips = [master.ip_address for master in masters]
@@ -270,7 +313,6 @@ class FirstMasterInit(NthMasterInit):
         self.pod_network = pod_network
         self.pod_subnet = pod_subnet
         self.role = 'master'
-        self.k8s_version = k8s_version
 
         # assemble the parts for the first master
         # use an encoder that just returns x, since b64_cert encodes already
@@ -294,54 +336,54 @@ class FirstMasterInit(NthMasterInit):
         self._cloud_config_data["ssh_keys"] = {}
         self._cloud_config_data["ssh_keys"]["rsa_private"] = key
 
-    def _write_koris_env(self, dex=None):
-        """
-        writes the necessary koris information for the node to the file
-        /etc/kubernetes/koris.env
-        """
-        content = """
-            #!/bin/bash
-            export MASTERS_IPS=( {} )
-            export MASTERS=( {} )
+    # def _write_koris_env(self, dex=None):
+    #     """
+    #     writes the necessary koris information for the node to the file
+    #     /etc/kubernetes/koris.env
+    #     """
+    #     content = """
+    #         #!/bin/bash
+    #         export MASTERS_IPS=( {} )
+    #         export MASTERS=( {} )
 
-            export LOAD_BALANCER_DNS="{}"
-            export LOAD_BALANCER_IP="{}"
-            export LOAD_BALANCER_PORT="{}"
+    #         export LOAD_BALANCER_DNS="{}"
+    #         export LOAD_BALANCER_IP="{}"
+    #         export LOAD_BALANCER_PORT="{}"
 
-            export BOOTSTRAP_TOKEN="{}"
+    #         export BOOTSTRAP_TOKEN="{}"
 
-            export POD_SUBNET="{}"
-            export POD_NETWORK="{}"
+    #         export POD_SUBNET="{}"
+    #         export POD_NETWORK="{}"
 
-            export KUBE_VERSION="{}"
-        """.format(" ".join(self.master_ips), " ".join(self.master_names),
-                   self.lb_dns if self.lb_dns else "",
-                   self.lb_ip, self.lb_port, self.bootstrap_token,
-                   self.pod_subnet,
-                   self.pod_network,
-                   self.k8s_version)
-        content = textwrap.dedent(content)
+    #         export KUBE_VERSION="{}"
+    #     """.format(" ".join(self.master_ips), " ".join(self.master_names),
+    #                self.lb_dns if self.lb_dns else "",
+    #                self.lb_ip, self.lb_port, self.bootstrap_token,
+    #                self.pod_subnet,
+    #                self.pod_network,
+    #                self.k8s_version)
+    #     content = textwrap.dedent(content)
 
-        # For Dex we need to start the apiserver with special args, such as
-        # the location of the Dex CA certificate in order to verify incoming
-        # tokens
-        if dex is not None:
-            dex_content = """
-                export OIDC_ISSUER_URL="https://{}:{}"
-                export OIDC_CLIENT_ID="{}"
-                export OIDC_CA_FILE="{}"
-                export OIDC_USERNAME_CLAIM="{}"
-                export OIDC_GROUPS_CLAIM="{}"
-            """.format(dex['issuer'], dex['ports']['listener'],
-                       dex['client']['id'],
-                       dex['ca_file'],
-                       dex['username_claim'],
-                       dex['groups_claim'])
-            dex_content = textwrap.dedent(dex_content)
-            content += dex_content
+    #     # For Dex we need to start the apiserver with special args, such as
+    #     # the location of the Dex CA certificate in order to verify incoming
+    #     # tokens
+    #     if dex is not None:
+    #         dex_content = """
+    #             export OIDC_ISSUER_URL="https://{}:{}"
+    #             export OIDC_CLIENT_ID="{}"
+    #             export OIDC_CA_FILE="{}"
+    #             export OIDC_USERNAME_CLAIM="{}"
+    #             export OIDC_GROUPS_CLAIM="{}"
+    #         """.format(dex['issuer'], dex['ports']['listener'],
+    #                    dex['client']['id'],
+    #                    dex['ca_file'],
+    #                    dex['username_claim'],
+    #                    dex['groups_claim'])
+    #         dex_content = textwrap.dedent(dex_content)
+    #         content += dex_content
 
-        self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
-                        "0600")
+        # self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
+        #                 "0600")
 
 
 class NodeInit(BaseInit):

@@ -256,6 +256,18 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                      "creation of the cluster.".format(master))
             if not index:
                 # create userdata for first master node if not existing
+                koris_env = {
+                    "master_ips": [master.ip_address for master in masters],
+                    "master_names": [master.name for master in masters],
+                    "lb_dns": lb_dns,
+                    "lb_ip": lb_ip,
+                    "lb_port": lb_port,
+                    "bootstrap_token": bootstrap_token,
+                    "pod_subnet": pod_subnet,
+                    "pod_network": pod_network,
+                    "k8s_version": k8s_version
+                }
+
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
                                                cloud_config, masters,
                                                lb_ip, lb_port,
@@ -263,11 +275,12 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                                pod_subnet,
                                                pod_network,
                                                dex=dex,
-                                               k8s_version=k8s_version))
+                                               koris_env=koris_env))
             else:
                 # create userdata for following master nodes if not existing
+                koris_env = {"k8s_version": k8s_version}
                 userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex,
-                                             k8s_version=k8s_version))
+                                             koris_env=koris_env))
 
             tasks.append(loop.create_task(
                 master.create(self._info.master_flavor, self._info.secgroups,
@@ -335,7 +348,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         key = self._info.conn.compute.find_keypair(self._info.name)
 
-        init = NthMasterInit(cloud_config, key.public_key, k8s_version)
+        koris_env = {"k8s_version": k8s_version}
+        init = NthMasterInit(cloud_config, key.public_key, koris_env=koris_env)
         userdata = str(init)
         task = loop.create_task(master.create(
             self._info.master_flavor, self._info.secgroups, self._info.keypair,
