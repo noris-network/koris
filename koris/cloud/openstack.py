@@ -318,9 +318,9 @@ class LoadBalancer:
             self.floatingip = None
             LOGGER.warning("No floating IP, I hope it's OK")
         else:
-            self.floatingip_availability(self.floatingip)
+            self.check_floating_ip_availability(self.floatingip)
 
-    def floatingip_availability(self, fip):
+    def check_floating_ip_availability(self, fip):
         """
         Find if a floating ip exists in the pool and
         if it's available for assignement.
@@ -630,7 +630,7 @@ class LoadBalancer:
             fip_addr = self.associate_floating_ip(lb)
         return lb, fip_addr
 
-    @retry(exceptions=(NeutronConflict, NotFound, BadRequest), backoff=1,
+    @retry(exceptions=(NeutronConflict, NotFound, BadRequest, OSConflict), backoff=1,
            tries=10, logger=LOGGER.debug)
     def delete(self):
         """Delete the cluster API loadbalancer
@@ -670,11 +670,8 @@ class LoadBalancer:
             fip = self.conn.network.update_ip(fip, port_id=loadbalancer.vip_port_id)
         except OSNotFound:
             LOGGER.error("The resource {} cannot be associated".format(self.floatingip))
-            try:
-                self.delete()
-            except OSConflict:
-                self.delete()
-                sys.exit(1)
+            self.delete()
+            sys.exit(1)
 
         LOGGER.success("Loadbalancer external IP: %s",
                        fip.floating_ip_address)
