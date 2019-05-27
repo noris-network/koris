@@ -316,9 +316,6 @@ class LoadBalancer:
 
         if not self.floatingip:
             self.floatingip = None
-            LOGGER.warning("No floating IP, I hope it's OK")
-        else:
-            self.check_floating_ip_availability(self.floatingip)
 
     def check_floating_ip_availability(self, fip):
         """
@@ -497,6 +494,9 @@ class LoadBalancer:
         Args:
             master_ips (list): A list of the master IP addresses
         """
+
+        if self.floatingip:
+            self.check_floating_ip_availability(self.floatingip)
 
         # If not present, add listener
         if not self._data.listeners:
