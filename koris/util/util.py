@@ -17,6 +17,9 @@ from pkg_resources import parse_version
 import yaml
 
 from koris.util.hue import red  # pylint: disable=no-name-in-module
+from koris.util.logger import Logger
+
+LOGGER = Logger(__name__)
 
 
 def get_logger(name, level=logging.INFO):
@@ -95,14 +98,35 @@ def name_validation(name):
         Name if valid, Exits with Status code 2 if name is invalid.
     """
     if len(name) > 244:
-        print(red("cluster-name is too long"))
+        LOGGER.error("cluster-name is too long")
         sys.exit(2)
     allowed = re.compile(r"^[a-zA-Z\d-]+$")
     if not allowed.match(name):
-        print(red("cluster-name '{}' is using illegal characters. \
-              Please change cluster-name in config file".format(name)))
+        LOGGER.error("cluster-name '%s' is using illegal characters."
+                     "Please change cluster-name in config file", name)
         sys.exit(2)
     return name
+
+
+def k8s_version_validation(version):
+    """Checks if a specified Kubernetes version is valid.
+
+    Args:
+        version (str): The version string to be checked
+
+    Returns:
+        True if version is valid.
+    """
+
+    if not isinstance(version, str):
+        return False
+
+    allowed = re.compile(r"^\d+\.\d+\.\d+$")
+    if not allowed.match(version):
+        LOGGER.error("'%s' is not a valid Kubernetes version", version)
+        return False
+
+    return True
 
 
 @lru_cache(maxsize=16)

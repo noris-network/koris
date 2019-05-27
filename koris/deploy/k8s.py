@@ -57,7 +57,6 @@ def _get_node_addr(addresses, addr_type):
     return [i.address for i in addresses if i.type == addr_type][0]
 
 
-KUBE_VERSION = "1.12.5"
 SFTPOPTS = ["-i /etc/ssh/ssh_host_rsa_key ",
             "-o StrictHostKeyChecking=no ",
             "-o ConnectTimeout=60"]
@@ -146,7 +145,7 @@ MASTER_ADDER_DEPLOYMENT = {
                      "command": ["sleep"],
                      "env": [{"value": "".join(SFTPOPTS), "name": "SFTPOPTS"},
                              {"value": "".join(SSHOPTS), "name": "SSHOPTS"},
-                             {"value": KUBE_VERSION,
+                             {"value": None,
                               "name": "KUBE_VERSION"},
                              {"value": "/etc/kubernetes/pki/etcd/ca.crt",
                               "name": "ETCDCTL_CACERT"},
@@ -433,7 +432,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         return master_name, master_ip
 
-    def bootstrap_master(self, new_master_name, new_master_ip):
+    def bootstrap_master(self, new_master_name, new_master_ip, k8s_version):
         """Run the steps required to bootstrap a new master.
 
         These are:
@@ -450,13 +449,14 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         """
         master_name, master_ip = self.get_random_master()
 
-        podname = self.launch_master_adder()
+        podname = self.launch_master_adder(k8s_version)
         LOGGER.info("Preparing bootstrap of new master node...")
         self.run_add_script(podname, master_name, master_ip, new_master_name,
                             new_master_ip)
         LOGGER.success("Bootstrap of new master finished successfully")
 
-    def launch_master_adder(self):
+    # pylint: disable=line-too-long
+    def launch_master_adder(self, k8s_version="1.12.7"):
         """Launch the add_master_deployment.
 
         Args:
@@ -471,6 +471,15 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         # pass
 
         kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
+
+        try:
+            env = MASTER_ADDER_DEPLOYMENT['spec']['template']['spec']['containers'][0]['env'] # noqa
+            idx = [idx for idx, val in enumerate(env) if val['name'] == 'KUBE_VERSION'][0]
+            MASTER_ADDER_DEPLOYMENT['spec']['template']['spec']['containers'][0]['env'][idx]['value'] = k8s_version # noqa
+        except (KeyError, IndexError) as exc:
+            LOGGER.debug(exc)
+            LOGGER.debug("Deployment manifest: %s", MASTER_ADDER_DEPLOYMENT)
+            raise ValueError("unable to set Kubernetes version")
         kctl.communicate(json.dumps(MASTER_ADDER_DEPLOYMENT).encode())
 
         if kctl.returncode:
@@ -707,6 +716,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
                      proc.returncode)
 
+    # pylint: disable=too-many-function-args
     def delete_node(self, nodename, grace_period=0, ignore_not_found=True):
         """Delete a node in Kubernetes.
 

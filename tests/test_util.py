@@ -1,7 +1,8 @@
 import io
 import unittest.mock
 
-from koris.util.util import KorisVersionCheck, name_validation
+from koris.util.util import (KorisVersionCheck, name_validation,
+                             k8s_version_validation)
 from koris.util.hue import red
 
 phtml = """
@@ -68,3 +69,16 @@ class Test_name_validation(unittest.TestCase):
         cluster_name = "bad:)chars"
         with self.assertRaises(SystemExit):
             name_validation(cluster_name)
+
+
+def test_k8s_version_validation():
+    VALID_VERSIONS = ["1.12.7", "1.13.5", "1.13.6", "1.15.0"]
+    INVALID_VERSIONS = [1, None, 1.13, "1", "1.13", "abc"]
+
+    for vers in VALID_VERSIONS:
+        print(f"OK:{vers}")
+        assert k8s_version_validation(vers) is True
+
+    for vers in INVALID_VERSIONS:
+        print(f"NOK: {vers}")
+        assert k8s_version_validation(vers) is False

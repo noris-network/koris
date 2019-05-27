@@ -95,7 +95,8 @@ for item in create_etcd_certs(hostnames, ips):
 
 @pytest.fixture
 def ci_nth_master():
-    ci = NthMasterInit(CLOUD_CONFIG, create_key())
+    ci = NthMasterInit(CLOUD_CONFIG, create_key(),
+                       koris_env={"a": "b"})
     return ci
 
 
@@ -104,11 +105,7 @@ def ci_first_master():
     ci = FirstMasterInit(create_key(),
                          CERTS['ca'],
                          CLOUD_CONFIG,
-                         TEST_CLUSTER,
-                         ips,
-                         LB_IP,
-                         "6443",
-                         "bootstrap_token"
+                         koris_env={"a": "b"}
                          )
     return ci
 
@@ -124,6 +121,18 @@ def ci_node():
         "discovery_hash"
     )
     return ci
+
+
+def test_first_master(ci_first_master):
+    ci = ci_first_master
+    assert ci is not None
+
+    with pytest.raises(ValueError):
+        ci = FirstMasterInit(create_key(),
+                             CERTS['ca'],
+                             CLOUD_CONFIG,
+                             koris_env={}
+                             )
 
 
 def test_cloud_config(ci_first_master):

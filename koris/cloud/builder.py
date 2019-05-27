@@ -87,6 +87,7 @@ class NodeBuilder:
                              self._info.secgroups)
         return nodes
 
+    # pylint: disable=too-many-arguments,too-many-locals
     def create_nodes_tasks(self,
                            host,
                            token,
@@ -94,7 +95,8 @@ class NodeBuilder:
                            role='node',
                            flavor=None,
                            zone=None,
-                           amount=1):
+                           amount=1,
+                           k8s_version="1.12.7"):
         """
         Create tasks for adding nodes when running ``koris add --args ...``
 
@@ -128,7 +130,8 @@ class NodeBuilder:
                                       flavor=flavor)
         nodes = self._create_nodes_tasks(ca_cert,
                                          host_addr, host_port, token,
-                                         discovery_hash, nodes)
+                                         discovery_hash, nodes,
+                                         k8s_version=k8s_version)
         return nodes
 
     @staticmethod
@@ -157,7 +160,7 @@ class NodeBuilder:
                              lb_port,
                              bootstrap_token,
                              discovery_hash,
-                             ):
+                             k8s_version="1.12.7"):
         """
         Create all initial nodes when running ``koris apply <config>``
         """
@@ -166,7 +169,8 @@ class NodeBuilder:
         nodes = self.get_nodes()
         nodes = self._create_nodes_tasks(ca_bundle.cert,
                                          lb_ip, lb_port, bootstrap_token,
-                                         discovery_hash, nodes)
+                                         discovery_hash, nodes,
+                                         k8s_version=k8s_version)
         return nodes
 
     def _create_nodes_tasks(self,
@@ -175,7 +179,8 @@ class NodeBuilder:
                             lb_port,
                             bootstrap_token,
                             discovery_hash,
-                            nodes):
+                            nodes,
+                            k8s_version="1.12.7"):
         """
         Create future tasks for creating the cluster worker nodes
         """
@@ -189,7 +194,8 @@ class NodeBuilder:
 
             userdata = str(NodeInit(ca_cert, self.cloud_config, lb_ip, lb_port,
                                     bootstrap_token,
-                                    discovery_hash))
+                                    discovery_hash,
+                                    k8s_version=k8s_version))
             tasks.append(loop.create_task(
                 node.create(node.flavor, self._info.secgroups,
                             self._info.keypair, userdata)
@@ -230,7 +236,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
     def create_masters_tasks(self, ssh_key, ca_bundle, cloud_config, lb_ip,
                              lb_port, bootstrap_token, lb_dns='',
                              pod_subnet="10.233.0.0/16",
-                             pod_network="CALICO", dex=None):
+                             pod_network="CALICO", dex=None,
+                             k8s_version="1.12.7"):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -249,16 +256,27 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                      "creation of the cluster.".format(master))
             if not index:
                 # create userdata for first master node if not existing
+                koris_env = {
+                    "master_ips": [master.ip_address for master in masters],
+                    "master_names": [master.name for master in masters],
+                    "lb_dns": lb_dns,
+                    "lb_ip": lb_ip,
+                    "lb_port": lb_port,
+                    "bootstrap_token": bootstrap_token,
+                    "pod_subnet": pod_subnet,
+                    "pod_network": pod_network,
+                    "k8s_version": k8s_version
+                }
+
                 userdata = str(FirstMasterInit(ssh_key, ca_bundle,
-                                               cloud_config, masters,
-                                               lb_ip, lb_port,
-                                               bootstrap_token, lb_dns,
-                                               pod_subnet,
-                                               pod_network,
-                                               dex=dex))
+                                               cloud_config,
+                                               dex=dex,
+                                               koris_env=koris_env))
             else:
                 # create userdata for following master nodes if not existing
-                userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex))
+                koris_env = {"k8s_version": k8s_version}
+                userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex,
+                                             koris_env=koris_env))
 
             tasks.append(loop.create_task(
                 master.create(self._info.master_flavor, self._info.secgroups,
@@ -305,7 +323,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                            self._info.secgroups)
         return master
 
-    def add_master(self, zone, flavor):
+    def add_master(self, zone, flavor, k8s_version="1.12.7"):
         """Adds a new instance in OpenStack which will be provisioned as master.
 
         - Create a new machine
@@ -326,7 +344,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
 
         key = self._info.conn.compute.find_keypair(self._info.name)
 
-        init = NthMasterInit(cloud_config, key.public_key)
+        koris_env = {"k8s_version": k8s_version}
+        init = NthMasterInit(cloud_config, key.public_key, koris_env=koris_env)
         userdata = str(init)
         task = loop.create_task(master.create(
             self._info.master_flavor, self._info.secgroups, self._info.keypair,
@@ -426,6 +445,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         execute the complete cluster build
         """
 
+        # Extract Kubernetes version
+        if 'version' in config and 'k8s' in config['version']:
+            k8s_version = config['version']['k8s']
+        else:
+            k8s_version = "1.12.7"
+
+        LOGGER.info("Building Kubernetes %s cluster '%s'",
+                    k8s_version, config['cluster-name'])
+
         LOGGER.info("Setting up networking ...")
         cloud_config = self.create_network()
         # generate CA key pair for the cluster, that is used to authenticate
@@ -489,7 +517,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             bootstrap_token, lb_dns,
             config.get("pod_subnet", "10.233.0.0/16"),
             config.get("pod_network", "CALICO"),
-            dex=self.dex_conf)
+            dex=self.dex_conf,
+            k8s_version=k8s_version)
         loop = asyncio.get_event_loop()
         results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
@@ -506,7 +535,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Waiting for worker instances to be launched and the "
                     "LoadBalancer to be configured...")
         node_tasks = self.nodes_builder.create_initial_nodes(
-            cloud_config, ca_bundle, lb_ip, lb_port, bootstrap_token, discovery_hash
+            cloud_config, ca_bundle, lb_ip, lb_port, bootstrap_token,
+            discovery_hash, k8s_version=k8s_version
         )
 
         node_tasks.append(configure_lb_task)
