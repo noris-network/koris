@@ -16,7 +16,7 @@ import yaml
 
 from cryptography.hazmat.primitives import serialization
 
-from koris import __version__
+from koris import __version__, KUBERNETES_BASE_VERSION
 from koris.ssl import b64_cert, b64_key
 from koris.util.logger import Logger
 
@@ -328,7 +328,7 @@ class NodeInit(BaseInit):
     """
     def __init__(self, ca_cert, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
-                 os_version="16.04", k8s_version="1.12.7"):
+                 os_version="16.04", k8s_version=KUBERNETES_BASE_VERSION):
         """
         """
         super().__init__(cloud_config)
