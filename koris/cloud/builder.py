@@ -14,6 +14,7 @@ import urllib
 import openstack
 from cryptography.hazmat.primitives import serialization
 
+from koris import KUBERNETES_BASE_VERSION
 from koris.cli import write_kubeconfig
 from koris.deploy.k8s import K8S
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
@@ -96,7 +97,7 @@ class NodeBuilder:
                            flavor=None,
                            zone=None,
                            amount=1,
-                           k8s_version="1.12.7"):
+                           k8s_version=KUBERNETES_BASE_VERSION):
         """
         Create tasks for adding nodes when running ``koris add --args ...``
 
@@ -160,7 +161,7 @@ class NodeBuilder:
                              lb_port,
                              bootstrap_token,
                              discovery_hash,
-                             k8s_version="1.12.7"):
+                             k8s_version=KUBERNETES_BASE_VERSION):
         """
         Create all initial nodes when running ``koris apply <config>``
         """
@@ -180,7 +181,7 @@ class NodeBuilder:
                             bootstrap_token,
                             discovery_hash,
                             nodes,
-                            k8s_version="1.12.7"):
+                            k8s_version=KUBERNETES_BASE_VERSION):
         """
         Create future tasks for creating the cluster worker nodes
         """
@@ -237,7 +238,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                              lb_port, bootstrap_token, lb_dns='',
                              pod_subnet="10.233.0.0/16",
                              pod_network="CALICO", dex=None,
-                             k8s_version="1.12.7"):
+                             k8s_version=KUBERNETES_BASE_VERSION):
         """
         Create future tasks for creating the cluster control plane nodesself.
         """
@@ -323,7 +324,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                            self._info.secgroups)
         return master
 
-    def add_master(self, zone, flavor, k8s_version="1.12.7"):
+    def add_master(self, zone, flavor, k8s_version=KUBERNETES_BASE_VERSION):
         """Adds a new instance in OpenStack which will be provisioned as master.
 
         - Create a new machine
@@ -449,7 +450,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         if 'version' in config and 'k8s' in config['version']:
             k8s_version = config['version']['k8s']
         else:
-            k8s_version = "1.12.7"
+            k8s_version = KUBERNETES_BASE_VERSION
 
         LOGGER.info("Building Kubernetes %s cluster '%s'",
                     k8s_version, config['cluster-name'])

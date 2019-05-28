@@ -29,6 +29,7 @@ from kubernetes.utils import create_from_yaml
 
 import yaml
 
+from koris import KUBERNETES_BASE_VERSION
 from koris.ssl import read_cert
 from koris.ssl import discovery_hash as ssl_discovery_hash
 from koris.util.util import retry
@@ -456,7 +457,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.success("Bootstrap of new master finished successfully")
 
     # pylint: disable=line-too-long
-    def launch_master_adder(self, k8s_version="1.12.7"):
+    def launch_master_adder(self, k8s_version=KUBERNETES_BASE_VERSION):
         """Launch the add_master_deployment.
 
         Args:

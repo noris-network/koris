@@ -21,7 +21,7 @@ from mach import mach1
 
 from koris.util.util import KorisVersionCheck
 
-from . import __version__
+from . import __version__, KUBERNETES_BASE_VERSION
 from .cli import remove_cluster, confirm
 from .deploy.k8s import K8S
 from .util.logger import Logger
@@ -84,7 +84,7 @@ def add_node(cloud_config,
     if 'version' in config_dict and 'k8s' in config_dict['version']:
         k8s_version = config_dict['version']['k8s']
     else:
-        k8s_version = "1.12.7"
+        k8s_version = KUBERNETES_BASE_VERSION
         config_dict.update({"version": {"k8s": k8s_version}})
 
     tasks = node_builder.create_nodes_tasks(k8s.host,
@@ -123,7 +123,7 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
     if 'version' in config_dict and 'k8s' in config_dict['version']:
         k8s_version = config_dict['version']['k8s']
     else:
-        k8s_version = "1.12.7"
+        k8s_version = KUBERNETES_BASE_VERSION
         config_dict.update({"version": {"k8s": k8s_version}})
 
     if not bootstrap_only:

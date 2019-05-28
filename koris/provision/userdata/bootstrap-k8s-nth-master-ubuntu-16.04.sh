@@ -14,8 +14,8 @@ if [ -f /etc/kubernetes/koris.env ]; then
     source /etc/kubernetes/koris.env
 fi
 
-#### Versions for Kube 1.12.7
-export KUBE_VERSION=${KUBE_VERSION:-1.12.7}
+#### Versions for Kube 1.12.8
+export KUBE_VERSION=${KUBE_VERSION:-1.12.8}
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 
