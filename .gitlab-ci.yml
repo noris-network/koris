@@ -463,6 +463,28 @@ cleanup:
     expire_in: 1 week
 
 
+clean-cluster-with-floating-ip:
+  stage: cleanup
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add make
+  - "pip3 install  -r requirements_ci.txt"
+  - "pip3 install -q -e ."
+  - make destroy-cluster-with-floating-ip
+  when: always
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+  artifacts:
+    paths:
+      - ".coverage.destroy"
+    expire_in: 1 week
+
+
 clean-bare-metal:
   stage: cleanup
   image: oz123/koris-alpine:0.1.5
