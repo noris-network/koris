@@ -442,4 +442,14 @@ complete-release:
 abort-release:
 	make -f release.mk $@
 
+cluster-with-floating-ip:
+	FIP=$$(openstack floating ip list -f json | jq -c  '.[]  | select(.Port == null) ' | head -n 1 | jq -r '."Floating IP Address"'); \
+	sed 's/floatingip: false/floatingip: '$${FIP}'/g' tests/koris_test.yml > tests/koris_test_floating_ip.yml; \
+	sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" tests/koris_test_floating_ip.yml; \
+	sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" tests/koris_test_floating_ip.yml; \
+	sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test_floating_ip.yml; \
+	sed -i "s/n-masters: 3/n-masters: 1/g" tests/koris_test_floating_ip.yml; \
+	sed -i "s/n-nodes: 3/n-nodes: 0/g" tests/koris_test_floating_ip.yml
+	$(PY) -m coverage run -m koris -v debug apply tests/koris_test_floating_ip.yml
+
 # vim: tabstop=4 shiftwidth=4
