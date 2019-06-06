@@ -448,11 +448,13 @@ update-config-with-floating-ip: update-config
 	sed 's/floatingip: false/floatingip: '$(FIP)'/g' tests/koris_test.yml > tests/koris_test_floating_ip.yml
 	sed -i "s/n-masters: 3/n-masters: 1/g" tests/koris_test_floating_ip.yml
 	sed -i "s/n-nodes: 3/n-nodes: 0/g" tests/koris_test_floating_ip.yml
+	sed -i "s/cluster-name: '$(CLUSTER_NAME)'/cluster-name: '$(CLUSTER_NAME)-fip'/g" tests/koris_test_floating_ip.yml
+	cat tests/koris_test_floating_ip.yml
 
 cluster-with-floating-ip: update-config-with-floating-ip
 	$(PY) -m coverage run -m koris -v debug apply tests/koris_test_floating_ip.yml
 
-destroy-cluster-flationg-ip: reset-config update-config-with-floating-ip
+destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip
 	$(PY) -m coverage run -m koris -v debug destroy -f tests/koris_test_floating_ip.yml
 
 # vim: tabstop=4 shiftwidth=4
