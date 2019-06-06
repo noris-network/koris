@@ -312,10 +312,7 @@ class LoadBalancer:
         self._existing_floating_ip = None
         self.conn = conn
 
-        self.floatingip = config.get('loadbalancer', {}).get('floatingip', '')
-
-        if not self.floatingip:
-            self.floatingip = None
+        self.floatingip = config.get('loadbalancer', {}).get('floatingip', None)
 
     def check_floating_ip_availability(self, fip):
         """
@@ -328,7 +325,6 @@ class LoadBalancer:
         exits, if floating ip not available in pool
         exits, if floating ip already being used
         """
-
         fip = self.conn.network.find_ip(fip)
 
         if not fip:
@@ -495,9 +491,6 @@ class LoadBalancer:
             master_ips (list): A list of the master IP addresses
         """
 
-        if self.floatingip:
-            self.check_floating_ip_availability(self.floatingip)
-
         # If not present, add listener
         if not self._data.listeners:
             listener = self.add_listener(name=MASTER_LISTENER_NAME)
@@ -546,6 +539,7 @@ class LoadBalancer:
         else:
             LOGGER.debug("Reusing existing LoadBalancer ...")
             self._existing_floating_ip = None
+            self.check_floating_ip_availability(self.floatingip)
             fip_addr = self._floating_ip_address(lb)
             LOGGER.success("Loadbalancer IP: %s", fip_addr)
             self._id = lb.id
@@ -656,7 +650,6 @@ class LoadBalancer:
 
     def associate_floating_ip(self, loadbalancer):
         """Associates a Floating IP with the LoadBalancer"""
-
         valid_ip = valid_ipv4(self.floatingip) or valid_ipv6(self.floatingip)
         if not valid_ip:
             LOGGER.error("'%s' is not a valid IP address", self.floatingip)
