@@ -38,6 +38,7 @@ REV_NUMBER = $(shell git rev-parse --short ${REV})
 CLUSTER_NAME = koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
+CONFIG_FILE ?= tests/koris_test.yml
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
@@ -160,7 +161,7 @@ compliance-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
-	$(PY) -m coverage run -m koris -v debug apply tests/koris_test.yml
+	$(PY) -m coverage run -m koris -v debug apply $(CONFIG_FILE)
 
 add-nodes: FLAVOR ?= ECS.UC1.4-4
 add-nodes: NUM ?= 2
@@ -329,7 +330,7 @@ expose-wait:
 
 
 reset-config:
-	git checkout tests/koris_test.yml
+	git checkout $(CONFIG_FILE)
 
 curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 curl-run:
@@ -379,25 +380,25 @@ security-checks-nodes:
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-[[:digit:]]' | head -n 1)
 update-config:
-	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" tests/koris_test.yml
-	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" tests/koris_test.yml
-	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" tests/koris_test.yml
-	@cat tests/koris_test.yml
+	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" $(CONFIG_FILE)
+	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" $(CONFIG_FILE)
+	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" $(CONFIG_FILE)
+	@cat $(CONFIG_FILE)
 
 clean-cluster: update-config
-	$(PY) -m coverage run -m koris -v debug destroy tests/koris_test.yml --force
+	$(PY) -m coverage run -m koris -v debug destroy $(CONFIG_FILE) --force
 
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
-		mv -v tests/koris_test.updated.yml tests/koris_test.yml; \
+		mv -v tests/koris_test.updated.yml  $(CONFIG_FILE); \
 		if [ -r tests/koris_test.master.yml ]; then \
-			sed -i 's/n-masters:\ 3/n-masters:\ 4/' tests/koris_test.yml; \
+			sed -i 's/n-masters:\ 3/n-masters:\ 4/' $(CONFIG_FILE); \
 		fi; \
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
-	$(PY) -m coverage run -m koris -v debug destroy tests/koris_test.yml --force
-	@git checkout tests/koris_test.yml
+	$(PY) -m coverage run -m koris -v debug destroy $(CONFIG_FILE) --force
+	@git checkout $(CONFIG_FILE)
 	@rm -fv ${KUBECONFIG}
 	@rm -vfR certs-${CLUSTER_NAME}
 
@@ -441,5 +442,22 @@ complete-release:
 
 abort-release:
 	make -f release.mk $@
+
+update-config-with-floating-ip:	FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
+update-config-with-floating-ip:	FIP ?= $(shell openstack floating ip list -f json | jq -c  '.[]  | select(.Port == null) ' | head -n 1 | jq -r '."Floating IP Address"')
+update-config-with-floating-ip: update-config
+	sed 's/floatingip: false/floatingip: '$(FIP)'/g' $(CONFIG_FILE) >  $(FILENAME)
+	sed -i "s/n-masters: 3/n-masters: 1/g" $(FILENAME)
+	sed -i "s/n-nodes: 3/n-nodes: 0/g" $(FILENAME)
+	sed -i "s/cluster-name: '$(CLUSTER_NAME)'/cluster-name: '$(CLUSTER_NAME)-fip'/g" $(FILENAME)
+	cat $(FILENAME)
+
+cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
+cluster-with-floating-ip: update-config-with-floating-ip
+	$(PY) -m coverage run -m koris -v debug apply $(FILENAME)
+
+destroy-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
+destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip
+	$(PY) -m coverage run -m koris -v debug destroy -f $(FILENAME)
 
 # vim: tabstop=4 shiftwidth=4

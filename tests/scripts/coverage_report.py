@@ -11,7 +11,7 @@ import subprocess
 FILES = [".coverage.unit-test", ".coverage.build-cluster",
          ".coverage.add-master", ".coverage.add-nodes",
          ".coverage.delete-master", ".coverage.delete-nodes",
-         ".coverage.destroy"]
+         ".coverage.destroy", ".coverage.floating-ip"]
 
 
 def main():
