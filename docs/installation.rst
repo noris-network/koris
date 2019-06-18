@@ -59,7 +59,7 @@ Clone the `Gitlab repo`_:
 
 Install required packages to OS:
 
-..code-block:: shell
+.. code-block:: shell
 
     $ apt-get update
     $ apt-get install python3-venv python3-dev
