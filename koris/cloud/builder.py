@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import serialization
 
 from koris import KUBERNETES_BASE_VERSION
 from koris.cli import write_kubeconfig
-from koris.deploy.k8s import K8S
+from koris.deploy.k8s import K8S, add_ingress_listeners
 from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
 from koris.ssl import create_key, create_ca, CertBundle
 from koris.ssl import discovery_hash as get_discovery_hash
@@ -597,8 +597,11 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.success("Kubernetes API is ready!")
         LOGGER.info("Waiting for all masters to become Ready ...")
 
-        k8s.add_all_masters_to_loadbalancer(len(master_tasks), lbinst)
+        k8s.add_all_masters_to_loadbalancer(config['cluster-name'],
+                                            len(master_tasks), lbinst)
         k8s.apply_addons(config)
+        add_ingress_listeners(k8s.nginx_ingress_ports, lbinst,
+                              master_ips + node_ips)
         LOGGER.success("Configured LoadBalancer to use all API servers")
         LOGGER.success("Kubernetes cluster is ready to use !")
         loop.close()
