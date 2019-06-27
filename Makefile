@@ -35,7 +35,7 @@ PYTEST_FLAGS ?=
 REV ?= HEAD
 BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
 REV_NUMBER = $(shell git rev-parse --short ${REV})
-CLUSTER_NAME = koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
+CLUSTER_NAME ?= koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
 CONFIG_FILE ?= tests/koris_test.yml
@@ -222,6 +222,17 @@ assert-audit-log:
 assert-metrics:
 	KUBECONFIG=$(KUBECONFIG) ./tests/scripts/assert_metrics.sh
 
+assert-nginx-ingress: MEMBERS := 6
+assert-nginx-ingress:
+	NAMESPACE="ingress-nginx" \
+	KUBECONFIG=${KUBECONFIG} \
+	TO_CHECK="-l app.kubernetes.io/name=ingress-nginx" \
+	./tests/scripts/assert_nginx_controller.sh;
+	./tests/scripts/assert_members.sh ${MEMBERS} $(CLUSTER_NAME) Ingress-HTTP-$(CLUSTER_NAME)
+	./tests/scripts/assert_members.sh ${MEMBERS} $(CLUSTER_NAME) Ingress-HTTPS-$(CLUSTER_NAME)
+	# assert green blue ingress works
+	KUBECONFIG=${KUBECONFIG} ./tests/scripts/blue_green_ingress.sh
+
 assert-control-plane: NUM ?= 4
 assert-control-plane: \
 	assert-kube-apiservers \
@@ -267,7 +278,7 @@ assert-kube-scheduler:
 
 assert-members: NUM ?= 4
 assert-members:
-	./tests/scripts/assert_members.sh $(NUM) $(CLUSTER_NAME)
+	./tests/scripts/assert_members.sh $(NUM) $(CLUSTER_NAME) master-pool-$(CLUSTER_NAME)
 
 show-nodes:
 	@echo "Waiting for nodes to join ..."
@@ -302,7 +313,7 @@ integration-patch-wait:
 		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
 		sleep 1; \
 		echo -n "."; \
-	done ; \
+	done;
 
 
 integration-patch:

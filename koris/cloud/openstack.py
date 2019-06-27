@@ -368,9 +368,11 @@ class LoadBalancer:
         if not listener:
             return None
 
-        if listener.name != MASTER_LISTENER_NAME:
+        listener_name = '-'.join((MASTER_LISTENER_NAME,
+                                  self.config['cluster-name']))
+        if listener.name != listener_name:
             LOGGER.error("Listener '%s' (%s) should be named (%s)",
-                         listener.name, listener.id, MASTER_LISTENER_NAME)
+                         listener.name, listener.id, listener_name)
             return None
 
         pool = self._pool_info(listener.default_pool_id)
@@ -403,6 +405,8 @@ class LoadBalancer:
 
         # Iterate over Listeners associated with LB...
         master_listeners = []
+        listener_name = '-'.join((MASTER_LISTENER_NAME,
+                                  self.config['cluster-name']))
         for li in lb.listeners:
             # Check if single Listener has name MASTER_LISTENER_NAME
             try:
@@ -416,11 +420,12 @@ class LoadBalancer:
                 continue
 
             # This one is good, append to list
-            if listener.name == MASTER_LISTENER_NAME:
+            if listener.name == listener_name:
                 master_listeners.append(listener)
 
         if not master_listeners:
-            LOGGER.error("Unable to find Listener with name '%s'", MASTER_LISTENER_NAME)
+            LOGGER.error("Unable to find Listener with name '%s'",
+                         listener_name)
             return None
 
         if len(master_listeners) > 1:
@@ -493,14 +498,17 @@ class LoadBalancer:
 
         # If not present, add listener
         if not self._data.listeners:
-            listener = self.add_listener(name=MASTER_LISTENER_NAME)
+            listener = self.add_listener(
+                name='-'.join((MASTER_LISTENER_NAME, self.config['cluster-name'])))  # noqa
             listener_id = listener.id
         else:
             LOGGER.debug("Reusing listener %s", self._data.listeners[0].id)
             listener_id = self._data.listeners[0].id
 
         if not self._data.pools:
-            pool = self.add_pool(listener_id, name=MASTER_POOL_NAME)
+            pool = self.add_pool(
+                listener_id,
+                name='-'.join((MASTER_POOL_NAME, self.config['cluster-name'])))
         else:
             LOGGER.debug("Reusing pool, removing all members ...")
             # (aknipping) This should be handled differently. If there are multiple

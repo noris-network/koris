@@ -1,0 +1,18 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: name-virtual-host-ingress
+spec:
+  rules:
+  - host: green.bar.com
+    http:
+      paths:
+      - backend:
+          serviceName: nginx-green
+          servicePort: 80
+  - host: blue.bar.com
+    http:
+      paths:
+      - backend:
+          serviceName: nginx-blue
+          servicePort: 80

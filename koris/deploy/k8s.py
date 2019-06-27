@@ -244,7 +244,12 @@ def parse_etcd_response(resp):
 
 
 class K8S:  # pylint: disable=too-many-locals,too-many-arguments
-    """Class allowing various interactions with a Kubernets cluster."""
+    """Class allowing various interactions with a Kubernets cluster.
+
+    Args:
+        config (str): File path for the kubernetes configuration file
+        manfiest_path (str): Path for kubernetes manifests to be applied
+    """
 
     def __init__(self, config, manifest_path=None):
 
@@ -332,7 +337,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
-    def add_all_masters_to_loadbalancer(self, n_masters, lb_inst):
+    def add_all_masters_to_loadbalancer(self, cluster_name, n_masters, lb_inst):
         """Adds all master nodes to the LoadBalancer listener.
 
         If the number of members in the master listener pool of the LoadBalancer
@@ -340,14 +345,17 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         the pool as soon as they have node status "Ready".
 
         Args:
+            cluster_name (string): the name of the cluster
             n_master (int): Number of desired master nodes.
             lb_inst (:class:`.cloud.openstack.LoadBalancer): A configured
                 LoadBalancer instance.
         """
         cond = {'Ready': 'True'}
         master_listener = lb_inst.master_listener
+        listener_name = '-'.join((MASTER_LISTENER_NAME,
+                                  cluster_name))
         if not master_listener:
-            LOGGER.error(f"No {MASTER_LISTENER_NAME} found, aborting")
+            LOGGER.error(f"No {listener_name} found, aborting")
             sys.exit(1)
 
         try:
@@ -355,8 +363,7 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             mem = master_listener['pool']['members']  # noqa #  pylint: disable=unused-variable
             pool_id = master_listener['pool']['id']
         except KeyError as exc:
-            err = f"Unable to extract info of {MASTER_LISTENER_NAME}: {exc}"
-            LOGGER.error(err)
+            LOGGER.error(f"Unable to extract info of {listener_name}: {exc}")
             sys.exit(1)
 
         while len(lb_inst.master_listener['pool']['members']) < n_masters:
@@ -759,6 +766,42 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             LOGGER.info("Applying add-on [%s]", addon.name)
             addon.apply(self.client, apply_func=apply_func)
 
+    @property
+    def nginx_ingress_ports(self):
+        """
+        get the ingress-nginx service ports as dictionary
+        """
+        ingress = self.api.list_namespaced_service(
+            'ingress-nginx',
+            label_selector="app.kubernetes.io/name=ingress-nginx",
+            limit=1)
+
+        return {i.name.upper(): i for i in ingress.items[0].spec.ports}
+
+
+def add_ingress_listeners(nginx_ingress_ports, lbinst, all_ips):
+    """
+    Reconfigure the Openstack LoadBalancer - add an HTTP and HTTPS listener
+    for nginx ingress controller
+
+    Args:
+        lbinst (:class:`.cloud.openstack.LoadBalancer`): A configured
+            LoadBalancer instance.
+        all_ips (list) : a list of all cluster member IPs
+    """
+    for key, port in {'Ingress-HTTP': 80, 'Ingress-HTTPS': 443}.items():
+        protocol = key.split("-")[-1]
+        name = '-'.join((key, lbinst.config['cluster-name']))
+        listener = lbinst.add_listener(
+            name=name,
+            protocol=protocol,
+            protocol_port=port)
+
+        pool = lbinst.add_pool(listener.id, protocol=protocol, name=name)
+        for ip in all_ips:
+            lbinst.add_member(pool.id, ip,
+                              protocol_port=nginx_ingress_ports[protocol].node_port)  # noqa
+
 
 def get_addons(config):
     """
@@ -773,7 +816,7 @@ def get_addons(config):
     for item in config.get('addons', {}):
         yield KorisAddon(item)
 
-    for item in ['metrics-server']:
+    for item in ['metrics-server', 'nginx-ingress']:
         yield KorisAddon(item)
 
 

@@ -79,6 +79,8 @@ ETCD_RESPONSE = "".join(['{"header":{"cluster_id":8827847562006938542,',
                          '"peerURLs":["https://10.32.192.66:2380"],',
                          '"clientURLs":["https://10.32.192.66:2379"]}]}'])
 
+MASTER_LISTENER_NAME = "-".join((MASTER_LISTENER_NAME, 'test'))
+
 
 def mock_listener():
     out = Munch()
@@ -137,7 +139,7 @@ def mock_member(nr=1):
 
 
 def default_data():
-    """A default LoadBlaancer Object as returned from the OpenStack SDK"""
+    """A default LoadBalancer Object as returned from the OpenStack SDK"""
 
     LB = Munch()
     LB.provider = "amphora"

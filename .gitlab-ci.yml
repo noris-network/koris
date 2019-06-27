@@ -321,6 +321,15 @@ check-added-nodes-ready:
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
+check-nginx-ingress-ready:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - "pip3 install -q -e ."
+  - "make assert-nginx-ingress"
 
 # --[ RESIZE DELETE ]--
 delete-added-nodes:

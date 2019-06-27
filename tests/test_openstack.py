@@ -330,7 +330,7 @@ def test_master_listener_single_member(get_os):
     assert len(master_listener['pool']['members']) == 1
     assert master_listener['pool']['members'][0]['address'] == pool_info['members'][0]['address'] # noqa
     assert master_listener['pool']['members'][0]['id'] == pool_info['members'][0]['id'] # noqa
-    assert master_listener['name'] == MASTER_LISTENER_NAME
+    assert master_listener['name'] == MASTER_LISTENER_NAME + '-' + 'test'
     assert master_listener['pool']['name'] == MASTER_POOL_NAME
 
 
@@ -348,7 +348,7 @@ def test_master_multiple_members(get_os):
     assert isinstance(master_listener['pool'], dict)
     assert isinstance(master_listener['pool']['members'], list)
     assert len(master_listener['pool']['members']) == len(mpi['members'])
-    assert master_listener['name'] == MASTER_LISTENER_NAME
+    assert master_listener['name'] == MASTER_LISTENER_NAME + '-' + 'test'
     assert master_listener['pool']['name'] == MASTER_POOL_NAME
 
     for i in range(len(mpi['members'])):
