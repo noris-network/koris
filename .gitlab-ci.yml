@@ -61,19 +61,19 @@ wait-for-resources:
 
 
 # --[ BUILD ]--
-bare-metal-build:
-  stage: build-cluster
-  image: oz123/koris-alpine:0.1.5
-  script:
-   - apk add openssh
-   - pip install python-openstackclient python-octaviaclient
-   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
-   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
-   - make -f tests/makefile-bare-metal.mk build-cluster-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
+#bare-metal-build:
+#  stage: build-cluster
+#  image: oz123/koris-alpine:0.1.5
+#  script:
+#   - apk add openssh
+#   - pip install python-openstackclient python-octaviaclient
+#   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+#   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
+#   - make -f tests/makefile-bare-metal.mk build-cluster-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
 
 build-cluster:
   stage: build-cluster
@@ -116,21 +116,21 @@ build-cluster-with-floating-ip:
 
 
 # --[ INTEGRATION TESTS ]--
-bare-metal-integration:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.5
-  script:
-   - apk add openssh
-   - pip install python-openstackclient python-octaviaclient
-   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
-   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
-   - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
-   - make -f tests/makefile-bare-metal.mk assert-audit-policy USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
+#bare-metal-integration:
+#  stage: integration-test
+#  image: oz123/koris-alpine:0.1.5
+#  script:
+#   - apk add openssh
+#   - pip install python-openstackclient python-octaviaclient
+#   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+#   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
+#   - make -f tests/makefile-bare-metal.mk integration-test-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+#   - make -f tests/makefile-bare-metal.mk assert-audit-policy USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
 
 integration-test:
   stage: integration-test
@@ -174,6 +174,22 @@ check-dns:
       - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
       - $SKIP_E2E
 
+check-cinder:
+  stage: integration-test
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+  - "pip3 install -q -e ."
+  - "make test-cinder-volumes"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+      - $SKIP_E2E
+
 check-members:
   stage: integration-test
   image: oz123/koris-alpine:0.1.5
@@ -197,7 +213,6 @@ assert-control-plane:
     LANG: "C.UTF-8"
   script:
   - "pip3 install -q -e ."
-  - "make assert-masters NUM=3"
   - "make assert-control-plane NUM=3"
   except:
     variables:
@@ -494,7 +509,23 @@ clean-cluster-with-floating-ip:
     expire_in: 1 week
 
 
-clean-bare-metal:
+#clean-bare-metal:
+#  stage: cleanup
+#  image: oz123/koris-alpine:0.1.5
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#   - pip install python-openstackclient python-octaviaclient
+#   - make -f tests/makefile-bare-metal.mk clean-all CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+#  when: always
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+
+clean-cinder-volumes:
   stage: cleanup
   image: oz123/koris-alpine:0.1.5
   variables:
@@ -502,13 +533,12 @@ clean-bare-metal:
     LANG: "C.UTF-8"
   script:
    - pip install python-openstackclient python-octaviaclient
-   - make -f tests/makefile-bare-metal.mk clean-all CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+   - make clean-cinder-volumes
   when: always
   except:
     variables:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
-
 
 # --[ COVERAGE REPORT ]--
 coverage-report:

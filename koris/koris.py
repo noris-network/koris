@@ -12,9 +12,9 @@ import os
 import shutil
 import ssl
 import sys
+import urllib
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
-import urllib3
 import yaml
 
 from mach import mach1
@@ -98,17 +98,18 @@ def add_node(cloud_config,
     node_builder.launch_new_nodes(tasks)
 
 
-# pylint: disable=too-many-locals
-def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
-               os_cluster_info, k8s):
+def add_master(builder,
+               zone,
+               flavor,
+               config,
+               config_dict,
+               k8s):
     """Add a new master to OpenStack and the Kubernetes cluster.
 
     Will add a new node to OpenStack, adjust the config, bootstrap the master
     and add the IP to the LoadBalancer pool.
 
     Args:
-        bootstrap_only (list): A list of name and IP for the node to be
-            bootstrapped
          builder (:class:`.cloud.openstack.ControlPlaneBuilder`): A
             ControlPlanBuilder instance.
         zone (str): The AZ to add the new node in.
@@ -126,25 +127,17 @@ def add_master(bootstrap_only, builder, zone, flavor, config, config_dict,
         k8s_version = KUBERNETES_BASE_VERSION
         config_dict.update({"version": {"k8s": k8s_version}})
 
-    if not bootstrap_only:
-        master = builder.add_master(zone, flavor, k8s_version)
-        name, ip_address = master.name, master.ip_address
-        update_config(config_dict, config, 1, role='masters')
-
-    try:
-        k8s.bootstrap_master(name, ip_address, k8s_version)
-    except ValueError as err:
-        LOGGER.error(f"Error: {err}")
-
-        # Cleanup
-        LOGGER.info("Deleting instance %s from OpenStack ...", name)
-        delete_instance(name, os_cluster_info.conn)
-
-        sys.exit(1)
-    except urllib3.exceptions.MaxRetryError:
-        LOGGER.error(("Connection failed! Are you using the correct "
-                      "kubernetes context?"))
-        sys.exit(1)
+    uri = urllib.parse.urlparse(k8s.host)
+    loc, port = uri.netloc.split(":")
+    master = builder.add_master(
+        zone, flavor, k8s_version, k8s.config,
+        koris_env={'bootstrap_token': k8s.get_bootstrap_token(),
+                   'lb_dns': loc,
+                   'lb_ip': loc,
+                   'lb_port': port,
+                   'current_cluster': k8s.etcd_cluster_status(),
+                   'auto_join': 1})
+    update_config(config_dict, config, 1, role='masters')
 
     # Adding master to LB
     conn = get_connection()
@@ -374,8 +367,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
 
     # pylint: disable=too-many-statements
     def add(self, config: str, flavor: str = None, zone: str = None,
-            role: str = 'node', amount: int = 1, ip_address: str = None,
-            name: str = None):
+            role: str = 'node', amount: int = 1):
         """
         Add a worker node or master node to the cluster.
 
@@ -384,8 +376,6 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         zone - the availablity zone
         role - one of node or master
         amount - the number of worker nodes to add (masters are not supported)
-        address - the IP address of the host to bootstrap
-        hostname - the hostname to bootstrap
         ---
         Add a node or a master to the current active context in your KUBECONFIG.
         You can specify any other configuration file by overriding the
@@ -393,21 +383,6 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         If you specify a name and IP address the program will only try to join
         it to the cluster without trying to create the host in the cloud first.
         """
-        bootstrap_only = list(filter(None, [name, ip_address]))
-
-        if bootstrap_only:
-            if len(bootstrap_only) != 2:
-                LOGGER.error(("To bootstrap a node you must specify both"
-                              "name and IP"))
-                sys.exit(1)
-
-            LOGGER.info(("Bootstraping host {} with address {}, "
-                         "assuming it's present".format(name, ip_address)))
-
-        elif len(list(filter(None, [flavor, zone]))) < 2:
-            LOGGER.error(("You  must specify both flavor and zone if you want"
-                          "to create an instance"))
-            sys.exit(1)
 
         with open(config, 'r') as stream:
             config_dict = yaml.safe_load(stream)
@@ -442,8 +417,8 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
             builder = ControlPlaneBuilder(config_dict, os_cluster_info,
                                           cloud_config)
             try:
-                add_master(bootstrap_only, builder, zone, flavor, config,
-                           config_dict, os_cluster_info, k8s)
+                add_master(builder, zone, flavor, config,
+                           config_dict, k8s)
             except (RuntimeError, ValueError) as exc:
                 LOGGER.error(f"Error: {exc}")
                 sys.exit(1)

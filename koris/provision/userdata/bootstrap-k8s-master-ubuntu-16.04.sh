@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 ###
 # A script to create a HA K8S cluster on OpenStack using pure bash and kubeadm
 #
@@ -51,6 +53,11 @@ export OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
 export OIDC_CA_FILE=${OIDC_CA_FILE:-""}
 export ADDTOKEN=1
 
+# find if better way to compare versions exists
+# version numbers are splited in the "." and the second part is being compared
+# ex. "1.12 vs 1.13 means compare 12 with 13"
+KUBE_VERSION_COMPARE="$(echo $KUBE_VERSION | cut -d '.' -f 2 )"
+
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -94,10 +101,6 @@ etcd:
 networking:
     # This CIDR is a Calico default. Substitute or remove for your CNI provider.
     podSubnet: ${POD_SUBNET}
-#apiServerExtraArgs:
-#  allow-privileged: "true"
-#  enable-admission-plugins: "Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
-#  feature-gates: "PersistentLocalVolumes=False,VolumeScheduling=false"
 controllerManagerExtraArgs:
   allocate-node-cidrs: "true"
   cluster-cidr: ${POD_SUBNET}
@@ -181,6 +184,127 @@ TOKEN
 fi
 }
 
+function create_kubeadm_config_new_version () {
+    HOST_NAME=$1
+    HOST_IP=$2
+
+    cat <<TMPL > kubeadm-"${HOST_NAME}".yaml
+apiVersion: kubeadm.k8s.io/v1beta1
+kind: ClusterConfiguration
+kubernetesVersion: v${KUBE_VERSION}
+apiServer:
+  certSANs:
+  - "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
+controlPlaneEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
+networking:
+  # This CIDR is a Calico default. Substitute or remove for your CNI provider.
+  podSubnet: ${POD_SUBNET}
+  # dnsDomain: cluster.local
+  # serviceSubnet: 10.96.0.0/12
+controllerManager:
+  extraArgs:
+    allocate-node-cidrs: "true"
+    cluster-cidr: ${POD_SUBNET}
+TMPL
+# if On baremetal we don't need all OpenStack cloud provider flags
+if [[ ${OPENSTACK} -eq 1 ]]; then
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+    cloud-provider: openstack
+    cloud-config: /etc/kubernetes/cloud.config
+    cloud-config: /etc/kubernetes/cloud.config
+  extraVolumes:
+   - hostPath: /etc/kubernetes/cloud.config
+     name: cloud-config
+     mountPath: /etc/kubernetes/cloud.config
+     pathType: File
+apiServer:
+  extraArgs:
+    cloud-provider: openstack
+  extraVolumes:
+  - hostPath: /etc/kubernetes/cloud.config
+    name: cloud-config
+    mountPath: /etc/kubernetes/cloud.config
+    pathType: File
+TMPL
+else
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+apiServer:
+  extraArgs:
+TMPL
+fi
+
+# If Dex is to be deployed, we need to start the apiserver with extra args.
+if [[ ! -z ${OIDC_CLIENT_ID} ]]; then
+cat <<TMPL > dex.yaml
+apiServer:
+  extraArgs:
+    oidc-issuer-url: "${OIDC_ISSUER_URL}"
+    oidc-client-id: ${OIDC_CLIENT_ID}
+    oidc-ca-file: ${OIDC_CA_FILE}
+    oidc-username-claim: ${OIDC_USERNAME_CLAIM}
+    oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
+TMPL
+yq m -i -a kubeadm-"${HOST_NAME}".yaml dex.yaml
+fi
+
+# add audit policy
+cat <<AUDITPOLICY >> auditPolicy.yml
+apiServer:
+  extraArgs:
+    audit-log-maxsize: "24"
+    audit-log-maxbackup: "30"
+    audit-log-maxage: "90"
+    audit-log-path: /var/log/kubernetes/audit.log
+    audit-policy-file: /etc/kubernetes/audit-policy.yml
+AUDITPOLICY
+
+yq m -i -a kubeadm-"${HOST_NAME}".yaml auditPolicy.yml
+
+# add volumes for audit logs
+cat << AV >> auditVolumes.yml
+apiServer:
+  extraVolumes:
+  - name: var-log-kubernetes
+    hostPath: /var/log/kubernetes
+    mountPath: /var/log/kubernetes
+    readOnly: true
+    pathType: DirectoryOrCreate
+  - name: "audit-policy"
+    hostPath: "/etc/kubernetes/audit-policy.yml"
+    mountPath: "/etc/kubernetes/audit-policy.yml"
+    readOnly: true
+    pathType: File
+AV
+
+yq m -i -a kubeadm-"${HOST_NAME}".yaml auditVolumes.yml
+
+if [[ ${ADDTOKEN} -eq 1 ]]; then
+cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
+---
+apiVersion: kubeadm.k8s.io/v1beta1
+kind: InitConfiguration
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: ${BOOTSTRAP_TOKEN}
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  name: ${HOSTNAME}
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+TOKEN
+fi
+
+DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
+                 openssl rsa -pubin -outform der 2>/dev/null | \
+                 openssl dgst -sha256 -hex | sed 's/^.* //')
+
+}
 
 # create secrets and config maps
 # these are used by the master pod which we call from the CLI
@@ -210,11 +334,6 @@ function make_secrets() {
     kubectl ${args} tls "etcd-ca" --key /etc/kubernetes/pki/etcd/ca.key --cert /etc/kubernetes/pki/etcd/ca.crt
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} "etcd-peer"
-    # shellcheck disable=SC2086
-    kubectl ${args} tls "etcd-peer" --key /etc/kubernetes/pki/etcd/peer.key --cert /etc/kubernetes/pki/etcd/peer.crt
-
-    # shellcheck disable=SC2086
     kubectl ${del_args} "sa-pub"
     # shellcheck disable=SC2086
     kubectl ${args} generic "sa-pub" --from-file=/etc/kubernetes/pki/sa.pub
@@ -231,6 +350,7 @@ function make_secrets() {
 
     # shellcheck disable=SC2086
     kubectl ${k8senv} create configmap audit-policy --from-file="/etc/kubernetes/audit-policy.yml"
+    kubectl ${k8senv} create configmap kubeadm.yaml --from-file="kubeadm.yaml"
 
     if [[ ${OPENSTACK} -eq 1 ]]; then
         # shellcheck disable=SC2086
@@ -239,7 +359,7 @@ function make_secrets() {
         kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
     fi
 
-	if [[ ! -z ${OIDC_CA_FILE} ]]; then
+    if [[ ! -z ${OIDC_CA_FILE} ]]; then
         kubectl ${del_args} oidc-ca
         # shellcheck disable=SC2086
         kubectl ${args} generic oidc-ca --from-file="${OIDC_CA_FILE}"
@@ -247,59 +367,8 @@ function make_secrets() {
         kubectl ${k8senv} delete configmap dex-config --ignore-not-found=true
         # shellcheck disable=SC2086
         kubectl ${k8senv} create configmap dex-config --from-file="dex.tmpl"
-	fi
+    fi
 }
-
-# create a config map with a script to add a master
-function add_master_script_config_map() {
-
-    # a little bit of meta programming is possible in bash ;)
-    # typeset -f prints the code of a function
-    { echo "#!/bin/bash" ;
-      echo "set -e";
-      echo "export KUBE_VERSION=${KUBE_VERSION}";
-
-      # shellcheck disable=SC2034
-      typeset -f get_yq;
-      # shellcheck disable=SC2034
-      typeset -f copy_keys;
-      # shellcheck disable=SC2034
-      typeset -f create_kubeadm_config;
-      # shellcheck disable=SC2034
-      typeset -f wait_for_etcd;
-      typeset -f get_docker;
-      typeset -f get_kubeadm;
-      typeset -f bootstrap_deps_node
-      # shellcheck disable=SC2034
-      typeset -f add_master;
-      echo "if [ ! -z \${DEBUGADDMASTER} ]; then set -x; fi"
-      echo "mkdir -p /etch/kubernetes/"
-      echo "touch /etc/kubernetes/koris.env"
-      echo "HOST_NAME=\$1";
-      echo "HOST_IP=\$2";
-      echo "CURRENT_CLUSTER=\$3";
-      echo "ETCD_HOST=\$4";
-      echo "ETCD_IP=\$5";
-      echo "echo \$HOST_IP \$HOST_NAME >> /etc/hosts"
-	  echo "until ssh \${SSHOPTS} \${HOST_IP} which kubeadm; do sleep 2; done"
-      echo "ssh \${SSHOPTS} \${HOST_IP} sudo kubeadm reset -f"
-      echo "export LOAD_BALANCER_DNS=${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
-      echo "export LOAD_BALANCER_PORT=${LOAD_BALANCER_PORT}"
-      echo "export OIDC_CLIENT_ID=${OIDC_CLIENT_ID}"
-      echo "export ADDTOKEN=0 BOOTSTRAP_NODES=${BOOTSTRAP_NODES}"
-      echo "export OPENSTACK=${OPENSTACK} POD_SUBNET=${POD_SUBNET}"
-      echo "export CURRENT_CLUSTER=\"\${CURRENT_CLUSTER},\$HOST_NAME=https://\${HOST_IP}:2380\"";
-	  echo ""
-      echo "copy_keys \$HOST_NAME";
-      echo "add_master \$HOST_NAME \$HOST_IP \$CURRENT_CLUSTER \$ETCD_HOST \$ETCD_IP";
-    } >> add_master_script.sh
-
-      kubectl --kubeconfig=/etc/kubernetes/admin.conf create -n kube-system configmap add-master-script.sh --from-file=add_master_script.sh
-}
-# NOTE: we append to /etc/hosts because sometime DNS from openstack is not reliable
-# this breaks ssh ...
-# This is a log message example from coredns
-# master-6-am.noriscloud. A: unreachable backend: read udp 10.233.0.3:55264->10.32.192.2:53: i/o timeout
 
 
 # distributes configuration file and certificates to a master node
@@ -343,10 +412,10 @@ EOF
     fi
 
 	if [ ! -z "${OIDC_CA_FILE}" ]; then
-		local DESTDIR
-		DESTDIR="$(dirname "${OIDC_CA_FILE}")"
-		ssh ${SSHOPTS} "${USER}@$host" mkdir -pv /home/"${USER}"/"${DESTDIR}"
-		sftp ${SFTPOPTS} ${USER}@$host << EOF
+	     local DESTDIR
+	     DESTDIR="$(dirname "${OIDC_CA_FILE}")"
+	     ssh ${SSHOPTS} "${USER}@$host" mkdir -pv /home/"${USER}"/"${DESTDIR}"
+	     sftp ${SFTPOPTS} "${USER}@$host" << EOF
 
 	put ${OIDC_CA_FILE} /home/${USER}/${DESTDIR}
 	chmod 0600 /home/${USER}/${OIDC_CA_FILE}
@@ -381,11 +450,13 @@ EOF
 fi
 }
 
+# check if a binary version is found
+# version_check kube-scheduler --version v1.10.4 return 1 if binary is found
+# in that version
+function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
 
-# bootstrap the first master.
-# the process is slightly different than for the rest of the N masters
-# we add
-function bootstrap_first_master() {
+# bootstrap first master for 1.12 serires
+function bootstrap_first_master_one_twelve() {
    HOST_NAME=$1
    HOST_IP=$2
 
@@ -435,35 +506,41 @@ function bootstrap_first_master() {
    kubectl get nodes
 }
 
-# add a master to the cluster
-# the first argument is the host name to add
-# the second argument is the host IP
-function add_master {
-    USER=${SSH_USER:-ubuntu}
-
+# bootstrap the first master.
+# the process is slightly different than for the rest of the N masters
+# we add
+function bootstrap_first_master() {
     HOST_NAME=$1
     HOST_IP=$2
-    CURRENT_CLUSTER=$3
-    ETCD_HOST=$4
-    ETCD_IP=$5
+    CONFIG=kubeadm-${HOST_NAME}.yaml
 
-    local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
+    CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
 
-    echo "*********** Bootstrapping $1 ******************"
-    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
-       echo "waiting for ssh on $1"
-       sleep 2
-    done
-    if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
-        bootstrap_deps_node $1
+    if [ "$KUBE_VERSION_COMPARE" -lt "13" ]; then
+        #    this is for v1.12
+        create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
+        bootstrap_first_master_one_twelve "${HOST_NAME}" "${HOST_IP}"
+        kubeadm -v=${V} alpha phase kubelet config upload  --config "${CONFIG}"
+   else
+        #    this is for v1.13
+        echo "Bootstaping 1.13"
+        create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
+        kubeadm init --config "${CONFIG}"
+        kubeadm -v=${V} init phase upload-config all --config "${CONFIG}"
     fi
 
-    echo "******* Preparing kubeadm config for $1 ******"
-    create_kubeadm_config ${HOST_NAME} ${HOST_IP} ${CURRENT_CLUSTER} "existing"
+   test -d /root/.kube || mkdir -p /root/.kube
+   cp /etc/kubernetes/admin.conf /root/.kube/config
+   chown root:root /root/.kube/config
+   cp kubeadm-${HOST_NAME}.yaml kubeadm.yaml
+   kubectl get nodes
+}
 
 
+function add_master_one_twelve() {
     scp ${SFTPOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
 
+    set -x
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config "${CONFIG}"
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config "${CONFIG}"
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config "${CONFIG}"
@@ -484,6 +561,49 @@ function add_master {
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config "${CONFIG}"
     ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase controlplane all --config "${CONFIG}"
     ssh ${SSHOPTS} ${USER}@$1 "until sudo kubeadm alpha phase mark-master --config "${CONFIG}"; do sleep 1; done"
+    set +x
+}
+
+function add_master_one_thirteen() {
+	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join --token ${BOOTSTRAP_TOKEN} --discovery-token-ca-cert-hash \
+		 sha256:${DISCOVERY_HASH} --experimental-control-plane ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}
+}
+
+# add a master to the cluster
+# the first argument is the host name to add
+# the second argument is the host IP
+function add_master {
+    USER=${SSH_USER:-ubuntu}
+
+    HOST_NAME=$1
+    HOST_IP=$2
+    CURRENT_CLUSTER=$3
+    ETCD_HOST=$4
+    ETCD_IP=$5
+
+    local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
+
+    echo "*********** Bootstrapping $1 ******************"
+    until ssh ${SSHOPTS} ${USER}@$1 hostname; do
+       echo "waiting for ssh on $1"
+       sleep 2
+    done
+
+    ssh ${SSHOPTS} ${USER}@1 "kubeadm | grep -qi ${KUBE_VERSION}" || BOOTSTRAP_NODES=1
+    if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
+        bootstrap_deps_node $1
+    fi
+
+    echo "******* Preparing kubeadm config for $1 ******"
+	if [ "$KUBE_VERSION_COMPARE" -lt "13" ]; then
+
+        create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "existing"
+        add_master_one_twelve $HOSTNAME $CONFIG
+    else
+        echo "bootstrapping 1.13"
+    	create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
+        add_master_one_thirteen $HOST_NAME $CONFIG
+    fi
 }
 
 
@@ -531,7 +651,6 @@ function get_net_plugin(){
             ;;
     esac
 }
-
 
 # apply the correct network plugin
 function apply_net_plugin(){
@@ -670,7 +789,6 @@ function main() {
     bootstrap_first_master "${first_master}" "${first_master_ip}"
     wait_for_etcd "${first_master}"
     make_secrets
-    add_master_script_config_map
 
     wait $pid_get_net_plugin
     apply_net_plugin
@@ -682,7 +800,7 @@ function main() {
         CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
         copy_keys "${HOST_IP}"
         until add_master $HOST_NAME $HOST_IP $CURRENT_CLUSTER $first_master $first_master_ip; do
-            ssh $HOST_NAME sudo kubeadm reset -f
+            ssh ${SSHOPTS} $HOST_NAME sudo kubeadm reset -f
             copy_keys $HOST_IP
         done
 
@@ -735,6 +853,7 @@ function fetch_all() {
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
 if [[ $sourced == 1 ]]; then
+    set +e
     echo "You can now use any of these functions:"
     echo ""
     typeset -F |  cut -d" " -f 3
@@ -746,4 +865,22 @@ else
     main "$@"
 fi
 
-# vi: ts=4 sw=4 ai
+# vi: sts=4 ts=4 sw=4 ai
+
+#apiVersion: kubeadm.k8s.io/v1beta1
+#discovery:
+#  bootstrapToken:
+#    apiServerEndpoint: "10.32.192.46:6443"
+#    token: mjmsw8.srj4flh6j5xkyzxz
+#    caCertHashes:
+#     - "sha256:6c932a865dd420ea08fed258e5f5b918f55ee1c7ca2aa287c9f7cda84071bf97"
+#    unsafeSkipCAVerification: false
+#  timeout: 5m0s
+#kind: JoinConfiguration
+#nodeRegistration:
+#  criSocket: /var/run/dockershim.sock
+#controlPlane:
+#  LocalAPIEndpoint:
+#    advertiseAddress: 10.32.192.54
+##    bindPort: 6443
+#

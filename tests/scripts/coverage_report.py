@@ -15,6 +15,7 @@ FILES = [".coverage.unit-test", ".coverage.build-cluster",
 
 
 def main():
+    """join all files"""
     actual_files = []
 
     # only combine files that are actually existing, print warning for every
