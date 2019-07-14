@@ -202,22 +202,12 @@ add-master:
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
-	if [ $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master -o name | grep -c master) -ne $(NUM) ]; \
-	then \
-		echo "can't find $(NUM) masters"; \
-		kubectl get nodes --kubeconfig=${KUBECONFIG}; \
-		exit 1; \
-	else \
-		echo "OK"; \
-	fi
+	KUBECONFIG=${KUBECONFIG} \
+	CLUSTER_NAME=${CLUSTER_NAME} ./tests/scripts/check-joined-master.sh
 
 assert-audit-log: USER ?= ubuntu
 assert-audit-log:
-	 for HOSTIP in $$(kubectl get nodes --kubeconfig=${KUBECONFIG} -l node-role.kubernetes.io/master= -o json | jq -r '.items[].status.addresses[] | select(.type | contains("InternalIP")) | .address'); do \
-		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} hostname -a; \
-		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} test -d /var/log/kubernetes || { echo "no /var/log/kubernetes found for $${HOSTIP}" ; exit 1; }; \
-		ssh -o StrictHostKeyChecking=no -l $(USER) $${HOSTIP} test -f /etc/kubernetes/audit-policy.yml || { echo "no /etc/kubernetes/audit-policy.yml found for $${HOSTIP}" ; exit 1; }; \
-	 done
+	KUBECONFIG=${KUBECONFIG} ./tests/scripts/assert_audit_logging.sh
 
 assert-metrics:
 	KUBECONFIG=$(KUBECONFIG) ./tests/scripts/assert_metrics.sh
@@ -338,6 +328,13 @@ expose-wait:
 	done;
 	@echo
 	@echo "Got an IP!"
+
+
+test-cinder-volumes:
+	KUBECONFIG=${KUBECONFIG} ./tests/scripts/assert-cinder-volumes.sh
+
+clean-cinder-volumes:
+	kubectl --kubeconfig=${KUBECONFIG} delete pvc --kubeconfig=${KUBECONFIG} --all;
 
 
 reset-config:

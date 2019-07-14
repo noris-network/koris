@@ -186,11 +186,21 @@ class NthMasterInit(BaseInit):
     adding an public SSH key for access from the first master node needs
     to be done.
     """
-    def __init__(self, cloud_config, ssh_key, os_type='ubuntu',
-                 os_version="16.04", dex=None, koris_env=None):
+    def __init__(  # pylint: disable=too-many-arguments
+            self,
+            cloud_config,
+            ssh_key,
+            os_type='ubuntu',
+            os_version="16.04",
+            dex=None,
+            koris_env=None,
+            k8s_conf=None,):
         """
         ssh_key is a RSA keypair (return value from create_key from util.ssl
             package)
+
+        Args:
+            k8s_conf (str) - path the the k8s configuration file
         """
         super().__init__(cloud_config)
         self.ssh_key = ssh_key
@@ -199,7 +209,9 @@ class NthMasterInit(BaseInit):
         self.role = 'nth-master'
         self.koris_env = koris_env
         self._write_koris_env(dex)
-
+        if k8s_conf:
+            self.write_file("/etc/kubernetes/admin.conf",
+                            open(k8s_conf).read())
         # assemble the parts for an n-th master node
         self.add_ssh_public_key(self.ssh_key)
 
@@ -235,6 +247,8 @@ class NthMasterInit(BaseInit):
             #!/bin/bash
             export MASTERS_IPS=( {" ".join(gk('master_ips'))} )
             export MASTERS=( {" ".join(gk('master_names'))} )
+            export AUTO_JOIN="{gk('auto_join')}"
+            export CURRENT_CLUSTER="{gk('current_cluster')}"
 
             export LOAD_BALANCER_DNS="{gk('lb_dns')}"
             export LOAD_BALANCER_IP="{gk('lb_ip')}"
@@ -328,7 +342,9 @@ class NodeInit(BaseInit):
     """
     def __init__(self, ca_cert, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
-                 os_version="16.04", k8s_version=KUBERNETES_BASE_VERSION):
+                 os_version="16.04",
+                 k8s_version=KUBERNETES_BASE_VERSION,
+                 pod_network="CALICO"):
         """
         """
         super().__init__(cloud_config)
@@ -342,6 +358,7 @@ class NodeInit(BaseInit):
         self.os_version = os_version
         self.role = "node"
         self.k8s_version = k8s_version
+        self.pod_network = pod_network
 
         # assemble parts for the node
         self._write_koris_env()
@@ -362,9 +379,11 @@ class NodeInit(BaseInit):
             export BOOTSTRAP_TOKEN="{}"
             export DISCOVERY_HASH="{}"
             export KUBE_VERSION="{}"
+            export POD_NETWORK="{}"
         """.format(b64_cert(self.ca_cert), self.lb_dns, self.lb_ip,
                    self.lb_port, self.bootstrap_token, self.discovery_hash,
-                   self.k8s_version)
+                   self.k8s_version,
+                   self.pod_network)
         content = textwrap.dedent(content)
         self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
                         "0600")

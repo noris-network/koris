@@ -4,7 +4,6 @@ deploy cluster service to kubernetes via the API server
 import base64
 from datetime import datetime, timedelta
 import getpass
-import json
 import logging
 import os
 import random
@@ -13,7 +12,6 @@ import socket
 import string
 import subprocess as sp
 import sys
-import time
 import urllib3
 
 from pkg_resources import resource_filename, Requirement
@@ -21,15 +19,14 @@ from netaddr import valid_ipv4
 
 from kubernetes import client as k8sclient
 from kubernetes.stream import stream
-from kubernetes.client.rest import ApiException
 from kubernetes.client import api_client
 from kubernetes.client.configuration import Configuration
+from kubernetes.client.rest import ApiException
 from kubernetes.config import kube_config
 from kubernetes.utils import create_from_yaml
 
 import yaml
 
-from koris import KUBERNETES_BASE_VERSION
 from koris.ssl import read_cert
 from koris.ssl import discovery_hash as ssl_discovery_hash
 from koris.util.util import retry
@@ -47,6 +44,13 @@ else:
 LOGGER = Logger(__name__)
 
 
+ETCDCTL_BASE = ("ETCDCTL_API=3 etcdctl "
+                "--key /etc/kubernetes/pki/etcd/server.key "
+                "--cacert /etc/kubernetes/pki/etcd/ca.crt "
+                "--cert /etc/kubernetes/pki/etcd/server.crt "
+                "{} --endpoints=https://{}:2379 -w json")
+
+
 def _get_node_addr(addresses, addr_type):
     """
     Parse the address of the node
@@ -56,135 +60,6 @@ def _get_node_addr(addresses, addr_type):
         addr_type (str) - the address type
     """
     return [i.address for i in addresses if i.type == addr_type][0]
-
-
-SFTPOPTS = ["-i /etc/ssh/ssh_host_rsa_key ",
-            "-o StrictHostKeyChecking=no ",
-            "-o ConnectTimeout=60"]
-SSHOPTS = ["-l ubuntu "] + SFTPOPTS
-
-# The deployment configuration of the master-adder operator.
-# This pod runs inside a cluster and waits for requests to bootstrap new masters
-MASTER_ADDER_PODNAME = "master-adder"
-MASTER_ADDER_DEPLOYMENT = {
-    "apiVersion": "apps/v1",
-    "kind": "Deployment",
-    "metadata": {
-        "name": "master-adder",
-        "labels": {
-            "k8s-app": "master-adder"
-        },
-        "namespace": "kube-system"
-    },
-    "spec": {
-        "replicas": 1,
-        "selector": {
-            "matchLabels": {
-                "k8s-app": "master-adder"
-            }
-        },
-        "template": {
-            "metadata": {
-                "labels": {
-                    "k8s-app": "master-adder"
-                }
-            },
-            "spec": {
-                "nodeSelector": {"node-role.kubernetes.io/master": ""},
-                "tolerations": [{"key": "node-role.kubernetes.io/master",
-                                 "effect": "NoSchedule"}],
-                "containers": [
-                    {"name": MASTER_ADDER_PODNAME,
-                     "image": "oz123/koris-etcd:0.3",
-                     "volumeMounts":
-                     [{"mountPath": "/usr/local/bin/add-master-script",
-                       "subPath": "add_master_script.sh",
-                       "name": "add-master-script"},
-                      {"mountPath": "/etc/kubernetes/audit-policy.yml",
-                       "subPath": "audit-policy.yml",
-                       "name": "audit-policy"},
-                      {"mountPath": "/etc/kubernetes/cloud.config",
-                       "subPath": "cloud.config",
-                       "name": "cloud-config"},
-                      {"mountPath": "/etc/kubernetes/admin.conf",
-                       "subPath": "admin.conf",
-                       "name": "admin-conf"},
-                      {"mountPath": "/etc/kubernetes/pki/sa.key",
-                       "subPath": "sa.key",
-                       "name": "sa-key"},
-                      {"mountPath": "/etc/kubernetes/pki/sa.pub",
-                       "subPath": "sa.pub",
-                       "name": "sa-pub"},
-                      {"mountPath": "/etc/kubernetes/pki/ca.crt",
-                       "subPath": "tls.crt",
-                       "name": "cluster-ca"},
-                      {"mountPath": "/etc/kubernetes/pki/ca.key",
-                       "subPath": "tls.key",
-                       "name": "cluster-ca-key"},
-                      {"mountPath": "/etc/ssh/ssh_host_rsa_key",
-                       "subPath": "ssh_host_rsa_key",
-                       "name": "ssh-key"},
-                      {"mountPath": "/etc/kubernetes/pki/etcd/peer.crt",
-                       "subPath": "tls.crt",
-                       "name": "etcd-peer"},
-                      {"mountPath": "/etc/kubernetes/pki/etcd/peer.key",
-                       "subPath": "tls.key",
-                       "name": "etcd-peer-key"},
-                      {"mountPath": "/etc/kubernetes/pki/etcd/ca.crt",
-                       "subPath": "tls.crt",
-                       "name": "etcd-ca"},
-                      {"mountPath": "/etc/kubernetes/pki/etcd/ca.key",
-                       "subPath": "tls.key",
-                       "name": "etcd-ca-key"},
-                      {"mountPath": "/etc/kubernetes/pki/front-proxy-ca.key",
-                       "subPath": "tls.key",
-                       "name": "front-proxy-key"},
-                      {"mountPath": "/etc/kubernetes/pki/front-proxy-ca.crt",
-                       "subPath": "tls.crt",
-                       "name": "front-proxy-ca"}],
-                     "args": ["1200"],
-                     "command": ["sleep"],
-                     "env": [{"value": "".join(SFTPOPTS), "name": "SFTPOPTS"},
-                             {"value": "".join(SSHOPTS), "name": "SSHOPTS"},
-                             {"value": None,
-                              "name": "KUBE_VERSION"},
-                             {"value": "/etc/kubernetes/pki/etcd/ca.crt",
-                              "name": "ETCDCTL_CACERT"},
-                             {"value": "/etc/kubernetes/pki/etcd/peer.crt",
-                              "name": "ETCDCTL_CERT"},
-                             {"value": "/etc/kubernetes/pki/etcd/peer.key",
-                              "name": "ETCDCTL_KEY"},
-                             {"value": "3",
-                              "name": "ETCDCTL_API"}]}],
-                "volumes": [
-                    {"configMap": {"name": "add-master-script.sh",
-                                   "defaultMode": 484},
-                     "name": "add-master-script"},
-                    {"configMap": {"name": "audit-policy",
-                                   "defaultMode": 420},
-                     "name": "audit-policy"},
-                    {"name": "cloud-config",
-                     "secret": {"secretName": "cloud.config"}},
-                    {"name": "admin-conf", "secret": {"secretName": "admin.conf"}},
-                    {"name": "sa-key", "secret": {"secretName": "sa-key"}},
-                    {"name": "sa-pub", "secret": {"secretName": "sa-pub"}},
-                    {"name": "cluster-ca", "secret": {"secretName": "cluster-ca"}},
-                    {"name": "cluster-ca-key", "secret": {"secretName": "cluster-ca"}
-                     },
-                    {"name": "front-proxy", "secret": {"secretName": "front-proxy"}},
-                    {"name": "etcd-peer", "secret": {"secretName": "etcd-peer"}},
-                    {"name": "etcd-peer-key", "secret": {"secretName": "etcd-peer"}},
-                    {"name": "etcd-ca", "secret": {"secretName": "etcd-ca"}},
-                    {"name": "etcd-ca-key", "secret": {"secretName": "etcd-ca"}},
-                    {"name": "ssh-key", "secret": {"secretName": "ssh-key",
-                                                   "defaultMode": 384}},
-                    {"name": "front-proxy-ca", "secret": {"secretName":
-                                                          "front-proxy"}},
-                    {"name": "front-proxy-key",
-                     "secret": {"secretName": "front-proxy"}}]}}}}
-
-
-MASTER_ADDER_WAIT_SSH_SECONDS = 60
 
 
 def rand_string(num):
@@ -235,32 +110,20 @@ def parse_etcd_response(resp):
     out = {}
     resp_yaml = yaml.load(resp)
     for mem in resp_yaml['members']:
-        out[mem['name']] = {k: v for k, v in mem.items() if k != "name"}
+        if 'name' in mem:
+            out[mem['name']] = {k: v for k, v in mem.items() if k != "name"}
 
-        # ID is uint64, but we need it in hex
-        out[mem['name']]['ID'] = hex(out[mem['name']]['ID'])[2:]
+            # ID is uint64, but we need it in hex
+            out[mem['name']]['ID'] = hex(out[mem['name']]['ID'])[2:]
 
     return out
 
 
-class K8S:  # pylint: disable=too-many-locals,too-many-arguments
-    """Class allowing various interactions with a Kubernets cluster.
+class K8SConfigurator:  # pylint: disable=no-member
+    """apply plugins and post install setup"""
 
-    Args:
-        config (str): File path for the kubernetes configuration file
-        manfiest_path (str): Path for kubernetes manifests to be applied
-    """
-
-    def __init__(self, config, manifest_path=None):
-
-        self.config = config
-        if not manifest_path:
-            manifest_path = MANIFESTSPATH
-        self.manifest_path = manifest_path
-        kube_config.load_kube_config(config_file=config)
-        config = Configuration()
-        self.api = k8sclient.CoreV1Api()
-        self.client = api_client.ApiClient(configuration=config)
+    def apply_plugins(self, plugins):
+        """apply all plugins in the list"""
 
     def get_bootstrap_token(self):
         """Generate a Bootstrap token
@@ -337,6 +200,71 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             return False
 
+    def get_random_master(self):
+        """Returns a name and IP of a random master server in the cluster.
+
+        Returns:
+            Tuple of name and IP of a master.
+        """
+
+        nodes = self.api.list_node(pretty=True)
+        nodes = [node for node in nodes.items if
+                 'node-role.kubernetes.io/master' in node.metadata.labels]
+
+        addresses = nodes[0].status.addresses
+
+        # master_ip and master_name are the hostname and IP of an existing
+        # master, where an etcd instance is already running.
+        master_ip = _get_node_addr(addresses, "InternalIP")
+        master_name = _get_node_addr(addresses, "Hostname")
+
+        return master_name, master_ip
+
+    @retry(ValueError)
+    def etcd_cluster_status(self):
+        """Checks the current etcd cluster state.
+
+        This function calls etcdctl inside a pod in order to obtain the
+        current state of the etcd cluster before a new member can be added
+        to it.
+
+        Right now, etcdctl offers no convenient way to format the output so
+        the URLs from the masters can be extracted, which is why jq is used here.
+
+        Args:
+            podname (str): The name of the pod where the etcdctl command
+                should be sent from. Needs to be inside the kube-system namespace.
+            master_ip (str)
+
+        Returns:
+            The status of the etcd as a string
+            (e.g.master-1=192.168.1.102,master-2=192.168.1.103)
+        """
+        name, master_ip = self.get_random_master()
+
+        exec_command = ['/bin/sh', '-c', ETCDCTL_BASE.format(
+            "member list", master_ip)]
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          "etcd-%s" % name, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+
+        if not response or not re.search("master-\\d+", response):
+            LOGGER.info(response)
+            raise ValueError("Could not extract current etcd cluster state!")
+        # respone should be something like
+        # {'members': [{'ID': 9007573287841766007, 'name': 'master-7-am',
+        #  'peerURLs': ['https://10.32.192.11:2380'],
+        #  'clientURLs': ['https://10.32.192.11:2379']}]}
+        response = yaml.load(response)
+        etcd_cluster = ",".join(("=".join((m['name'], m['peerURLs'][0])) for m
+                                 in response['members'] if 'name' in m))
+        LOGGER.debug("Current etcd cluster state is: %s", etcd_cluster)
+
+        return etcd_cluster
+
     def add_all_masters_to_loadbalancer(self, cluster_name, n_masters, lb_inst):
         """Adds all master nodes to the LoadBalancer listener.
 
@@ -379,131 +307,28 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
                             lb_inst.add_member(pool_id,
                                                addr_to_add)
 
-    def run_add_script(self, pod, master_name, master_ip,
-                       new_master_name, new_master_ip):
-        """Executes a script inside the master-adder operator.
-
-        This function simply takes the required arguments for the
-        ``add-master-script`` shell function
-        from the bootstrap script and runs it inside the master-adder
-        operator pod.
+    def apply_addons(self, koris_config, apply_func=create_from_yaml):
+        """apply all addons to the cluster
 
         Args:
-            master_name (str): an existing master host where and etcd member is
-            master_ip (str): the IP address of an existing etcd member
-            new_master_name (str): the host name to provision
-            new_master_ip (str): the IP address of the master to provision
-        """
-        LOGGER.info("Retrieving etcd cluster state ...")
-        etcd_cluster = self.etcd_cluster_status(pod, master_ip)
-        LOGGER.debug(f"etcd cluster: {etcd_cluster}")
-        cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
-               '"/usr/local/bin/add-master-script '
-               '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
-                                    etcd_cluster, master_name, master_ip))
-
-        LOGGER.info("Bootstrapping new master node ...")
-        cmd = ('kubectl exec -it %s -n kube-system -- /bin/bash -c '
-               '"/usr/local/bin/add-master-script '
-               '%s %s %s %s %s"' % (pod, new_master_name, new_master_ip,
-                                    etcd_cluster, master_name, master_ip))
-        kctl = sp.Popen(cmd,
-                        stdout=sp.PIPE,
-                        stderr=sp.PIPE,
-                        shell=True,
-                        universal_newlines=True)
-
-        out, err = kctl.communicate()
-        LOGGER.debug(f"STDOUT: {out}")
-        LOGGER.debug(f"STDERR: {err}")
-
-        if kctl.returncode:
-            raise ValueError("unable to execute adder script in adder pod")
-
-    def get_random_master(self):
-        """Returns a name and IP of a random master server in the cluster.
-
-        Returns:
-            Tuple of name and IP of a master.
+            koris_config (dict): koris configuration loaded as dict
         """
 
-        nodes = self.api.list_node(pretty=True)
-        nodes = [node for node in nodes.items if
-                 'node-role.kubernetes.io/master' in node.metadata.labels]
+        for addon in get_addons(koris_config):
+            LOGGER.info("Applying add-on [%s]", addon.name)
+            addon.apply(self.client, apply_func=apply_func)
 
-        addresses = nodes[0].status.addresses
-
-        # master_ip and master_name are the hostname and IP of an existing
-        # master, where an etcd instance is already running.
-        master_ip = _get_node_addr(addresses, "InternalIP")
-        master_name = _get_node_addr(addresses, "Hostname")
-
-        return master_name, master_ip
-
-    def bootstrap_master(self, new_master_name, new_master_ip, k8s_version):
-        """Run the steps required to bootstrap a new master.
-
-        These are:
-            1. Find all existing masters
-            2. Get the hostname and the IP address of one
-            3. Get the current etcd cluster status.
-            4. Runs the add-master-script.
-
-        Steps 3 and 4 are done in run_add_script.
-
-        Args:
-            new_master_name (str): Name of the new master
-            new_master_ip (str): IP of the new master.
+    @property
+    def nginx_ingress_ports(self):
         """
-        master_name, master_ip = self.get_random_master()
-
-        podname = self.launch_master_adder(k8s_version)
-        LOGGER.info("Preparing bootstrap of new master node...")
-        self.run_add_script(podname, master_name, master_ip, new_master_name,
-                            new_master_ip)
-        LOGGER.success("Bootstrap of new master finished successfully")
-
-    # pylint: disable=line-too-long
-    def launch_master_adder(self, k8s_version=KUBERNETES_BASE_VERSION):
-        """Launch the add_master_deployment.
-
-        Args:
-            new_master_name (str): the new master's name
-            new_master_ip (str): the new master's IP address
-
-        Return:
-            str: the pod name
+        get the ingress-nginx service ports as dictionary
         """
-        # if self.api.list_namespaced_config_map("kube-system", # noqa
-        #   field_selector="metadata.name=dex-config"): # noqa
-        # pass
+        ingress = self.api.list_namespaced_service(
+            'ingress-nginx',
+            label_selector="app.kubernetes.io/name=ingress-nginx",
+            limit=1)
 
-        kctl = sp.Popen("kubectl apply -f -", stdin=sp.PIPE, shell=True)
-
-        try:
-            env = MASTER_ADDER_DEPLOYMENT['spec']['template']['spec']['containers'][0]['env'] # noqa
-            idx = [idx for idx, val in enumerate(env) if val['name'] == 'KUBE_VERSION'][0]
-            MASTER_ADDER_DEPLOYMENT['spec']['template']['spec']['containers'][0]['env'][idx]['value'] = k8s_version # noqa
-        except (KeyError, IndexError) as exc:
-            LOGGER.debug(exc)
-            LOGGER.debug("Deployment manifest: %s", MASTER_ADDER_DEPLOYMENT)
-            raise ValueError("unable to set Kubernetes version")
-        kctl.communicate(json.dumps(MASTER_ADDER_DEPLOYMENT).encode())
-
-        if kctl.returncode:
-            raise ValueError("Could not apply master adder pod!")
-
-        LOGGER.info("Waiting for pod to run ...")
-        result = self.api.list_namespaced_pod(
-            "kube-system",
-            label_selector='k8s-app=master-adder')
-
-        while not result.items or result.items[0].status.phase != "Running":
-            time.sleep(1)
-            result = self.api.list_namespaced_pod(
-                "kube-system",
-                label_selector='k8s-app=master-adder')
-        return result.items[0].metadata.name
+        return {i.name.upper(): i for i in ingress.items[0].spec.ports}
 
     def validate_context(self, conn):
         """Validate that server that we are talking to via K8S API
@@ -538,150 +363,16 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
 
         return False
 
-    @retry(ValueError)
-    def etcd_cluster_status(self, podname, master_ip):
-        """Checks the current etcd cluster state.
 
-        This function calls etcdctl inside a pod in order to obtain the
-        current state of the etcd cluster before a new member can be added
-        to it.
+class K8SScaler:  # pylint: disable=no-member
+    """
+    A Mixin to modify the cluster size
+    """
+    def add_node(self):
+        """add a node to the cluster"""
 
-        Right now, etcdctl offers no convenient way to format the output so
-        the URLs from the masters can be extracted, which is why jq is used here.
-
-        Args:
-            podname (str): The name of the pod where the etcdctl command
-                should be sent from. Needs to be inside the kube-system namespace.
-            master_ip (str)
-
-        Returns:
-            The status of the etcd as a string
-            (e.g.master-1=192.168.1.102,master-2=192.168.1.103)
-        """
-        exec_command = [
-            '/bin/sh', '-c',
-            ("ETCDCTL_API=3 etcdctl --endpoints=https://%s:2379 member list"
-             " -w json") % master_ip]  # noqa
-
-        response = stream(self.api.connect_get_namespaced_pod_exec,
-                          podname, 'kube-system',
-                          command=exec_command,
-                          stderr=True, stdin=False,
-                          stdout=True, tty=False)
-
-        if not response or not re.search("master-\\d+", response):
-            LOGGER.info(response)
-            raise ValueError("Could not extract current etcd cluster state!")
-        # respone should be something like
-        # {'members': [{'ID': 9007573287841766007, 'name': 'master-7-am',
-        #  'peerURLs': ['https://10.32.192.11:2380'],
-        #  'clientURLs': ['https://10.32.192.11:2379']}]}
-        response = yaml.load(response)
-        etcd_cluster = ",".join(("=".join((m['name'], m['peerURLs'][0])) for m
-                                 in response['members']))
-        LOGGER.debug("Current etcd cluster state is: %s", etcd_cluster)
-
-        return etcd_cluster
-
-    @retry(ValueError)
-    def etcd_members(self, podname, master_ip):
-        """Retrieves a dictionary with information about the etcd cluster.
-
-        This function uses ``etcdctl member list`` to retrieve information
-        about the etcd cluster, then parses that response into a dictionary
-        where the keys are the names of the members and the corresponding values
-        hold the rest of the information such as ID, clientURLs and peerURLs.
-
-        Returns:
-            A dictionary with information about the etcd cluster.
-
-        Raises:
-            ValueError if master_ip is not valid.
-        """
-        if not valid_ipv4(master_ip):
-            raise ValueError(f"Invalid IP: {master_ip}")
-
-        exec_command = [
-            '/bin/sh', '-c',
-            ("ETCDCTL_API=3 etcdctl --endpoints=https://%s:2379 member list"
-             " -w json") % master_ip]  # noqa
-
-        response = stream(self.api.connect_get_namespaced_pod_exec,
-                          podname, 'kube-system',
-                          command=exec_command,
-                          stderr=True, stdin=False,
-                          stdout=True, tty=False)
-
-        return parse_etcd_response(response)
-
-    @retry(ValueError)
-    def remove_from_etcd(self, name, ignore_not_found=True):
-        """Removes a member from etcd.
-
-        The 'master-adder' operator will be used to perform the
-        queries against etcd. The pod will be created if not found.
-
-        Args:
-            name (str): The name of the member to remove.
-            ignore_not_found (bool): If set to False, will raise a
-                ValueError if member is not part of etcd cluster.
-        """
-
-        podname = self.launch_master_adder()
-        _, master_ip = self.get_random_master()
-
-        etcd_members = self.etcd_members(podname, master_ip)
-        LOGGER.debug(etcd_members)
-
-        try:
-            etcd_id = etcd_members[name]['ID']
-        except KeyError:
-            msg = f"'{name}' not part of etcd cluster"
-            if ignore_not_found:
-                LOGGER.info("Skipping removing %s from etcd: %s", name, msg)
-                return
-
-            raise ValueError(msg)
-
-        cmd = " ".join(["ETCDCTL_API=3", "etcdctl",
-                        f"--endpoints=https://{master_ip}:2379",
-                        "member", "remove", f"{etcd_id}", "-w", "json"])
-        exec_command = ['/bin/sh', '-c', cmd]
-
-        response = stream(self.api.connect_get_namespaced_pod_exec,
-                          podname, 'kube-system',
-                          command=exec_command,
-                          stderr=True, stdin=False,
-                          stdout=True, tty=False)
-
-        LOGGER.debug("%s", response)
-        LOGGER.debug("Removed '%s' from etcd", name)
-
-    def node_status(self, nodename):
-        """Returns the status of a Node.
-
-        Args:
-            nodename (str): The name of the node to check.
-
-        Returns:
-            The status of the node as string or None if an error was
-                encountered.
-        """
-
-        resp = None
-        try:
-            resp = self.api.read_node_status(
-                nodename,
-                pretty=True)
-            LOGGER.debug("API Response: %s", resp)
-        except ApiException as exc:
-            LOGGER.debug("API exception: %s", exc)
-            return None
-
-        # Grab dat string
-        status = [x for x in resp.status.conditions if x.type == 'Ready']
-
-        return status[0].status
+    def add_master(self):
+        """add a master to the cluster"""
 
     def drain_node(self, nodename, ignore_not_found=True):
         """Drains a node of pods.
@@ -755,16 +446,123 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
         LOGGER.success("Kubernetes node '%s' has been deleted successfully",
                        nodename)
 
-    def apply_addons(self, koris_config, apply_func=create_from_yaml):
-        """apply all addons to the cluster
+    def node_status(self, nodename):
+        """Returns the status of a Node.
 
         Args:
-            koris_config (dict): koris configuration loaded as dict
+            nodename (str): The name of the node to check.
+
+        Returns:
+            The status of the node as string or None if an error was
+                encountered.
         """
 
-        for addon in get_addons(koris_config):
-            LOGGER.info("Applying add-on [%s]", addon.name)
-            addon.apply(self.client, apply_func=apply_func)
+        resp = None
+        try:
+            resp = self.api.read_node_status(
+                nodename,
+                pretty=True)
+            LOGGER.debug("API Response: %s", resp)
+        except ApiException as exc:
+            LOGGER.debug("API exception: %s", exc)
+            return None
+
+        # Grab dat string
+        status = [x for x in resp.status.conditions if x.type == 'Ready']
+
+        return status[0].status
+
+    @retry(ValueError)
+    def etcd_members(self, podname, master_ip):
+        """Retrieves a dictionary with information about the etcd cluster.
+
+        This function uses ``etcdctl member list`` to retrieve information
+        about the etcd cluster, then parses that response into a dictionary
+        where the keys are the names of the members and the corresponding values
+        hold the rest of the information such as ID, clientURLs and peerURLs.
+
+        Returns:
+            A dictionary with information about the etcd cluster.
+
+        Raises:
+            ValueError if master_ip is not valid.
+        """
+
+        if not valid_ipv4(master_ip):
+            raise ValueError(f"Invalid IP: {master_ip}")
+
+        exec_command = ['/bin/sh', '-c', ETCDCTL_BASE.format(
+            "member list", master_ip)]
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+
+        return parse_etcd_response(response)
+
+    @retry(ValueError)
+    def remove_from_etcd(self, name, ignore_not_found=True):
+        """Removes a member from etcd.
+
+        The 'master-adder' operator will be used to perform the
+        queries against etcd. The pod will be created if not found.
+
+        Args:
+            name (str): The name of the member to remove.
+            ignore_not_found (bool): If set to False, will raise a
+                ValueError if member is not part of etcd cluster.
+        """
+
+        master, master_ip = self.get_random_master()
+        podname = "etcd-%s" % master
+        etcd_members = self.etcd_members(podname, master_ip)
+        LOGGER.debug(etcd_members)
+
+        try:
+            etcd_id = etcd_members[name]['ID']
+        except KeyError:
+            msg = f"'{name}' not part of etcd cluster"
+            if ignore_not_found:
+                LOGGER.info("Skipping removing %s from etcd: %s", name, msg)
+                return
+
+            raise ValueError(msg)
+
+        exec_command = ['/bin/sh', '-c',
+                        ETCDCTL_BASE.format("member remove %s" % etcd_id, master_ip)]
+
+        response = stream(self.api.connect_get_namespaced_pod_exec,
+                          podname, 'kube-system',
+                          command=exec_command,
+                          stderr=True, stdin=False,
+                          stdout=True, tty=False)
+
+        LOGGER.debug("%s", response)
+        LOGGER.debug("Removed '%s' from etcd", name)
+
+
+class K8S(K8SConfigurator, K8SScaler):  # pylint: disable=too-many-locals
+    """Class allowing various interactions with a Kubernets cluster.
+
+    """
+    def __init__(self, config, manifest_path=None):
+        """
+        A class to configure k8s after boot
+
+        Args:
+            config (str): File path for the kubernetes configuration file
+            manfiest_path (str): Path for kubernetes manifests to be applied
+        """
+        self.config = config
+        if not manifest_path:
+            manifest_path = MANIFESTSPATH
+        self.manifest_path = manifest_path
+        kube_config.load_kube_config(config_file=config)
+        config = Configuration()
+        self.api = k8sclient.CoreV1Api()
+        self.client = api_client.ApiClient(configuration=config)
 
     @property
     def nginx_ingress_ports(self):
@@ -777,30 +575,6 @@ class K8S:  # pylint: disable=too-many-locals,too-many-arguments
             limit=1)
 
         return {i.name.upper(): i for i in ingress.items[0].spec.ports}
-
-
-def add_ingress_listeners(nginx_ingress_ports, lbinst, all_ips):
-    """
-    Reconfigure the Openstack LoadBalancer - add an HTTP and HTTPS listener
-    for nginx ingress controller
-
-    Args:
-        lbinst (:class:`.cloud.openstack.LoadBalancer`): A configured
-            LoadBalancer instance.
-        all_ips (list) : a list of all cluster member IPs
-    """
-    for key, port in {'Ingress-HTTP': 80, 'Ingress-HTTPS': 443}.items():
-        protocol = key.split("-")[-1]
-        name = '-'.join((key, lbinst.config['cluster-name']))
-        listener = lbinst.add_listener(
-            name=name,
-            protocol=protocol,
-            protocol_port=port)
-
-        pool = lbinst.add_pool(listener.id, protocol=protocol, name=name)
-        for ip in all_ips:
-            lbinst.add_member(pool.id, ip,
-                              protocol_port=nginx_ingress_ports[protocol].node_port)  # noqa
 
 
 def get_addons(config):
@@ -846,3 +620,27 @@ class KorisAddon:  # pylint: disable=too-few-public-methods
             apply_func: A callable that can apply a plugin to the cluster
         """
         apply_func(k8s_client, self.file, verbose=False)
+
+
+def add_ingress_listeners(nginx_ingress_ports, lbinst, all_ips):
+    """
+    Reconfigure the Openstack LoadBalancer - add an HTTP and HTTPS listener
+    for nginx ingress controller
+
+    Args:
+        lbinst (:class:`.cloud.openstack.LoadBalancer`): A configured
+            LoadBalancer instance.
+        all_ips (list) : a list of all cluster member IPs
+    """
+    for key, port in {'Ingress-HTTP': 80, 'Ingress-HTTPS': 443}.items():
+        protocol = key.split("-")[-1]
+        name = '-'.join((key, lbinst.config['cluster-name']))
+        listener = lbinst.add_listener(
+            name=name,
+            protocol=protocol,
+            protocol_port=port)
+
+        pool = lbinst.add_pool(listener.id, protocol=protocol, name=name)
+        for ip in all_ips:
+            lbinst.add_member(pool.id, ip,
+                              protocol_port=nginx_ingress_ports[protocol].node_port)  # noqa

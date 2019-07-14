@@ -1,0 +1,10 @@
+# define a Storage class for noris.cloud
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: default-de-nbg6-1a 
+provisioner: kubernetes.io/cinder
+reclaimPolicy: Retain
+parameters:
+  type: BSS-Performance-Storage
+  availability: de-nbg6-1a

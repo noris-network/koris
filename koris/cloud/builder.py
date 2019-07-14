@@ -161,7 +161,8 @@ class NodeBuilder:
                              lb_port,
                              bootstrap_token,
                              discovery_hash,
-                             k8s_version=KUBERNETES_BASE_VERSION):
+                             k8s_version=KUBERNETES_BASE_VERSION,
+                             pod_network="CALICO"):
         """
         Create all initial nodes when running ``koris apply <config>``
         """
@@ -171,7 +172,8 @@ class NodeBuilder:
         nodes = self._create_nodes_tasks(ca_bundle.cert,
                                          lb_ip, lb_port, bootstrap_token,
                                          discovery_hash, nodes,
-                                         k8s_version=k8s_version)
+                                         k8s_version=k8s_version,
+                                         pod_network=pod_network)
         return nodes
 
     def _create_nodes_tasks(self,
@@ -181,7 +183,8 @@ class NodeBuilder:
                             bootstrap_token,
                             discovery_hash,
                             nodes,
-                            k8s_version=KUBERNETES_BASE_VERSION):
+                            k8s_version=KUBERNETES_BASE_VERSION,
+                            pod_network="CALICO"):
         """
         Create future tasks for creating the cluster worker nodes
         """
@@ -196,7 +199,8 @@ class NodeBuilder:
             userdata = str(NodeInit(ca_cert, self.cloud_config, lb_ip, lb_port,
                                     bootstrap_token,
                                     discovery_hash,
-                                    k8s_version=k8s_version))
+                                    k8s_version=k8s_version,
+                                    pod_network=pod_network))
             tasks.append(loop.create_task(
                 node.create(node.flavor, self._info.secgroups,
                             self._info.keypair, userdata)
@@ -275,7 +279,8 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                                                koris_env=koris_env))
             else:
                 # create userdata for following master nodes if not existing
-                koris_env = {"k8s_version": k8s_version}
+                koris_env = {"k8s_version": k8s_version,
+                             "auto_join": 0}
                 userdata = str(NthMasterInit(cloud_config, ssh_key, dex=dex,
                                              koris_env=koris_env))
 
@@ -324,7 +329,13 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
                            self._info.secgroups)
         return master
 
-    def add_master(self, zone, flavor, k8s_version=KUBERNETES_BASE_VERSION):
+    def add_master(
+            self,
+            zone,
+            flavor,
+            k8s_version=KUBERNETES_BASE_VERSION,
+            k8s_conf=None,
+            **kwargs):
         """Adds a new instance in OpenStack which will be provisioned as master.
 
         - Create a new machine
@@ -346,7 +357,15 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
         key = self._info.conn.compute.find_keypair(self._info.name)
 
         koris_env = {"k8s_version": k8s_version}
-        init = NthMasterInit(cloud_config, key.public_key, koris_env=koris_env)
+        koris_env.update(kwargs.get('koris_env', {}))
+
+        init = NthMasterInit(
+            cloud_config,
+            key.public_key,
+            koris_env=koris_env,
+            k8s_conf=k8s_conf,
+        )
+
         userdata = str(init)
         task = loop.create_task(master.create(
             self._info.master_flavor, self._info.secgroups, self._info.keypair,
@@ -537,7 +556,8 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
                     "LoadBalancer to be configured...")
         node_tasks = self.nodes_builder.create_initial_nodes(
             cloud_config, ca_bundle, lb_ip, lb_port, bootstrap_token,
-            discovery_hash, k8s_version=k8s_version
+            discovery_hash, k8s_version=k8s_version,
+            pod_network=config['pod_network']
         )
 
         node_tasks.append(configure_lb_task)
