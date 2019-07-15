@@ -318,7 +318,10 @@ assert-metrics-server-is-running:
   script:
   - "pip3 install -q -e ."
   - "make assert-metrics"
-
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
 
 check-added-nodes-ready:
   stage: integration-test
@@ -345,6 +348,11 @@ check-nginx-ingress-ready:
   script:
   - "pip3 install -q -e ."
   - "make assert-nginx-ingress"
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+      - $SKIP_E2E
 
 # --[ RESIZE DELETE ]--
 delete-added-nodes:
@@ -603,7 +611,7 @@ pages:
 # --[ BUILD ]--
 build:
   stage: build
-  image: oz123/koris-builder:0.2
+  image: oz123/koris-builder:0.3
   script:
    - make install build-exec
    - python3 setup.py sdist
