@@ -48,7 +48,7 @@ start-release: check-env
 do-bump: NVER = $(subst v,,$(VER))
 do-bump: check-env
 	echo $(NVER)
-	sed -i "s/[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/$(NVER)/g" koris/__init__.py
+	sed -i "s/__version__.=[[:space:]]'[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]'\+/__version__ = '$(NVER)'/g" koris/__init__.py
 
 abort-release: check-env
 	git checkout dev
