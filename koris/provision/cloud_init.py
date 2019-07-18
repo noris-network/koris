@@ -28,10 +28,15 @@ BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
 
 def get_audit_policy():
     """read the"""
-    path = resource_filename(Requirement('koris'),
-                             os.path.join(BOOTSTRAP_SCRIPTS_DIR,
-                                          'manifests',
-                                          'audit-policy.yml'))
+    if getattr(sys, 'frozen', False):
+        path = os.path.join(
+            sys._MEIPASS,  # pylint: disable=no-member, protected-access
+            'provision/userdata/manifests/audit-policy.yml')
+    else:
+        path = resource_filename(Requirement('koris'),
+                                 os.path.join(BOOTSTRAP_SCRIPTS_DIR,
+                                              'manifests',
+                                              'audit-policy.yml'))
     with open(path) as policy:
         return policy.read()
 

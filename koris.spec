@@ -56,6 +56,8 @@ cinder_ = get_distribution('python-cinderclient')
 
 a = Entrypoint('koris', 'console_scripts', 'koris',
                datas=[('koris/provision/userdata/*', 'provision/userdata'),
+	              ('koris/provision/userdata/manifests/*', 'provision/userdata/manifests'),
+		      ('koris/deploy/manifests/*', 'provision/userdata/manifests'),
                       (os_service_types, 'os_service_types'),
                       (os_defaults, 'openstack'),
                       (keystoneauth1.egg_info,
