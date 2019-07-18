@@ -36,7 +36,7 @@ from koris import MASTER_LISTENER_NAME
 if getattr(sys, 'frozen', False):
     MANIFESTSPATH = os.path.join(
         sys._MEIPASS,  # pylint: disable=no-member, protected-access
-        'koris/deploy/manifests')
+        'deploy/manifests')
 else:
     MANIFESTSPATH = resource_filename(Requirement.parse("koris"),
                                       'koris/deploy/manifests')
