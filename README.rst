@@ -24,12 +24,14 @@ Features
  * You a pre-built binary installer or the Python sources
  * Resize your cluster as needed (add or remove masters and worker nodes)
  * Multiple plugins already installed (you can add more easily by deploying
-   operators)
+   operators):
+
    - nginx-ingress controller
    - audit logging
    - cloud provider integration (create volumes and loadbalancers from within kubernetes)
    - metrics API enabled
  * Support for two CNI plugins out of the box
+
    - calico (default)
    - flannel
  * Single-Sign-On with LDAP\Gitlab\SAML (beta feature)
