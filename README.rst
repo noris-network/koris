@@ -18,7 +18,21 @@ Launch kubernetes clusters on OpenStack.
 Features
 --------
 
-* Get your kubernetes cluster on noris.cloud in about 5 minutes.
+ * Get your kubernetes cluster on noris.cloud in about 5 minutes.
+ * Complete provisioning of openstack infrastructure via the installer.
+ * Kubernetes 1.13.X supported
+ * You a pre-built binary installer or the Python sources
+ * Resize your cluster as needed (add or remove masters and worker nodes)
+ * Multiple plugins already installed (you can add more easily by deploying
+   operators)
+   - nginx-ingress controller
+   - audit logging
+   - cloud provider integration (create volumes and loadbalancers from within kubernetes)
+   - metrics API enabled
+ * Support for two CNI plugins out of the box
+   - calico (default)
+   - flannel
+ * Single-Sign-On with LDAP\Gitlab\SAML (beta feature)
 
 Demo:
 
