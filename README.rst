@@ -30,11 +30,17 @@ Features
    - audit logging
    - cloud provider integration (create volumes and loadbalancers from within kubernetes)
    - metrics API enabled
+
  * Support for two CNI plugins out of the box
 
    - calico (default)
    - flannel
- * Single-Sign-On with LDAP\Gitlab\SAML (beta feature)
+
+ * Single-Sign-On with:
+
+   - LDAP
+   - Gitlab
+   - SAML (beta feature)
 
 Demo:
 
