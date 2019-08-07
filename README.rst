@@ -21,7 +21,7 @@ Features
  * Get your kubernetes cluster on noris.cloud in about 5 minutes.
  * Complete provisioning of openstack infrastructure via the installer.
  * Kubernetes 1.13.X supported
- * You a pre-built binary installer or the Python sources
+ * You can use a pre-built binary installer or the Python sources
  * Resize your cluster as needed (add or remove masters and worker nodes)
  * Multiple plugins already installed (you can add more easily by deploying
    operators):
