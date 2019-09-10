@@ -1133,16 +1133,17 @@ class OSRouter:  # pylint: disable=too-few-public-methods
         Returns:
             The external network as OpenStack Network Object.
         """
+        fallback = self.config.get('private_net',
+                                   {}).get('subnet',
+                                           {}).get('router', {}).get('name')
 
         ext_net = OSNetwork.find_external_network(
-            self.conn,
-            fallback=self.config.get('private_net',
-                                     {}).get('subnet',
-                                             {}).get('router', {}).get('name')
-        )
+            self.conn, fallback=fallback)
         if not ext_net:
-            LOGGER.error("No external network found")
-            raise RuntimeError("no external network found")
+            msg = (f"Could not find any external network "
+                   "({fallback} specified for router isn't found either.)")
+            LOGGER.error(msg)
+            raise RuntimeError(msg)
 
         return ext_net
 
