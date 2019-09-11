@@ -44,8 +44,8 @@ Features
 
 Demo:
 
-.. image:: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/kolt-demo.gif
-   :target: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/kolt-demo.gif
+.. image:: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/koris-demo.gif
+   :target: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/koris-demo.gif
    :scale: 12%
 
 Quickstart
