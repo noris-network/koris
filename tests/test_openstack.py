@@ -27,7 +27,7 @@ def no_networks(*args, **kwargs):
 
 
 def other_networks(*args, **kwargs):
-    return [Network("hello", "ajsdlk")]
+    return [Network("hello", "bgp-noris")]
 
 
 def valid_plus_other(*args, **kwargs):
@@ -56,7 +56,7 @@ def test_other_networks():
     conn = MagicMock()
     conn.network.networks = other_networks
 
-    assert OSNetwork.find_external_network(conn) is None
+    assert OSNetwork.find_external_network(conn).name == "hello"
 
 
 def test_valid_plus_other_networks():
@@ -70,7 +70,7 @@ def test_fallback_networks():
     conn = MagicMock()
     conn.network.networks = valid_fallback
 
-    assert OSNetwork.find_external_network(conn).name == "ext01"
+    assert OSNetwork.find_external_network(conn).name == "hello"
 
 
 def test_get_connection():

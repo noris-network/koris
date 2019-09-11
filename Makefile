@@ -39,6 +39,7 @@ CLUSTER_NAME ?= koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
 CONFIG_FILE ?= tests/koris_test.yml
+UBUNTU_VER ?= 16.04
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
@@ -386,7 +387,7 @@ security-checks-nodes:
 	@kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 
 update-config: KEY ?= kube  ## create a test configuration file
-update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-[[:digit:]]' | head -n 1)
+update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
 update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" $(CONFIG_FILE)
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" $(CONFIG_FILE)

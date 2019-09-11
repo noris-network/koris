@@ -978,7 +978,8 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
 
     # pylint: disable=inconsistent-return-statements
     @staticmethod
-    def find_external_network(conn, default="ext02", fallback="ext01"):
+    def find_external_network(conn, default="ext02", fallback='bgp-noris',
+                              autodetect=True):
         """Finds and returns an external network in OpenStack.
 
         This function will look for all external networks, then try to find the
@@ -992,6 +993,8 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
             default (str): The default external network to use.
             fallback (str): The fallback external network to use in case the default
                 is not found.
+            autodetect (bool): If network isn't given with router in the
+                config and the default is not found try and find one.
 
         Returns:
             An :class:`OpenStackAPI.network.v2.network` object or None if no external
@@ -1000,13 +1003,13 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
 
         # Retrieve all external networks as list
 
-        # import pdb; pdb.set_trace()
         ext_networks = list(conn.network.networks(is_router_external=True))
 
-        for net_name in [default, fallback]:
-            nets = [x for x in ext_networks if x.name == net_name]
-            if nets:
-                return nets[0]
+        nets = [x for x in ext_networks if x.name in [default, fallback]]
+        if nets:
+            return nets[0]
+        if autodetect and ext_networks:
+            return ext_networks[0]
 
 
 class OSSubnet:  # pylint: disable=too-few-public-methods
@@ -1130,11 +1133,17 @@ class OSRouter:  # pylint: disable=too-few-public-methods
         Returns:
             The external network as OpenStack Network Object.
         """
+        fallback = self.config.get('private_net',
+                                   {}).get('subnet',
+                                           {}).get('router', {}).get('name')
 
-        ext_net = OSNetwork.find_external_network(self.conn)
-        if ext_net is None:
-            LOGGER.error("No external network found")
-            raise RuntimeError("no external network found")
+        ext_net = OSNetwork.find_external_network(
+            self.conn, fallback=fallback)
+        if not ext_net:
+            msg = (f"Could not find any external network "
+                   "({fallback} specified for router isn't found either.)")
+            LOGGER.error(msg)
+            raise RuntimeError(msg)
 
         return ext_net
 
