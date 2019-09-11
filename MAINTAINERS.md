@@ -8,7 +8,7 @@ This documents explains how to a release:
 
 To do a release X.Y.Z do the following steps:
 
-1. `make start-relese VER=vX.Y.Z`
+1. `make start-release VER=vX.Y.Z`
 2. edit `ChangeLog` and rename it to TAGMESSAGE`
 3. `make complete-release VER=vX.Y.Z ACCESS_TOKEN=<your-secret-key>`
 
