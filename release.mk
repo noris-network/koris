@@ -77,7 +77,7 @@ finish-release: check-env check-api-key
 	git branch -D prepare_$(VER)
 	git merge --ff master
 	rm -f TAGMESSAGE
-	git pull --rebase
+	git pull
 	python3 tests/scripts/protect-un-protect.py dev
 	git push origin dev
 	python3 tests/scripts/protect-un-protect.py dev
