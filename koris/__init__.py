@@ -9,4 +9,4 @@ except pkg_resources.DistributionNotFound:
 MASTER_PREFIX = "master"
 MASTER_LISTENER_NAME = f"{MASTER_PREFIX}-listener"
 MASTER_POOL_NAME = f"{MASTER_PREFIX}-pool"
-KUBERNETES_BASE_VERSION = "1.12.9"
+KUBERNETES_BASE_VERSION = "1.13.10"
