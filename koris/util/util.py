@@ -6,6 +6,7 @@ import copy
 import logging
 import re
 import time
+import sys
 
 
 from functools import lru_cache
@@ -16,6 +17,9 @@ from pkg_resources import parse_version
 import yaml
 
 from koris.util.hue import red  # pylint: disable=no-name-in-module
+from koris.util.logger import Logger
+
+LOGGER = Logger(__name__)
 
 
 def get_logger(name, level=logging.INFO):
@@ -32,22 +36,31 @@ def get_logger(name, level=logging.INFO):
     return logger
 
 
-KUBECONFIG = {'apiVersion': 'v1',
-              'clusters': [{'cluster': {'server': '%%%%MASTERURI%%%%',
-                                        'certificate-authority': '%%%%CA%%%%'},
-                            'name': 'kubernetes'}],
-              'contexts': [{'context': {'cluster': 'kubernetes',
-                                        'user': '%%%USERNAME%%%'},
-                            'name': '%%%USERNAME%%%-context'}],
-              'current-context': '%%%USERNAME%%%-context',
-              'kind': 'Config',
-              'users': [
-                  {'name': '%%%USERNAME%%%',
-                   'user': {'client-certificate': '%%%%CLIENT_CERT%%%%',
-                            'client-key': '%%%%CLIENT_KEY%%%%'
-                            }
-                   }]
-              }
+KUBECONFIG_EMB = {'apiVersion': 'v1',
+                  'clusters': [{
+                      'cluster': {
+                          'server': '%%%%MASTERURI%%%%',
+                          'certificate-authority-data': '%%%%CA%%%%'
+                      },
+                      'name': 'kubernetes'
+                  }],
+                  'contexts': [{
+                      'context': {
+                          'cluster': 'kubernetes',
+                          'user': '%%%USERNAME%%%'
+                      },
+                      'name': '%%%USERNAME%%%-context'
+                  }],
+                  'current-context': '%%%USERNAME%%%-context',
+                  'kind': 'Config',
+                  'users': [{
+                      'name': '%%%USERNAME%%%',
+                      'user': {
+                          'client-certificate-data': '%%%%CLIENT_CERT%%%%',
+                          'client-key-data': '%%%%CLIENT_KEY%%%%'
+                      }
+                  }]
+                  }
 
 
 def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
@@ -55,15 +68,15 @@ def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
     """
     format a kube configuration file
     """
-    config = copy.deepcopy(KUBECONFIG)
+    config = copy.deepcopy(KUBECONFIG_EMB)
     config['clusters'][0]['cluster']['server'] = master_uri
-    config['clusters'][0]['cluster']['certificate-authority'] = ca_cert
+    config['clusters'][0]['cluster']['certificate-authority-data'] = ca_cert
     config['contexts'][0]['context']['user'] = "%s" % username
     config['contexts'][0]['name'] = "%s-context" % username
     config['current-context'] = "%s-context" % username
     config['users'][0]['name'] = username
-    config['users'][0]['user']['client-certificate'] = client_cert
-    config['users'][0]['user']['client-key'] = client_key
+    config['users'][0]['user']['client-certificate-data'] = client_cert
+    config['users'][0]['user']['client-key-data'] = client_key
 
     yml_config = yaml.dump(config)
     if encode:
@@ -71,12 +84,58 @@ def get_kubeconfig_yaml(master_uri, ca_cert, username, client_cert,
     return yml_config
 
 
+def name_validation(name):
+    """
+    Validates a name that will be used as an instance name.
+    Each name should conform to the following convention:
+    not too long (maximum 244 characters)
+    only ASCII-letters, numbers and dashes
+
+    Args:
+        name (str): The name to be checked
+
+    Returns:
+        Name if valid, Exits with Status code 2 if name is invalid.
+    """
+    if len(name) > 244:
+        LOGGER.error("cluster-name is too long")
+        sys.exit(2)
+    allowed = re.compile(r"^[a-zA-Z\d-]+$")
+    if not allowed.match(name):
+        LOGGER.error("cluster-name '%s' is using illegal characters."
+                     "Please change cluster-name in config file", name)
+        sys.exit(2)
+    return name
+
+
+def k8s_version_validation(version):
+    """Checks if a specified Kubernetes version is valid.
+
+    Args:
+        version (str): The version string to be checked
+
+    Returns:
+        True if version is valid.
+    """
+
+    if not isinstance(version, str):
+        return False
+
+    allowed = re.compile(r"^\d+\.\d+\.\d+$")
+    if not allowed.match(version):
+        LOGGER.error("'%s' is not a valid Kubernetes version", version)
+        return False
+
+    return True
+
+
 @lru_cache(maxsize=16)
 def host_names(role, num, cluster_name):
     """
     format host names
     """
-    return ["%s-%s-%s" % (role, i, cluster_name) for i in
+    name_validation(cluster_name)
+    return ["%s-%s-%s" % (cluster_name, role, i) for i in
             range(1, num + 1)]
 
 

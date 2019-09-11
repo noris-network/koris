@@ -9,36 +9,33 @@ node_flavor: 'ECS.C1.4-8'
 # per default koris will create a network for your cluster and route
 # this network to ext02 network in openstack if this is undesired change this
 private_net:
- name: 'korispipeline-office-net'
+ name: 'k8s-nude'
  subnet:
-  name: 'sub-korispipeline-office-net'
-  cidr: '10.36.18.0/27'
+  name: 'NORIS-NUDE-OS-K8S-DEV-SUBNET'
+  cidr: '10.36.192.0/24'
 #  This is optional - if no router name is given a new one will be created
   router:
-   name: 'kubepipeline-office-rt'
+   name: 'NORIS-K8S-NUDE-OS-MGMT-ROUTER'
    network: 'bgp-noris'
-cluster-name: 'change-me'
+cluster-name: 'ext-ccp'
 availibility-zones:
  - de-nbg6-1b
  - de-nbg6-1a
-n-masters: 3
-n-nodes: 3
-keypair: 'your-key-pair'
+n-masters: 1
+n-nodes: 1
+keypair: 'otiram'
 #security_group: 'default'
 user_data: 'cloud-init-parts/generic'
-# Use the nightly koris images, if you don't have access talk 
+# Use the nightly koris images, if you don't have access talk
 # to the OpenStack team.
-image: "koris-2019-02-08"
+image: "koris-2019-03-20"
 loadbalancer:
 # set this to true if you
 # want the load balancer to have a floating IP
  floatingip: false
 certificates:
   expriry: 8760h
-# For now a special storage class is required. If you don't
-# have access, talk to the OpenStack team.
-# storage_class: "BSS-Performance-Storage"
-storage_class: "PI-Storage-Class"
+storage_class: "BSS-Performance-Storage"
 pod_subnet: "10.233.0.0/16"
 pod_network: "CALICO"
 #pod_subnet: "10.244.0.0/16"

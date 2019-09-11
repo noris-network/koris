@@ -20,6 +20,14 @@ koris\.util\.util module
     :undoc-members:
     :show-inheritance:
 
+koris\.util\.logger module
+--------------------------
+
+.. automodule:: koris.util.logger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Module contents
 ----------------

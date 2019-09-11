@@ -15,7 +15,7 @@ from koris.deploy.dex import (Pool, Listener, create_dex, create_oauth2,
                               is_port, is_ip)
 from koris.ssl import read_cert
 
-NEUTRON = mock.Mock()
+
 LB = mock.MagicMock()
 
 VALID_NAMES = ["test", "", None, "-42"]
@@ -148,27 +148,27 @@ def test_functions_valid(default_pool, default_listener):
     listener = default_listener
 
     # Create a Listener first so it has an ID
-    listener.create(NEUTRON)
+    listener.create()
 
-    pool.create(NEUTRON, LB, listener.id)
-    pool.add_members(NEUTRON, LB)
-    pool.add_health_monitor(NEUTRON, LB)
+    pool.create(LB, listener.id)
+    pool.add_members(LB)
+    pool.add_health_monitor(LB)
 
     pool = default_pool
-    pool.all(NEUTRON, LB, listener.id)
+    pool.all(LB, listener.id)
 
     # Listener
     pool = default_pool
     listener = Listener(LB, name, port, pool)
-    listener.create(NEUTRON)
-    listener.create_pool(NEUTRON)
-    listener.all(NEUTRON)
+    listener.create()
+    listener.create_pool()
+    listener.all()
 
 
 def test_async_valid():
     loop = asyncio.get_event_loop()
-    dex_task = loop.create_task(create_dex(NEUTRON, LB, members=VALID_MEMBERS))
-    oauth_task = loop.create_task(create_oauth2(NEUTRON, LB, members=VALID_MEMBERS))
+    dex_task = loop.create_task(create_dex(LB, members=VALID_MEMBERS))
+    oauth_task = loop.create_task(create_oauth2(LB, members=VALID_MEMBERS))
     tasks = [dex_task, oauth_task]
     loop.run_until_complete(asyncio.gather(*tasks))
 
@@ -213,21 +213,21 @@ def test_functions_invalid(default_pool, default_listener):
     # A pool needs to be created first before adding members or HM
     pool = default_pool
     with pytest.raises(ValidationError):
-        pool.add_members(NEUTRON, LB)
+        pool.add_members(LB)
     with pytest.raises(ValidationError):
-        pool.add_health_monitor(NEUTRON, LB)
+        pool.add_health_monitor(LB)
 
     # A listener needs a LB to be created
     listener = default_listener
     listener.loadbalancer = None
     with pytest.raises(ValidationError):
-        listener.create(NEUTRON)
+        listener.create()
 
     # A listener needs to be created first before creating a pool
     listener = default_listener
     listener.listener = None
     with pytest.raises(ValidationError):
-        listener.create_pool(NEUTRON)
+        listener.create_pool()
 
 
 def test_DexSSL(default_dex_ssl):

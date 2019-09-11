@@ -1,11 +1,14 @@
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: your-user-binding
+  name: dex-user-binding
+  labels:
+    k8s-app: dex
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
 - kind: User
+  # 1. Enter the Email you have used with your Identity Provider
   name: your-user-here

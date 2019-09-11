@@ -3,11 +3,8 @@ echo "Downloading sonobuoy to check for compliance with kubernetes certification
 curl -s -L -o sonobuoy.tgz ${SONOBUOY_URL};
 tar --skip-old-files -x -z -f sonobuoy.tgz;
 echo "Running sonobuoy on the cluster. This can take a very long time (up to 3 hours and more!)...";
-./sonobuoy --kubeconfig ${KUBECONFIG} run;
-if [ $? -ne 0 ]; then
-    echo "Failed to run sonobuoy!";
-    exit 1;
-fi;
+if ! ./sonobuoy --kubeconfig ${KUBECONFIG} run; then echo "Failed to run sonobuoy!"; exit 1; fi
+
 STARTTIME=`date +%s`;
 echo "Starttime: `date`";
 echo -n "Waiting for result to come in, checking every 5 minutes ";
@@ -28,7 +25,7 @@ while true; do
     echo ${SONOBUOY_CURR_STATUS} | grep "${SONOBUOY_COMPLETED_INDICATOR}" > /dev/null;
     if [ $? -eq 0 ]; then
         echo -e "\nResults are in! Retrieving and displaying for e2e tests...";
-        ./sonobuoy --kubeconfig ${KUBECONFIG} retrieve .;
+        until ./sonobuoy --kubeconfig ${KUBECONFIG} retrieve .; do sleep 10; done
         RESULTFILE=`ls | grep *sonobuoy*.tar.gz`;
         FAILED_TESTS=$(./sonobuoy --kubeconfig ${KUBECONFIG} e2e ${RESULTFILE} --show failed | grep "\[")
         echo -e "\n#####################################";

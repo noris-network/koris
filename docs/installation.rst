@@ -57,6 +57,13 @@ Clone the `Gitlab repo`_:
     $ git clone git@gitlab.noris.net:PI/koris.git
     $ cd koris
 
+Install required packages to OS:
+
+.. code-block:: shell
+
+    $ apt-get update
+    $ apt-get install python3-venv python3-dev
+
 Create and activate a virtual environment:
 
 .. code-block:: shell
@@ -68,6 +75,7 @@ Install the requirements:
 
 .. code-block:: shell
 
+    $ pip install -U pip
     $ pip install -r requirements.txt
     $ python setup.py install
 

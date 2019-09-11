@@ -1,43 +1,43 @@
 """The dex module manages a dex (https://github.com/dexidp/dex) installation.
 
-    The workflow is the following:
+The workflow is the following:
 
-    1. Create certificates for Dex (via :class:`.DexSSL`)
+1. Create certificates for Dex (via :class:`.DexSSL`)
 
-    2. In :class:`koris.provision.cloud_init.FirstMasterInit` deploy the previously
-    created CA to the first Master that is created. Additionally, create the extra
-    arguments for the apiserver as environment variables in the ``koris.env`` file.
+2. In :class:`koris.provision.cloud_init.FirstMasterInit` deploy the previously
+created CA to the first Master that is created. Additionally, create the extra
+arguments for the apiserver as environment variables in the ``koris.env`` file.
 
-    3. In ``koris/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
-    variables from ``koris.env`` and add their values as extra arguments to kubeadm's
-    ``init.tmpl``.
+3. In ``koris/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
+variables from ``koris.env`` and add their values as extra arguments to kubeadm's
+``init.tmpl``.
 
-    4. Take the main LoadBalancer and add two new Listeners to it: one for the Dex service
-    (via :meth:`create_dex`) and one for an OAuth2 client app
-    (via :meth:`create_oauth2`) that will be requesting tokens from Dex.
+4. Take the main LoadBalancer and add two new Listeners to it: one for the Dex service
+(via :meth:`create_dex`) and one for an OAuth2 client app
+(via :meth:`create_oauth2`) that will be requesting tokens from Dex.
 
-    Example:
-        >>> dex_ssl = DexSSL("certs/", "dex.example.org")
-        >>> dex_ssl.save_certs()
-        >>> dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
-        >>> master_tasks = master_builder.create_masters_tasks(..., dex=dex_conf)
-        >>> # Execute master_tasks
-        >>> dex_listener = dex_conf['ports']['listener']
-        >>> dex_service = dex_conf['ports']['service']
-        >>> dex_members = master_ips
-        >>> dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
-        ...                                        listener_port=dex_listener,
-        ...                                        pool_port=dex_service,
-        ...                                        members=dex_members))
-        >>> client_listener = dex_conf['client']['ports']['listener']
-        >>> client_service = dex_conf['client']['ports']['service']
-        >>> client_members = node_ips
-        >>> oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
-        ...                                             listener_port=client_listener,
-        ...                                             pool_port=client_service,
-        ...                                             members=client_members))
-        >>> tasks = [dex_task, oauth_task]
-        >>> loop.run_until_complete(asyncio.gather(*tasks))
+Example:
+    >>> dex_ssl = DexSSL("certs/", "dex.example.org")
+    >>> dex_ssl.save_certs()
+    >>> dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
+    >>> master_tasks = master_builder.create_masters_tasks(..., dex=dex_conf)
+    >>> # Execute master_tasks
+    >>> dex_listener = dex_conf['ports']['listener']
+    >>> dex_service = dex_conf['ports']['service']
+    >>> dex_members = master_ips
+    >>> dex_task = loop.create_task(create_dex(NEUTRON, lbinst,
+    ...                                        listener_port=dex_listener,
+    ...                                        pool_port=dex_service,
+    ...                                        members=dex_members))
+    >>> client_listener = dex_conf['client']['ports']['listener']
+    >>> client_service = dex_conf['client']['ports']['service']
+    >>> client_members = node_ips
+    >>> oauth_task = loop.create_task(create_oauth2(NEUTRON, lbinst,
+    ...                                             listener_port=client_listener,
+    ...                                             pool_port=client_service,
+    ...                                             members=client_members))
+    >>> tasks = [dex_task, oauth_task]
+    >>> loop.run_until_complete(asyncio.gather(*tasks))
 """
 
 from netaddr import valid_ipv4, valid_ipv6
@@ -157,29 +157,27 @@ class Pool:
             if not is_ip(ip):
                 raise ValidationError(f"invalid IP address: {ip}")
 
-    def create(self, client, lb: LoadBalancer, listener_id):
+    def create(self, lb: LoadBalancer, listener_id):
         """Creates a Pool and adds it to a Listener.
 
         This function will set the attributes ``pool`` and ``id``.
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
             listener_id (str): The Listener ID this pool should be added to.
         """
 
         self.verify()
-        pool = lb.add_pool(client, listener_id=listener_id, lb_algorithm=self.algorithm,
+        pool = lb.add_pool(listener_id=listener_id, lb_algorithm=self.algorithm,
                            protocol=self.protocol,
                            name=self.name)
-        self.id = pool["id"]
+        self.id = pool.id
         self.pool = pool
 
-    def add_members(self, client, lb: LoadBalancer):
+    def add_members(self, lb: LoadBalancer):
         """Adds Members to a Pool.
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
         """
 
@@ -188,35 +186,33 @@ class Pool:
         self.verify()
 
         for ip in self.members:
-            lb.add_member(client, self.id, ip, self.port)
+            lb.add_member(self.id, ip, self.port)
 
-    def add_health_monitor(self, client, lb: LoadBalancer):
+    def add_health_monitor(self, lb: LoadBalancer):
         """Adds a Health monitor to a Pool with default settings
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
         """
 
         if not self.id:
             raise ValidationError("need pool id to create health monitor")
         self.verify()
-        lb.add_health_monitor(client, self.id, f"{self.name}-health")
+        lb.add_health_monitor(self.id, f"{self.name}-health")
 
-    def all(self, client, lb: LoadBalancer, listener_id):
+    def all(self, lb: LoadBalancer, listener_id):
         """Convenience function to create a Pool with Members and Health Monitor.
 
         Will call ``create``, ``add_members`` and ``add_health_monitor``.
 
         Args:
-            client: An OpenStack client, usually Neutron.
             lb (LoadBalancer): An OSLoadBalancer instance.
             listener_id (str): The Listener ID this pool should be added to.
         """
 
-        self.create(client, lb, listener_id)
-        self.add_members(client, lb)
-        self.add_health_monitor(client, lb)
+        self.create(lb, listener_id)
+        self.add_members(lb)
+        self.add_health_monitor(lb)
 
 
 class Listener:
@@ -283,50 +279,41 @@ class Listener:
         if not is_port(self.port):
             raise ValidationError(f"invalid listener port {self.port}")
 
-    def create(self, client):
+    def create(self):
         """Creates a new Listener and adds it to the LoadBalancer.
 
         This function will assing the attributes ``listener`` and ``id``.
 
-        Args:
-            client: An OpenStack client, usually Neutron.
         """
         self.verify()
-        listener = self.loadbalancer.add_listener(client, name=self.name,
+        listener = self.loadbalancer.add_listener(name=self.name,
                                                   protocol=self.protocol,
                                                   protocol_port=self.port)
         self.listener = listener
-        self.id = listener["listener"]["id"]
+        self.id = listener.id
 
-    def create_pool(self, client):
+    def create_pool(self):
         """Creates a new Pool with members and healthmon and adds it to the Listener.
 
         Requires ``create`` to be called first.
 
         In case the ``Pool.create()`` or ``Pool.all()`` function hasn't been called,
         call ``Pool.all()``.
-
-        Args:
-            client: An OpenStack client, usually Neutron.
-
         """
         self.verify()
         if not self.listener:
             raise ValidationError("need listener to create pool")
 
-        self.pool.all(client, self.loadbalancer, self.id)
+        self.pool.all(self.loadbalancer, self.id)
 
-    def all(self, client):
+    def all(self):
         """Convenience function to create a Listener, then Pool.
 
         Will call ``create`` and ``create_pool``.
-
-        Args:
-            client: An OpenStack client, usually Neutron.
         """
 
-        self.create(client)
-        self.create_pool(client)
+        self.create()
+        self.create_pool()
 
 
 class DexSSL:
@@ -435,7 +422,7 @@ class DexSSL:
         self.ca_bundle.save(ca_prefix, self.cert_dir)
 
 
-async def create_dex(client, lb: LoadBalancer, name="dex",
+async def create_dex(lb: LoadBalancer, name="dex",
                      listener_port=32000, pool_port=32000, protocol="HTTPS",
                      algo="ROUND_ROBIN", members=None):
     """Convenience function to create a Dex Listener and Pool.
@@ -457,10 +444,10 @@ async def create_dex(client, lb: LoadBalancer, name="dex",
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
-    listener.all(client)
+    listener.all()
 
 
-async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
+async def create_oauth2(lb: LoadBalancer, name="oauth2",
                         listener_port=5556, pool_port=32555, protocol="HTTP",
                         algo="ROUND_ROBIN", members=None):
     """Convenience function to create an OAuth2 Client App Listener and Pool.
@@ -482,7 +469,7 @@ async def create_oauth2(client, lb: LoadBalancer, name="oauth2",
 
     pool = Pool(f"{name}-pool", protocol, pool_port, algo, members)
     listener = Listener(lb, f"{name}-listener", listener_port, pool)
-    listener.all(client)
+    listener.all()
 
 
 # pylint: disable=too-many-branches

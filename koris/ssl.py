@@ -15,9 +15,9 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
-from koris.util.util import get_logger
+from koris.util.logger import Logger
 
-LOGGER = get_logger(__name__)
+LOGGER = Logger(__name__)
 
 
 def create_key(size=2048, public_exponent=65537):

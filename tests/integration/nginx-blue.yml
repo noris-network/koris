@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-blue
+  labels:
+    app: nginx-blue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-blue
+  template:
+    metadata:
+      labels:
+        app: nginx-blue
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html/index.html
+          name: welcome-blue
+          subPath: welcome-blue.html
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: welcome-blue
+        name: welcome-blue
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx-blue
+spec:
+  selector:
+    app: nginx-blue
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  #type: NodePort

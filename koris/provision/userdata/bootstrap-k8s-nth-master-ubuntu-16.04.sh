@@ -14,16 +14,147 @@ if [ -f /etc/kubernetes/koris.env ]; then
     source /etc/kubernetes/koris.env
 fi
 
-#### Versions for Kube 1.12.3
-export KUBE_VERSION=1.12.3
+#### Versions for Kube 1.12.8
+export KUBE_VERSION=${KUBE_VERSION:-1.12.8}
+export AUTO_JOIN=${AUTO_JOIN:-0}
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 
+export KUBECONFIG=/etc/kubernetes/admin.conf
 
 LOGLEVEL=4
 V=${LOGLEVEL}
 
+LOGFILE=/dev/stderr
+
+function log() {
+	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	echo -e "$datestring - $@" | tee $LOGFILE
+}
+
+# create a configuration file for kubeadm 1.12
+function create_kubeadm_config_one_twelve () {
+
+    HOST_NAME=$1
+    HOST_IP=$2
+    CURRENT_CLUSTER=$3
+
+    cat <<TMPL > kubeadm-"${HOST_NAME}".yaml
+apiVersion: kubeadm.k8s.io/v1alpha2
+kind: MasterConfiguration
+kubernetesVersion: v${KUBE_VERSION}
+apiServerCertSANs:
+- "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
+api:
+    controlPlaneEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
+etcd:
+  local:
+    extraArgs:
+      listen-client-urls: "https://127.0.0.1:2379,https://${HOST_IP}:2379"
+      advertise-client-urls: "https://${HOST_IP}:2379"
+      listen-peer-urls: "https://${HOST_IP}:2380"
+      initial-advertise-peer-urls: "https://${HOST_IP}:2380"
+      initial-cluster: "${CURRENT_CLUSTER},${HOST_NAME}=https://${HOST_IP}:2380"
+      initial-cluster-state: "existing"
+    serverCertSANs:
+      - ${HOST_NAME}
+      - ${HOST_IP}
+    peerCertSANs:
+      - ${HOST_NAME}
+      - ${HOST_IP}
+networking:
+    # This CIDR is a Calico default. Substitute or remove for your CNI provider.
+    podSubnet: ${POD_SUBNET}
+controllerManagerExtraArgs:
+  allocate-node-cidrs: "true"
+  cluster-cidr: ${POD_SUBNET}
+TMPL
+# if On baremetal we don't need all OpenStack cloud provider flags
+if [[ ${OPENSTACK} -eq 1 ]]; then
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+apiServerExtraVolumes:
+- name: "cloud-config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
+  writable: false
+  pathType: File
+controllerManagerExtraVolumes:
+- name: "cloud-config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
+  writable: false
+  pathType: File
+apiServerExtraArgs:
+  cloud-provider: openstack
+  cloud-config: /etc/kubernetes/cloud.config
+TMPL
+else
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+apiServerExtraArgs:
+TMPL
+fi
+
+# If Dex is to be deployed, we need to start the apiserver with extra args.
+if [[ ! -z ${OIDC_CLIENT_ID} ]]; then
+cat <<TMPL > dex.tmpl
+  oidc-issuer-url: "${OIDC_ISSUER_URL}"
+  oidc-client-id: ${OIDC_CLIENT_ID}
+  oidc-ca-file: ${OIDC_CA_FILE}
+  oidc-username-claim: ${OIDC_USERNAME_CLAIM}
+  oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
+TMPL
+    cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
+fi
+
+# add audit policy
+cat <<AUDITPOLICY >> kubeadm-"${HOST_NAME}".yaml
+  audit-log-maxsize: "24"
+  audit-log-maxbackup: "30"
+  audit-log-maxage: "90"
+  audit-log-path: /var/log/kubernetes/audit.log
+  audit-policy-file: /etc/kubernetes/audit-policy.yml
+AUDITPOLICY
+
+# add volumes for audit logs
+cat << AV >> auditVolumes.yml
+apiServerExtraVolumes:
+- name: var-log-kubernetes
+  hostPath: /var/log/kubernetes
+  mountPath: /var/log/kubernetes
+  writable: true
+  pathType: DirectoryOrCreate
+- name: "audit-policy"
+  hostPath: "/etc/kubernetes/audit-policy.yml"
+  mountPath: "/etc/kubernetes/audit-policy.yml"
+  writable: false
+  pathType: File
+AV
+
+yq m -i -a kubeadm-"${HOST_NAME}".yaml auditVolumes.yml
+
+if [[ ${ADDTOKEN} -eq 1 ]]; then
+cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: "${BOOTSTRAP_TOKEN}"
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+TOKEN
+fi
+}
+
+# check if a binary version is found
+# version_check kube-scheduler --version v1.10.4 return 1 if binary is found
+# in that version
+function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
+
 function fetch_all() {
+    log "Started fetch_all"
     sudo apt-get update
     sudo apt-get install -y software-properties-common
     sudo swapoff -a
@@ -36,6 +167,7 @@ function fetch_all() {
     sudo apt-get update
     sudo apt-get -y install docker-ce=${DOCKER_VERSION}*
     sudo apt install -y socat conntrack ipset
+    log "Finished ${FUNCNAME[0]}"
 }
 
 # run commands needed for network plugins
@@ -48,18 +180,114 @@ function config_pod_network(){
             ;;
     esac
 }
+
+
+function join_one_twelve() {
+    CONFIG=kubeadm-${HOSTNAME}.yaml
+
+    create_kubeadm_config_one_twelve "${HOSTNAME}" "$(hostname --ip-address | awk '{print $1}')" "${CURRENT_CLUSTER}"
+
+    kubeadm alpha phase certs all --config "${CONFIG}"
+    kubeadm alpha phase kubelet config write-to-disk --config "${CONFIG}"
+    kubeadm alpha phase kubelet write-env-file --config "${CONFIG}"
+    kubeadm alpha phase kubeconfig kubelet --config "${CONFIG}"
+    systemctl start kubelet
+
+    # This returns something like 10.32.192.34 etcd-oz-master-1
+    ETCD_DATA=$(kubectl get pod -l component=etcd -n kube-system -o json | jq -cr '.items[0] | .status.hostIP, .metadata.name')
+    ETCD_HOST=${ETCD_DATA#*[[:space:]]}
+    ETCD_IP=${ETCD_DATA%[[:space:]]*}  # deletes from the end
+
+    # join the etcd host to the cluster, this is executed on local node!
+    until kubectl exec -n kube-system ${ETCD_HOST} -- etcdctl \
+        --ca-file /etc/kubernetes/pki/etcd/ca.crt \
+        --cert-file /etc/kubernetes/pki/etcd/peer.crt \
+        --key-file /etc/kubernetes/pki/etcd/peer.key \
+        --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380; do \
+	    sleep 2; \
+	done
+
+    # launch etcd
+    kubeadm alpha phase etcd local --config "${CONFIG}"
+    kubeadm alpha phase kubeconfig all --config "${CONFIG}"
+    kubeadm alpha phase controlplane all --config "${CONFIG}"
+    until sudo kubeadm alpha phase mark-master --config "${CONFIG}"; do sleep 1; done
+}
+
+function fetch_secrets(){
+    mkdir -pv /etc/kubernetes/pki/etcd
+
+    kubectl get secrets -n kube-system cluster-ca -o json | jq -r '.data["tls.crt"]' | base64 -d > /etc/kubernetes/pki/ca.crt
+    kubectl get secrets -n kube-system cluster-ca -o json | jq -r '.data["tls.key"]' | base64 -d > /etc/kubernetes/pki/ca.key
+
+    kubectl get secrets -n kube-system front-proxy -o json | jq -r '.data["tls.crt"]' | base64 -d > /etc/kubernetes/pki/front-proxy-ca.crt
+    kubectl get secrets -n kube-system front-proxy -o json | jq -r '.data["tls.key"]' | base64 -d > /etc/kubernetes/pki/front-proxy-ca.key
+
+    kubectl get secrets -n kube-system etcd-ca -o json | jq -r '.data["tls.crt"]' | base64 -d > /etc/kubernetes/pki/etcd/ca.crt
+    kubectl get secrets -n kube-system etcd-ca -o json | jq -r '.data["tls.key"]' | base64 -d > /etc/kubernetes/pki/etcd/ca.key
+
+    kubectl get secrets -n kube-system sa-key -o "jsonpath={.data['sa\.key']}" | base64 -d > /etc/kubernetes/pki/sa.key
+    kubectl get secrets -n kube-system sa-pub -o "jsonpath={.data['sa\.pub']}" | base64 -d > /etc/kubernetes/pki/sa.pub
+
+    kubectl get cm -n kube-system audit-policy -o="jsonpath={.data['audit-policy\.yml']}" > /etc/kubernetes/audit-policy.yml
+
+    kubectl get secret -n kube-system cloud.config -o="jsonpath={.data['cloud\.config']}" | base64 -d > /etc/kubernetes/cloud.config
+
+    # this should be reviewed
+    set +e
+    kubectl get secret oidc-ca -n kube-system && { kubectl get secret oidc-ca -n kube-system -o="jsonpath={.data['oidc\.ca']}" > /etc/kubernetes/pki/oidc.ca; }
+    kubectl get cm -n kube-system dex.tmpl && { kubectl get cm dex.tmpl -n kube-system -o="jsonpath={.data['dex\.tmpl']}" > /etc/kubernetes/dex.tmpl; }
+    set -e
+}
+
+function write_join_config() {
+    log "Started ${FUNCNAME[0]}"
+    DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
+                     openssl rsa -pubin -outform der 2>/dev/null | \
+                     openssl dgst -sha256 -hex | sed 's/^.* //')
+    cat <<EOF > /etc/kubernetes/join.yml
+apiVersion: kubeadm.k8s.io/v1beta1
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
+    token: ${BOOTSTRAP_TOKEN}
+    caCertHashes:
+     - "sha256:${DISCOVERY_HASH}"
+    unsafeSkipCAVerification: false
+  timeout: 5m0s
+kind: JoinConfiguration
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+controlPlane:
+  LocalAPIEndpoint:
+    advertiseAddress: $(hostname --ip-address)
+    bindPort: ${LOAD_BALANCER_PORT}
+EOF
+    log "Finished ${FUNCNAME[0]}"
+}
+
 # the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
 function main() {
-    fetch_all
+
+    kubeadm version | grep -qi "${KUBE_VERSION}" || fetch_all
     kubeadm config images pull
     config_pod_network
+    if [ ${AUTO_JOIN} -eq 1 ]; then
+        fetch_secrets
+        write_join_config
+        if [[ -r /etc/kubernetes/pki/ca.crt &&  ${KUBE_VERSION} == *"1.13"* ]]; then
+            kubeadm join --config /etc/kubernetes/join.yml
+        else
+            join_one_twelve
+        fi
+    fi
+    echo "Success! ${HOSTNAME} should now be part of the cluster."
 }
 
 
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
 cd /root
-
 main
