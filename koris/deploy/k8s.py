@@ -275,8 +275,8 @@ class K8SConfigurator:  # pylint: disable=no-member
         Args:
             cluster_name (string): the name of the cluster
             n_master (int): Number of desired master nodes.
-            lb_inst (:class:`.cloud.openstack.LoadBalancer): A configured
-                LoadBalancer instance.
+            lb_inst (:class:`.cloud.openstack.LoadBalancer`):
+                A configured LoadBalancer instance.
         """
         cond = {'Ready': 'True'}
         master_listener = lb_inst.master_listener
