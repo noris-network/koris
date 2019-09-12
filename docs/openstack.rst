@@ -11,6 +11,12 @@ Follow the :doc:`installation` instructions to make sure koris is installed prop
 Prepare OpenStack
 ~~~~~~~~~~~~~~~~~
 
+.. note::
+
+  Doing the below is not strictly required as koris will create a new network
+  for you if you don't specify one in the ``config.yml``.
+
+
 1. In your browser, navigate to the OpenStack project where you wish to deploy the cluster into.
    For this tutorial, the project ``koris-project`` will be used as reference.
 
@@ -65,12 +71,6 @@ deploy your cluster
       Please enter your OpenStack Password for project <PROJECT> as user <USER>\:
 
 3. Create a koris configuration file. An example can be found :download:`here <../configs/example-config.yml>`.
-   If you're developing koris and want to deploy a cluster into the PI project, please refer to the
-   :download:`pi-dev-config <../configs/pi-dev-config.yml>`.
-
-   .. note::
-       Please check if you have access to the pre-built koris images (e.g. ``koris-2019-02-08``).
-       If not, please contact the OpenStack team to enable them for you.
 
 4. Pass the your config file to ``koris apply``:
 

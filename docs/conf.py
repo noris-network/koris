@@ -52,7 +52,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'koris'
-copyright = u"2018 noris network"
+copyright = u"2019 noris network"
 author = u"koris authors"
 
 # The version info for the project you're documenting, acts as replacement
@@ -159,7 +159,7 @@ texinfo_documents = [
      u'koris Documentation',
      author,
      'koris',
-     'One line description of project.',
+     'Kubernetes installer for OpenStack.',
      'Miscellaneous'),
 ]
 
