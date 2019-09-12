@@ -83,7 +83,7 @@ Installation
    You can leave your virtual environment by typing ``deactivate``.
 
 3. To install the latest realese (for installation from source see :doc:`/installation`), grab it
-   with the following command (replace ``<LATEST_TAG>`` with the latest version tag, for example ``0.9.0``).
+   with the following command (replace ``<LATEST_TAG>`` with the latest version tag, for example ``1.2.0``).
 
    .. code:: shell
 

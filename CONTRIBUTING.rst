@@ -104,7 +104,7 @@ If you prefer to use `Pipenv` you can let Pipenv manage the virtual environment:
 7. Submit a merge request through the Gitlab website.
 
 Merge Request Guidelines
------------------------
+------------------------
 
 Before you submit a merge request, check that it meets these guidelines:
 

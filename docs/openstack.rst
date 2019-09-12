@@ -75,6 +75,7 @@ Volumes       6
 Storage       150 GB
 Floating IP   1
 Load Balancer 1
+============= ===========
 
 .. _usage_deploy_cluster:
 
