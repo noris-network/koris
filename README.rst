@@ -2,11 +2,11 @@
 koris
 =====
 
-.. image:: https://gitlab.noris.net/PI/koris/badges/dev/pipeline.svg
-  :target: https://gitlab.noris.net/PI/koris/badges/dev/pipeline.svg
+.. image:: https://gitlab.com/noris-network/koris/badges/dev/pipeline.svg
+  :target: https://gitlab.com/noris-network/koris/badges/dev/pipeline.svg
 
-.. image:: https://gitlab.noris.net/PI/koris/badges/dev/coverage.svg
-  :target: https://gitlab.noris.net/PI/koris/badges/dev/coverage.svg
+.. image:: https://gitlab.com/noris-network/koris/badges/dev/coverage.svg
+  :target: https://gitlab.com/noris-network/koris/badges/dev/coverage.svg
 
 .. image:: https://img.shields.io/badge/docs-passed-green.svg
   :target: https://pi.docs.noris.net/koris/
@@ -91,7 +91,7 @@ Installation
 .. note::
 
    If the machine you would like to install koris on does not have access to
-   ``gitlab.noris.net``, download the source distribution on a machine that has,
+   ``gitlab.com`noris-network download the source distribution on a machine that has,
    and copy it over to your desired machine:
 
    .. code:: shell

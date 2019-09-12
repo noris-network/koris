@@ -20,9 +20,10 @@ in ``/etc/kubernetes/koris.env``
    export POD_SUBNET="10.233.0.0/16"
    export POD_NETWORK="CALICO"
    export LOAD_BALANCER_PORT="6443"
-   export MASTERS_IPS=( 10.36.23.29 10.36.23.4 10.36.23.37 )
+   # Set the IPs of your master machines
+   export MASTERS_IPS=( 10.0.0.29 10.0.0.41 0.0.0.37 )
    export MASTERS=( bare-metal-master-1 bare-metal-master-2 bare-metal-master-3 )
-   export LOAD_BALANCER_IP=10.36.23.11
+   export LOAD_BALANCER_IP=10.0.0.11
    #export LOAD_BALANCER_DNS
    export BOOTSTRAP_TOKEN=e8e199.9c4a416087c3af19
    export OPENSTACK=0
@@ -90,5 +91,5 @@ The script will intall all dependencies on all node if you instructed it to do s
 This takes a little while, dependending on the number of masters nodes and how
 fast is the internet connection is.
 
-.. _bootstrap script: https://gitlab.noris.net/PI/koris/raw/master/koris/provision/userdata/bootstrap-k8s-master-ubuntu-16.04.sh
+.. _bootstrap script: https://gitlab.com/noris-network/koris/raw/master/koris/provision/userdata/bootstrap-k8s-master-ubuntu-16.04.sh
 

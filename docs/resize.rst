@@ -23,8 +23,8 @@ nodes:
 
    $ koris add --amount 2 --zone de-nbg6-1a --flavor ECS.UC1.4-4 add-m.yml
    [!] The network [k8s-nude] already exists. Skipping
-   [!] subnetwork [NORIS-NUDE-OS-K8S-DEV-SUBNET] already exists. Skipping...
-   [!] The router [NORIS-K8S-NUDE-OS-MGMT-ROUTER] already exists. Skipping
+   [!] subnetwork [test-OS-K8S-DEV-SUBNET] already exists. Skipping...
+   [!] The router [test-OS-MGMT-ROUTER] already exists. Skipping
    [!] Gathering node information from OpenStack ...
    created volume <Volume: 899b5d15-41dc-47b0-9deb-2e5911f2bbd5> BSS-Performance-Storage
    Creating instance node-2-am...
@@ -43,9 +43,9 @@ nodes:
    Instance: node-2-am is in in BUILD state, sleeping for 5 more seconds
    Instance: node-3-am is in in BUILD state, sleeping for 5 more seconds
    Instance: node-2-am is in ACTIVE state
-   Instance booted! Name: node-2-am, IP: ACTIVE, Status : 10.32.192.56
+   Instance booted! Name: node-2-am, IP: ACTIVE, Status : 10.0.0.56
    Instance: node-3-am is in ACTIVE state
-   Instance booted! Name: node-3-am, IP: ACTIVE, Status : 10.32.192.119
+   Instance booted! Name: node-3-am, IP: ACTIVE, Status : 10.0.0.119
    [!] An updated cluster configuration was written to: add-m.updated.yml
 
 The machines will now boot in OpenStack, and join the cluster. Notice that,
@@ -99,8 +99,8 @@ Adding master nodes is easy too:
 
    $ koris add --role master --zone de-nbg6-1a --flavor ECS.GP1.2-8 add-m.yml
    [!] The network [k8s-nude] already exists. Skipping
-   [!] subnetwork [NORIS-NUDE-OS-K8S-DEV-SUBNET] already exists. Skipping...
-   [!] The router [NORIS-K8S-NUDE-OS-MGMT-ROUTER] already exists. Skipping
+   [!] subnetwork [test-OS-K8S-DEV-SUBNET] already exists. Skipping...
+   [!] The router [test-OS-MGMT-ROUTER] already exists. Skipping
    [!] Gathering control plane information from OpenStack ...
    created volume <Volume: e717ee52-9291-4fc4-9fe7-dcff1a38af76> BSS-Performance-Storage
    Creating instance master-2-am...
@@ -109,12 +109,12 @@ Adding master nodes is easy too:
    Instance: master-2-am is in in BUILD state, sleeping for 5 more seconds
    Instance: master-2-am is in in BUILD state, sleeping for 5 more seconds
    Instance: master-2-am is in ACTIVE state
-   Instance booted! Name: master-2-am, IP: ACTIVE, Status : 10.32.192.100
+   Instance booted! Name: master-2-am, IP: ACTIVE, Status : 10.0.0.100
    [!] An updated cluster configuration was written to: add-m.updated.yml
    deployment.apps/master-adder unchanged
    Waiting for the pod to run ...
    Extract current etcd cluster state...
-   Current etcd cluster state is: master-1-am=https://10.32.192.27:2380
+   Current etcd cluster state is: master-1-am=https://10.0.0.27:2380
    Executing adder script on current master node...
    ... snipped ...
    [markmaster] Marking the node master-2-am as master by adding the label "node-role.kubernetes.io/master=''"

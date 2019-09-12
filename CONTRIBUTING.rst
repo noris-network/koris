@@ -233,7 +233,7 @@ You can run make tragets with::
 Continous Integration
 +++++++++++++++++++++
 
-With every ``git push`` a complete test suite is running in `gitlab.noris.net`_.
+With every ``git push`` a complete test suite is running in `Gitlab CI`_.
 This test suite builds a complete Kubernetes cluster in noris.cloud. To access
 the resources of this cluster you need an OpenStack account in noris.cloud, and
 your user has to be added to the project ``korispipeline``.
@@ -241,4 +241,4 @@ Make sure you have your user added to the project, talk to the OpenStack team.
 
 .. _Gitlab issues: https://gitlab.com/noris-network/koris/issues
 .. _PBR: https://docs.openstack.org/pbr/latest/
-.. _gitlab.noris.net: https://gitlab.noris.net/PI/koris/pipelines
+.. _Gitlab CI: https://gitlab.com/noris-network/koris/pipelines
