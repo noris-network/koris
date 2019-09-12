@@ -1287,7 +1287,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                  cinder_client,
                  config,
                  conn):
-
         self.conn = conn
         self.keypair = nova_client.keypairs.get(config['keypair'])
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
@@ -1323,6 +1322,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.azones = config['availibility-zones']
         self.storage_class = config['storage_class']
         self._image_name = config['image']
+        self._image = None
         self._nova = nova_client
         self._neutron = neutron_client
         self._cinder = cinder_client
@@ -1380,14 +1380,21 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         """find the koris image in OpenStackAPI"""
         try:
             return self._nova.glance.find_image(self._image_name)
-        except NoUniqueMatch:
+        except (NoUniqueMatch, NovaNotFound):
             return self._nova.glance.find_image(
                 [l.id for l in self.conn.list_images() if l.name == self._image_name][0])
 
     def _get(self, hostname, zone, role):
         """Retrieves an Instance from OpenStack."""
+        if self._image is None:
+            try:
+                self._image = self.image
+            except IndexError:
+                self._image = ''
+                LOGGER.warning("Image %s was not found", self._image_name)
 
-        volume_config = {'image': self.image, 'class': self.storage_class}
+
+        volume_config = {'image': self._image, 'class': self.storage_class}
         inst = None
         try:
             _server = self._nova.servers.find(name=hostname)
@@ -1491,7 +1498,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             hz = list(distribute_host_zones(self.nodes_names, self.azones))
         else:
             hz = list(distribute_host_zones(self.management_names, self.azones))
-
         for hosts, zone in hz:
             for host in hosts:
                 yield self._get(host, zone, role)
