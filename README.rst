@@ -33,20 +33,14 @@ Features
 
  * Support for two CNI plugins out of the box
 
-   - calico (default)
-   - flannel
+   - Calico (default)
+   - Flannel
 
- * Single-Sign-On with:
+ * (Experimental) Single-Sign-On with:
 
    - LDAP
    - Gitlab
    - SAML (beta feature)
-
-Demo:
-
-.. image:: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/koris-demo.gif
-   :target: https://gitlab.noris.net/PI/koris/raw/dev/docs/static/_imgs/koris-demo.gif
-   :scale: 12%
 
 Quickstart
 ----------
@@ -61,11 +55,9 @@ The complete compiled `documentation of koris can be found here <https://pi.docs
 Prerequisites
 ^^^^^^^^^^^^^
 
-1. Make sure you are on a machine that has access to `gitlab.noris.net <https://gitlab.noris.net/>`_.
+1. Have Python3.6 installed.
 
-2. Have Python3.6 installed.
-
-3. Via the OpenStack web UI, download an ``OS_RC_FILE v3`` file for the project you want to deploy
+2. Via the OpenStack web UI, download an ``OS_RC_FILE v3`` file for the project you want to deploy
    your cluster into.
 
 Installation
@@ -87,12 +79,12 @@ Installation
 
    You can leave your virtual environment by typing ``deactivate``.
 
-3. To install the latest realese (for installation from source see :doc:`/installation`), grab it 
+3. To install the latest realese (for installation from source see :doc:`/installation`), grab it
    with the following command (replace ``<LATEST_TAG>`` with the latest version tag, for example ``0.9.0``).
 
    .. code:: shell
 
-     $ pip install -e git+git@gitlab.noris.net:PI/koris.git@v<LATEST_TAG>#egg=koris
+     $ pip install -e git+git@gitlab.com:noris-network/koris.git@v<LATEST_TAG>#egg=koris
 
   Koris is now installed in ``./koris-env/bin`` and usable with an activated virtual environment.
 
@@ -104,7 +96,7 @@ Installation
 
    .. code:: shell
 
-      curl https://gitlab.noris.net/PI/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
+      curl https://gitlab.com/noris-network/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
       scp koris-v<LATEST_TAG>.zip remotehost:~/
 
    Repeat the steps to create and activate a virtual environment, then install
@@ -128,22 +120,36 @@ Usage
    with ``-h`` or ``--help``.
 
    .. code:: shell
-   
+
       $ koris -h
-      usage: koris [-h] [--version] {add,apply,destroy} ...
+      usage: koris [-h] [--version]
+                  [--verbosity {0,1,2,3,4,quiet,error,warning,info,debug}]
+                  {add,apply,delete,destroy} ...
+
+      Before any koris command can be run, an OpenStack RC file has to be sourced in
+      the shell. See online documentation for more information.
 
       positional arguments:
-        {add,apply,destroy}  commands
-          add                Add a worker node or master node to the cluster. Add a
-                            node to the current active context in your KUBECONFIG.
-                            You can specify any other configuration file by
-                            overriding the KUBECONFIG environment variable.
-          apply              Bootstrap a Kubernetes cluster
-          destroy            Delete the complete cluster stack
+        {add,apply,delete,destroy}
+                              commands
+          add                 Add a worker node or master node to the cluster. Add a
+                              node or a master to the current active context in your
+                              KUBECONFIG. You can specify any other configuration
+                              file by overriding the KUBECONFIG environment
+                              variable. If you specify a name and IP address the
+                              program will only try to join it to the cluster
+                              without trying to create the host in the cloud first.
+          apply               Bootstrap a Kubernetes cluster
+          delete              Delete a node from the cluster, or the complete
+                              cluster.
+          destroy             Delete the complete cluster stack
 
       optional arguments:
-        -h, --help           show this help message and exit
-        --version            show version and exit
+        -h, --help            show this help message and exit
+        --version             show version and exit
+        --verbosity {0,1,2,3,4,quiet,error,warning,info,debug}, -v {0,1,2,3,4,quiet,error,warning,info,debug}
+                              set the verbosity level (0 = quiet, 1 = error, 2 =
+                              warning, 3 = info, 4 = debug) (default: 3)
 
 3. To get information about each subcommand type:
 
@@ -177,8 +183,8 @@ Usage
 
       $ koris apply your-config.yaml
 
-7. A ``kubectl`` configuration file will be created into your project root with the name of ``<clustername>-admin.conf``. 
-   You can either pass that with each execution via ``kubectl --kubeconfig=/path/to/koris/your-admin.conf`` 
+7. A ``kubectl`` configuration file will be created into your project root with the name of ``<clustername>-admin.conf``.
+   You can either pass that with each execution via ``kubectl --kubeconfig=/path/to/koris/your-admin.conf``
    or by exporting it as an environment variable:
 
    .. code:: shell
