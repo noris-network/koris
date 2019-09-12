@@ -55,10 +55,13 @@ The complete compiled `documentation of koris can be found here <https://pi.docs
 Prerequisites
 ^^^^^^^^^^^^^
 
-1. Have Python3.6 installed.
+Install Python 3.6:
 
-2. Via the OpenStack web UI, download an ``OS_RC_FILE v3`` file for the project you want to deploy
-   your cluster into.
+.. code:: shell
+
+   sudo apt install python3-pip python3.6-venv
+
+Follow the instructions to install `kubectl`_ .
 
 Installation
 ^^^^^^^^^^^^
@@ -199,5 +202,6 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
+.. _kubectl: https://kubernetes.io/docs/tasks/tools/install-kubectl/
 
 .. highlight:: shell

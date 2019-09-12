@@ -16,7 +16,6 @@ Prepare OpenStack
   Doing the below is not strictly required as koris will create a new network
   for you if you don't specify one in the ``config.yml``.
 
-
 1. In your browser, navigate to the OpenStack project where you wish to deploy the cluster into.
    For this tutorial, the project ``koris-project`` will be used as reference.
 
@@ -58,9 +57,28 @@ Prepare OpenStack
      $ neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --remote-ip-prefix <CUSTOMER_CIDR> --direction egress <CLUSTER-SEC-GROUP>
      $ neutron security-group-rule-create --protocol tcp --port-range-min 179 --port-range-max 179 --direction ingress --remote-ip-prefix <CUSTOMER_CIDR> <CLUSTER-SEC-GROUP>
 
+Sizing
+~~~~~~
+
+The infrastructure requirements depend on the size of your cluster (number of
+workers and nodes), as well as the instance type you choose. It's recommended
+to have at least three master nodes to ensure high availability. Assuming
+you are using three master nodes (``ECS.C1.2-4``) and three worker nodes
+(``ECS.UC1.4-4``), your cluster will use the following resources:
+
+============= ===========
+Resource type Consumption
+============= ===========
+CPU           18 cores
+Memory        24 GB
+Volumes       6
+Storage       150 GB
+Floating IP   1
+Load Balancer 1
+
 .. _usage_deploy_cluster:
 
-deploy your cluster
+Deploy your cluster
 ~~~~~~~~~~~~~~~~~~~
 
 1. Before you can run ``koris``, source your RC file. Then enter your password:
@@ -112,13 +130,13 @@ You can see the output of cloud-init with the following sequence of commands:
    +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+
    | ID                                   | Name                                  | Status | Networks                             | Image | Flavor      |
    +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+
-   | 3685eec8-494b-4e1c-9c06-dee2068727a5 | node-1-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.9  |       | ECS.C1.4-8  |
-   | 402cbc68-b7ad-463f-8657-f553aa263276 | master-2-koris-pipe-line-671a519-8034 | ACTIVE | korispipeline-office-net=10.36.18.24 |       | ECS.GP1.2-8 |
-   | 02752b0a-7f3d-47ac-a509-af9b52e2bf2a | master-3-koris-pipe-line-671a519-8034 | ACTIVE | korispipeline-office-net=10.36.18.20 |       | ECS.GP1.2-8 |
-   | 45ad854a-e484-44f8-bb87-a9e5d0a20b79 | master-1-koris-pipe-line-671a519-8034 | ACTIVE | korispipeline-office-net=10.36.18.12 |       | ECS.GP1.2-8 |
-   | 0c460ba9-4c73-4966-80ec-959f5aaabbe0 | node-2-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.11 |       | ECS.C1.4-8  |
-   | 0d4670a3-95b8-4f80-bd92-06b8266b3d6c | node-3-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.8  |       | ECS.C1.4-8  |
-   | 611e8b44-f88e-47fe-9ce6-bed168eaea8e | node-1-koris-pipe-line-671a519-8034   | ACTIVE | korispipeline-office-net=10.36.18.7  |       | ECS.C1.4-8  |
+   | 3685eec8-494b-4e1c-9c06-dee2068727a5 | node-1-koris-pipe-line-671a519-8034   | ACTIVE | koris-net=10.0.0.9  |       | ECS.C1.4-8  |
+   | 402cbc68-b7ad-463f-8657-f553aa263276 | master-2-koris-pipe-line-671a519-8034 | ACTIVE | koris-net=10.0.0.24 |       | ECS.GP1.2-8 |
+   | 02752b0a-7f3d-47ac-a509-af9b52e2bf2a | master-3-koris-pipe-line-671a519-8034 | ACTIVE | koris-net=10.0.0.20 |       | ECS.GP1.2-8 |
+   | 45ad854a-e484-44f8-bb87-a9e5d0a20b79 | master-1-koris-pipe-line-671a519-8034 | ACTIVE | koris-net=10.0.0.12 |       | ECS.GP1.2-8 |
+   | 0c460ba9-4c73-4966-80ec-959f5aaabbe0 | node-2-koris-pipe-line-671a519-8034   | ACTIVE | koris-net=10.0.0.11 |       | ECS.C1.4-8  |
+   | 0d4670a3-95b8-4f80-bd92-06b8266b3d6c | node-3-koris-pipe-line-671a519-8034   | ACTIVE | koris-net=10.0.0.8  |       | ECS.C1.4-8  |
+   | 611e8b44-f88e-47fe-9ce6-bed168eaea8e | node-1-koris-pipe-line-671a519-8034   | ACTIVE | koris-net=10.0.0.7  |       | ECS.C1.4-8  |
    +--------------------------------------+---------------------------------------+--------+--------------------------------------+-------+-------------+
 
    $  $ openstack console log show 3685eec8-494b-4e1c-9c06-dee2068727a5
