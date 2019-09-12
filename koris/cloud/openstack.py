@@ -1389,6 +1389,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         if self._image is None:
             try:
                 self._image = self.image
+                LOGGER.info("Found image %s", self._image_name)
             except IndexError:
                 self._image = ''
                 LOGGER.warning("Image %s was not found", self._image_name)
