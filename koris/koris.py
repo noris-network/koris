@@ -445,7 +445,7 @@ def main():
     # Setting verbosity level
     level = k.parser.parse_args().verbosity
     LOGGER.level = level
-    # pylint misses the fact that Kolt is decorater with mach.
+    # pylint misses the fact that Koris is decorated with mach.
     # the mach decortaor analyzes the methods in the class and dynamically
     # creates the CLI parser. It also adds the method run to the class.
     k.run()  # pylint: disable=no-member
