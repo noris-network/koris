@@ -15,7 +15,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at our `JIRA Koris`_ project.
+Report bugs via  `Gitlab issues`_ .
 
 If you are reporting a bug, please include:
 
@@ -32,15 +32,14 @@ and "help wanted" is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-koris could always use more documentation, whether as part of the
+Koris could always use more documentation, whether as part of the
 official koris docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to talk to us in `Kolt Channel`_.
-
+The best way to get in touch is via `Gitlab issues`_.
 
 If you are proposing a feature:
 
@@ -59,7 +58,7 @@ Ready to contribute? Here's how to set up `koris` for local development.
 1. Fork the `koris` repo on Gitlab.
 2. Clone your fork locally::
 
-    $ git clone git@gitlab.noris.net:PI/koris.git
+    $ git clone git@gitlab.com:noris-network/koris.git
 
 3. Install your local copy into a virtualenv.
    This is how you set up your fork for local development::
@@ -104,16 +103,16 @@ If you prefer to use `Pipenv` you can let Pipenv manage the virtual environment:
 
 7. Submit a merge request through the Gitlab website.
 
-Pull Request Guidelines
------------------------
+Merge Request Guidelines
+------------------------
 
-Before you submit a pull request, check that it meets these guidelines:
+Before you submit a merge request, check that it meets these guidelines:
 
-1. The pull request should include tests.
-2. If the pull request adds functionality, the docs should be updated. Put
+1. The merge request should include tests.
+2. If the merge request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
-3. The pull request should work for Python 3.4, 3.5 and 3.6.  Check
+3. The merge request should support Python3.6 and newer versions only. Check
    and make sure that the tests pass for all supported Python versions.
 
 .. _dependencies:
@@ -204,9 +203,8 @@ Instead make small commits that are easy to reason about and to understand.
 
 Instead write a `nice commit message`_ with a short title and informative body.
 Make sure the body contains a reference to the ticket you are working on.
-The reference should be in the form of a the jira ticket number: KOLT-XY.
+The reference should be in the form of a the Gitlab issue number.
 Make sure your titles are meaningful, they will appear in the ChangeLog!
-
 
 .. _nice commit message: https://code.likeagirl.io/useful-tips-for-writing-better-git-commit-messages-808770609503
 
@@ -225,7 +223,7 @@ develop faster. Issue ``make help`` to see all th available functions.
 
 To run the complete integration test from your local machine issue::
 
-   $ make integration-test KEY=otiram
+   $ make integration-test KEY=your-key
 
 You can run make tragets with::
 
@@ -235,16 +233,12 @@ You can run make tragets with::
 Continous Integration
 +++++++++++++++++++++
 
-With every ``git push`` a complete test suite is running in `gitlab.noris.net`_.
+With every ``git push`` a complete test suite is running in `Gitlab CI`_.
 This test suite builds a complete Kubernetes cluster in noris.cloud. To access
 the resources of this cluster you need an OpenStack account in noris.cloud, and
 your user has to be added to the project ``korispipeline``.
 Make sure you have your user added to the project, talk to the OpenStack team.
 
-
-
-
-.. _Kolt Channel: https://hipchat.noris.de/chat/room/664
-.. _JIRA Koris: https://jira.office.noris.de/secure/RapidBoard.jspa?rapidView=291&projectKey=KORIS
+.. _Gitlab issues: https://gitlab.com/noris-network/koris/issues
 .. _PBR: https://docs.openstack.org/pbr/latest/
-.. _gitlab.noris.net: https://gitlab.noris.net/PI/koris/pipelines
+.. _Gitlab CI: https://gitlab.com/noris-network/koris/pipelines
