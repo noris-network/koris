@@ -3,7 +3,7 @@ cli.py
 ======
 
 misc functions to interact with the cluster, usually called from
-``koris.koris.Koris``.
+other classes.
 
 Don't use directly
 """

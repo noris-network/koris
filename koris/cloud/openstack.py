@@ -1287,6 +1287,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                  cinder_client,
                  config,
                  conn):
+
         self.conn = conn
         self.keypair = nova_client.keypairs.get(config['keypair'])
         self.node_flavor = nova_client.flavors.find(name=config['node_flavor'])
@@ -1505,6 +1506,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
             hz = list(distribute_host_zones(self.nodes_names, self.azones))
         else:
             hz = list(distribute_host_zones(self.management_names, self.azones))
+
         for hosts, zone in hz:
             for host in hosts:
                 yield self._get(host, zone, role)
