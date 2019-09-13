@@ -1390,7 +1390,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
                 _id = [l.id for l in self.conn.list_images()
                        if l.name == self._image_name]
                 if _id:
-                    self._image = self._nova.glace.find_image(_id[0])
+                    self._image = self._nova.glance.find_image(_id[0])
                 else:
                     LOGGER.warning("Image %s was not found", self._image_name)
                     self._image = ''
