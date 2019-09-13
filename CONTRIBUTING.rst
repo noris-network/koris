@@ -112,7 +112,7 @@ Before you submit a merge request, check that it meets these guidelines:
 2. If the merge request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
-3. The merge request should work for Python 3.4, 3.5 and 3.6.  Check
+3. The merge request should support Python3.6 and newer versions only. Check
    and make sure that the tests pass for all supported Python versions.
 
 .. _dependencies:
