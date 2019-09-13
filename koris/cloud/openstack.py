@@ -1323,6 +1323,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         self.azones = config['availibility-zones']
         self.storage_class = config['storage_class']
         self._image_name = config['image']
+        self._image = None
         self._nova = nova_client
         self._neutron = neutron_client
         self._cinder = cinder_client
@@ -1377,17 +1378,31 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
     @property
     def image(self):
-        """find the koris image in OpenStackAPI"""
-        try:
-            return self._nova.glance.find_image(self._image_name)
-        except NoUniqueMatch:
-            return self._nova.glance.find_image(
-                [l.id for l in self.conn.list_images() if l.name == self._image_name][0])
+        """Find the koris image in OpenStack
+
+        We use self._image in order to save us doing multiple calls to OpenStack
+        every time the property is called.
+        """
+        if self._image is None:
+            try:
+                self._image = self._nova.glance.find_image(self._image_name)
+            except (NoUniqueMatch, NovaNotFound):
+                _id = [l.id for l in self.conn.list_images()
+                       if l.name == self._image_name]
+                if _id:
+                    self._image = self._nova.glace.find_image(_id[0])
+                else:
+                    LOGGER.warning("Image %s was not found", self._image_name)
+                    self._image = ''
+
+        return self._image
 
     def _get(self, hostname, zone, role):
         """Retrieves an Instance from OpenStack."""
+        if self.image:
+            LOGGER.info("Found image %s", self._image_name)
 
-        volume_config = {'image': self.image, 'class': self.storage_class}
+        volume_config = {'image': self._image, 'class': self.storage_class}
         inst = None
         try:
             _server = self._nova.servers.find(name=hostname)
