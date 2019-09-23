@@ -73,16 +73,16 @@ fi
 
 function fetch_all() {
     apt-get update
-    apt-get install -y software-properties-common
+    apt-get install -y software-properties-common apt-transport-https
     curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-    apt install -y --allow-downgrades kubeadm="${KUBE_VERSION}"-00 kubelet="${KUBE_VERSION}"-00
+    apt-get install -y --allow-downgrades kubeadm="${KUBE_VERSION}"-00 kubelet="${KUBE_VERSION}"-00
 
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
     apt -y --allow-downgrades install docker-ce=${DOCKER_VERSION}*
-    apt install -y socat conntrack ipset
+    apt-get install -y socat conntrack ipset
 }
 
 # check if a binary version is found
