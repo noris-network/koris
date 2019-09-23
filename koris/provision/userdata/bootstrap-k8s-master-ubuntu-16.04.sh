@@ -730,20 +730,22 @@ EOF
 
 # enforce docker version
 function get_docker_ubuntu() {
-    dpkg -l software-properties-common | grep ^ii || sudo apt install "${TRANSPORT_PACKAGES}" -y
+    apt-get update
+    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
     apt-get -y install docker-ce="${DOCKER_VERSION}*"
-    apt install -y socat conntrack ipset
+    apt-get install -y socat conntrack ipset
 }
 
 # enforce kubeadm version
 function get_kubeadm_ubuntu() {
-    dpkg -l software-properties-common | grep ^ii || sudo apt install "${TRANSPORT_PACKAGES}" -y
+    apt-get update
+    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-    apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
+    apt-get install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
 }
 
 function get_yq() {
