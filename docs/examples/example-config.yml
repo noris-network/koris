@@ -5,7 +5,8 @@
 # https://www.noris.cloud/services/compute/openstack-nova/?lang=en#details
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
-
+version:
+  k8s: "1.13.10"
 # Specify the name of an existing network and subnet with CIDR range. If it
 # doesn't exist, koris will create it for you.
 private_net:
