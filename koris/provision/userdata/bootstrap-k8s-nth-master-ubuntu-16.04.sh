@@ -22,6 +22,8 @@ export CALICO_VERSION=3.3
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
+TRANSPORT_PACKAGES="apt-transport-https ca-certificates software-properties-common"
+
 LOGLEVEL=4
 V=${LOGLEVEL}
 
@@ -153,22 +155,39 @@ fi
 # in that version
 function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
 
-function fetch_all() {
-    log "Started fetch_all"
-    sudo apt-get update
-    sudo apt-get install -y software-properties-common
-    sudo swapoff -a
-    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-    sudo apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
-    sudo apt install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
-
-    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    sudo apt-get update
-    sudo apt-get -y install docker-ce=${DOCKER_VERSION}*
-    sudo apt install -y socat conntrack ipset
+# enforce docker version
+function get_docker() {
+    log "stated ${FUNCNAME[0]}"
+    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
+    curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update
+    apt-get -y install docker-ce="${docker_version}*"
+    apt-get install -y socat conntrack ipset
     log "Finished ${FUNCNAME[0]}"
 }
+
+# enforce kubeadm version
+function get_kubeadm {
+    log "stated ${FUNCNAME[0]}"
+    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
+    curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
+    apt-get install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
+    log "Finished ${FUNCNAME[0]}"
+}
+
+
+function fetch_all() {
+    apt-get update
+    if [ -z "$(type -P docker)" ]; then
+        get_docker
+    fi
+    if [ -z "$(type -P kubeadm)" ]; then
+        get_kubeadm
+    fi
+}
+
 
 # run commands needed for network plugins
 function config_pod_network(){
