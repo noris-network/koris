@@ -61,6 +61,13 @@ KUBE_VERSION_COMPARE="$(echo $KUBE_VERSION | cut -d '.' -f 2 )"
 LOGLEVEL=4
 V=${LOGLEVEL}
 
+LOGFILE=/dev/stderr
+
+function log() {
+	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	echo -e "$datestring - $@" | tee $LOGFILE
+}
+
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 SFTPOPTS=${SSHOPTS}
 
@@ -667,46 +674,6 @@ function apply_net_plugin(){
     esac
 }
 
-# get docker version for CentOS
-function get_docker_centos() {
-    yum install -y yum-utils \
-        device-mapper-persistent-data \
-        lvm2
-    yum-config-manager \
-    --add-repo \
-    https://download.docker.com/linux/centos/docker-ce.repo
-    # docker-ce docker-ce-cli
-    yum install -y 'docker-ce-'${DOCKER_VERSION}'*' containerd.io
-    systemctl enable docker
-    systemctl start docker
-}
-
-# get kubeadm version for CentOS
-function get_kubeadm_centos() {
-    cat <<EOF > /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-exclude=kube*
-EOF
-
-    # Set SELinux in permissive mode (effectively disabling it)
-    setenforce 0
-    sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
-
-    yum install -y kubelet-${KUBE_VERSION} kubeadm-${KUBE_VERSION} kubectl-${KUBE_VERSION} --disableexcludes=kubernetes
-    systemctl enable --now kubelet
-
-    cat <<EOF >  /etc/sysctl.d/k8s.conf
-net.bridge.bridge-nf-call-ip6tables = 1
-net.bridge.bridge-nf-call-iptables = 1
-EOF
-sysctl --system
-}
 
 function bootstrap_deps_node() {
 ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
@@ -729,14 +696,16 @@ EOF
 }
 
 # enforce docker version
-function get_docker_ubuntu() {
+function get_docker() {
+    log "Started get_docker"
     apt-get update
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
-    curl --retry 10 -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
     apt-get -y install docker-ce="${DOCKER_VERSION}*"
     apt-get install -y socat conntrack ipset
+    log "started finished_docker"
 }
 
 # enforce kubeadm version
@@ -753,14 +722,6 @@ function get_yq() {
 		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/2.3.0/yq_linux_amd64 -o /usr/local/bin/yq
 		chmod +x /usr/local/bin/yq
 	fi
-}
-
-function get_docker(){
-	if [ -z "$(type -P apt)" ]; then
-        get_docker_centos;
-    else
-        get_docker_ubuntu;
-    fi
 }
 
 function get_kubeadm(){
