@@ -95,6 +95,26 @@ build-cluster:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+
+build-cluster-with-vanilla-image:
+  stage: build-cluster
+  image: oz123/koris-alpine:0.1.5
+  script:
+  - "pip3 install -r requirements_ci.txt"
+  - "pip3 install -q -e ."
+  - "make launch-cluster IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'koris-base' | head -n 1) CLUSTER_NAME=koris-pipeline-${REV_NUMBER}${BUILD_SUFFIX}-vanilla"
+  - "cp tests/koris_test.yml tests/koris_test-vanilla.yml"
+  artifacts:
+    paths:
+      - "*-admin.conf"
+      - "tests/koris_test-vanilla.yml"
+    expire_in: 1 week
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+
+
 build-cluster-with-floating-ip:
   stage: build-cluster
   image: oz123/koris-alpine:0.1.5
@@ -493,6 +513,23 @@ cleanup:
     paths:
       - ".coverage.destroy"
     expire_in: 1 week
+
+clean-vanilla-cluster:
+  stage: cleanup
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+  - apk add make
+  - "pip3 install -r requirements_ci.txt"
+  - "pip3 install -q -e ."
+  - make clean-cluster CONFIG_FILE=tests/koris_test-vanilla.yml
+  when: always
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
 
 
 clean-cluster-with-floating-ip:
