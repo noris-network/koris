@@ -1386,6 +1386,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         if self._image is None:
             try:
                 self._image = self._nova.glance.find_image(self._image_name)
+                LOGGER.info("Found image %s", self._image_name)
             except (NoUniqueMatch, NovaNotFound):
                 _id = [l.id for l in self.conn.list_images()
                        if l.name == self._image_name]
@@ -1399,8 +1400,6 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
     def _get(self, hostname, zone, role):
         """Retrieves an Instance from OpenStack."""
-        if self.image:
-            LOGGER.info("Found image %s", self._image_name)
 
         volume_config = {'image': self._image, 'class': self.storage_class}
         inst = None
