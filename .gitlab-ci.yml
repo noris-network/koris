@@ -102,7 +102,7 @@ build-cluster-with-vanilla-image:
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
-  - "make launch-cluster IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'koris-base' | head -n 1) CLUSTER_NAME=koris-pipeline-${REV_NUMBER}${BUILD_SUFFIX}-vanilla"
+  - "make launch-cluster IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'koris-base' | head -n 1) CLUSTER_NAME=koris-pipeline-${CI_PIPELINE_ID}-vanilla"
   - "cp tests/koris_test.yml tests/koris_test-vanilla.yml"
   artifacts:
     paths:
