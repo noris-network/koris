@@ -15,12 +15,12 @@ _, _, cinder = get_clients()
 
 
 pprint.pprint(os.environ)
-URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.noris.net/PI/koris/"))
+URL = urlparse(os.getenv("CI_PROJECT_URL"))
 gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
                    private_token=os.getenv("ACCESS_TOKEN"))
 
 
-project = gl.projects.get(os.getenv("CI_PROJECT_ID", 1260))
+project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 MAX_PIPES = int(os.getenv("CI_MAX_RUNNING_PIELINES", 3))
 
