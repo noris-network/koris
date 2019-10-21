@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-expose \
+.PHONY: clean clean-test clean-pyc clean-build docs help integration-run \
 	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
@@ -143,8 +143,6 @@ integration-test: \
 	add-nodes \
 	add-master \
 	integration-run \
-	integration-wait \
-	integration-expose \
 	expose-wait \
 	curl-run \
 	check-cluster-dns \
@@ -277,30 +275,14 @@ show-nodes:
 	done
 
 integration-run:
-	kubectl apply -f tests/integration/nginx-pod.yml --kubeconfig=${KUBECONFIG}
+	kubectl apply -f tests/integration/nginx-deployment.yml --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
 	@echo "started"
-
-
-integration-wait:
-	@until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
-		do \
-	        echo "Waiting for container...." ;\
-		sleep 2; \
-		done
-
-	@echo "The pod is scheduled"
-
-
-integration-expose:
-	@kubectl --kubeconfig=${KUBECONFIG} delete svc nginx-deployment 2>/dev/null || echo "No such service"
-	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
-
 
 expose-wait:
 	@echo "Waiting for loadBalancer to get an IP"
 	@while true; do \
-		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
+		IP=`kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
 			break; \
 		fi; \
@@ -321,7 +303,7 @@ clean-cinder-volumes:
 reset-config:
 	git checkout $(CONFIG_FILE)
 
-curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+curl-run: IP := $(shell kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 curl-run:
 	@echo "Loadbalancer IP:" $(IP);
 	@echo "Waiting for service to become available:"
@@ -331,8 +313,8 @@ check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
 
 clean-lb-after-integration-test:
-	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG};
-	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
+	@kubectl describe service external-http-nginx-service --kubeconfig=${KUBECONFIG};
+	@kubectl delete service external-http-nginx-service --kubeconfig=${KUBECONFIG}
 	# wait for deletion of LB by kubernetes
 	@sleep 60
 
@@ -433,19 +415,6 @@ complete-release:
 
 abort-release:
 	make -f release.mk $@
-
-update-config-with-floating-ip:	FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
-update-config-with-floating-ip:	FIP ?= $(shell openstack floating ip list -f json | jq -c  '.[]  | select(.Port == null) ' | head -n 1 | jq -r '."Floating IP Address"')
-update-config-with-floating-ip: update-config
-	sed 's/floatingip: false/floatingip: '$(FIP)'/g' $(CONFIG_FILE) >  $(FILENAME)
-	sed -i "s/n-masters: 3/n-masters: 1/g" $(FILENAME)
-	sed -i "s/n-nodes: 3/n-nodes: 0/g" $(FILENAME)
-	sed -i "s/cluster-name: '$(CLUSTER_NAME)'/cluster-name: '$(CLUSTER_NAME)-fip'/g" $(FILENAME)
-	cat $(FILENAME)
-
-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
-cluster-with-floating-ip: update-config-with-floating-ip
-	$(PY) -m coverage run -m koris -v debug apply $(FILENAME)
 
 destroy-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
 destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip

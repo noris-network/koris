@@ -22,7 +22,9 @@ gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
 
 project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
-MAX_PIPES = int(os.getenv("CI_MAX_RUNNING_PIELINES", 3))
+# change to 1 again, because we have a very small amount of
+# public floating IPs.
+MAX_PIPES = int(os.getenv("CI_MAX_RUNNING_PIELINES", 1))
 
 
 def can_i_run():
