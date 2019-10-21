@@ -162,7 +162,6 @@ integration-test:
   - "pip3 install -q -e ."
   - "make integration-run"
   - "make integration-wait"
-  - "make integration-patch-wait"
   - "make integration-expose"
   - "make expose-wait"
   - "make curl-run"

@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
+.PHONY: clean clean-test clean-pyc clean-build docs help integration-expose \
 	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
@@ -144,8 +144,6 @@ integration-test: \
 	add-master \
 	integration-run \
 	integration-wait \
-	integration-patch-wait \
-	integration-patch \
 	integration-expose \
 	expose-wait \
 	curl-run \
@@ -293,24 +291,6 @@ integration-wait:
 
 	@echo "The pod is scheduled"
 
-
-integration-patch-wait:
-	@echo "Waiting for pod status == Running "
-	@STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`; \
-	while true; do \
-		if [ "Running" == "$${STATUS}" ]; then \
-			break; \
-		fi; \
-		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
-		sleep 1; \
-		echo -n "."; \
-	done;
-
-
-integration-patch:
-	@kubectl patch deployment nginx-deployment -p \
-		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
-		--kubeconfig=${KUBECONFIG}
 
 integration-expose:
 	@kubectl --kubeconfig=${KUBECONFIG} delete svc nginx-deployment 2>/dev/null || echo "No such service"
