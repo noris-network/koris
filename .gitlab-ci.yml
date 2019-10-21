@@ -81,7 +81,7 @@ build-cluster:
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
-  - "make launch-cluster"
+  - "make cluster-with-floating-ip"
   - "make rename-coverage NAME=\"build-cluster\""
   - "make show-nodes"
   artifacts:
@@ -115,24 +115,24 @@ build-cluster-with-vanilla-image:
       - $SKIP_E2E
 
 
-build-cluster-with-floating-ip:
-  stage: build-cluster
-  image: oz123/koris-alpine:0.1.5
-  script:
-  - "pip3 install -r requirements_ci.txt"
-  - "pip3 install -q -e ."
-  - "make cluster-with-floating-ip"
-  - "make rename-coverage NAME=\"floating-ip\""
-  artifacts:
-    paths:
-      - "*-admin.conf"
-      - "tests/koris_test.yml"
-      - ".coverage.floating-ip"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
+#build-cluster-with-floating-ip:
+#  stage: build-cluster
+#  image: oz123/koris-alpine:0.1.5
+#  script:
+#  - "pip3 install -r requirements_ci.txt"
+#  - "pip3 install -q -e ."
+#  - "make cluster-with-floating-ip"
+#  - "make rename-coverage NAME=\"floating-ip\""
+#  artifacts:
+#    paths:
+#      - "*-admin.conf"
+#      - "tests/koris_test.yml"
+#      - ".coverage.floating-ip"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
 
 
 # --[ INTEGRATION TESTS ]--
