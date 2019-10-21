@@ -81,7 +81,7 @@ build-cluster:
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
-  - "make cluster-with-floating-ip"
+  - "make launch-cluster"
   - "make rename-coverage NAME=\"build-cluster\""
   - "make show-nodes"
   artifacts:
