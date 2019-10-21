@@ -388,7 +388,7 @@ security-checks-nodes:
 
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
-update-config:	FIP ?= $(shell openstack floating ip list -f json | jq -c  '.[]  | select(.Port == null and ."Floating Network"=="c019250b-aea8-497e-9b3b-fd94020684b6") ' | head -n 1 | jq -r '."Floating IP Address"')
+update-config:	FIP ?= $(shell openstack floating ip list -f json | jq -c  '.[$(TESTID)]  | select(.Port == null and ."Floating Network"=="c019250b-aea8-497e-9b3b-fd94020684b6") ' | head -n 1 | jq -r '."Floating IP Address"')
 update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" $(CONFIG_FILE)
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" $(CONFIG_FILE)
