@@ -559,6 +559,22 @@ clean-cinder-volumes:
       - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
       - $SKIP_E2E
 
+
+clean-floating-ips:
+  stage: cleanup
+  image: oz123/koris-alpine:0.1.5
+  variables:
+    LC_ALL: "C.UTF-8"
+    LANG: "C.UTF-8"
+  script:
+   - pip install python-openstackclient python-octaviaclient
+   - make clean-floating-ips
+  when: always
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+      - $SKIP_E2E
+
 # --[ COVERAGE REPORT ]--
 coverage-report:
   stage: coverage-report

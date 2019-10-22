@@ -361,6 +361,11 @@ update-config:
 clean-cluster: update-config
 	$(PY) -m coverage run -m koris -v debug destroy $(CONFIG_FILE) --force
 
+clean-floating-ips:
+	for ip in $$(openstack floating ip list -f json | jq -c -r '.[-2:] | .[].ID'); do \
+		openstack floating ip delete $$ip; \
+	done
+
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
 		mv -v tests/koris_test.updated.yml  $(CONFIG_FILE); \
