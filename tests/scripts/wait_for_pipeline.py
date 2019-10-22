@@ -1,5 +1,6 @@
 #!/bin/python3
 import os
+import pprint
 import time
 
 from urllib.parse import urlparse
@@ -13,14 +14,17 @@ from koris.cloud.openstack import get_clients
 _, _, cinder = get_clients()
 
 
-URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.noris.net/PI/koris/"))
+pprint.pprint(os.environ)
+URL = urlparse(os.getenv("CI_PROJECT_URL"))
 gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
                    private_token=os.getenv("ACCESS_TOKEN"))
 
 
-project = gl.projects.get(os.getenv("CI_PROJECT_ID", 1260))
+project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
-MAX_PIPES = int(os.getenv("CI_MAX_RUNNING_PIELINES", 3))
+# change to 1 again, because we have a very small amount of
+# public floating IPs.
+MAX_PIPES = int(os.getenv("CI_MAX_RUNNING_PIELINES", 1))
 
 
 def can_i_run():

@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-patch-wait \
+.PHONY: clean clean-test clean-pyc clean-build docs help integration-run \
 	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
@@ -40,6 +40,7 @@ KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
 CONFIG_FILE ?= tests/koris_test.yml
 UBUNTU_VER ?= 16.04
+TEST_ID ?= 0
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
@@ -143,10 +144,6 @@ integration-test: \
 	add-nodes \
 	add-master \
 	integration-run \
-	integration-wait \
-	integration-patch-wait \
-	integration-patch \
-	integration-expose \
 	expose-wait \
 	curl-run \
 	check-cluster-dns \
@@ -279,48 +276,14 @@ show-nodes:
 	done
 
 integration-run:
-	kubectl apply -f tests/integration/nginx-pod.yml --kubeconfig=${KUBECONFIG}
+	kubectl apply -f tests/integration/nginx-deployment.yml --kubeconfig=${KUBECONFIG}
 	# wait for the pod to be available
 	@echo "started"
-
-
-integration-wait:
-	@until kubectl describe pod nginx --kubeconfig=${KUBECONFIG} > /dev/null; \
-		do \
-	        echo "Waiting for container...." ;\
-		sleep 2; \
-		done
-
-	@echo "The pod is scheduled"
-
-
-integration-patch-wait:
-	@echo "Waiting for pod status == Running "
-	@STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`; \
-	while true; do \
-		if [ "Running" == "$${STATUS}" ]; then \
-			break; \
-		fi; \
-		STATUS=`kubectl get pod --selector=app=nginx --kubeconfig=${KUBECONFIG} -o jsonpath='{.items[0].status.phase}'`;\
-		sleep 1; \
-		echo -n "."; \
-	done;
-
-
-integration-patch:
-	@kubectl patch deployment nginx-deployment -p \
-		'{"spec":{"template":{"metadata":{"annotations":{"service.beta.kubernetes.io/openstack-internal-load-balancer":"true"}}}}}' \
-		--kubeconfig=${KUBECONFIG}
-
-integration-expose:
-	@kubectl --kubeconfig=${KUBECONFIG} delete svc nginx-deployment 2>/dev/null || echo "No such service"
-	@kubectl expose deployment nginx-deployment --type=LoadBalancer --kubeconfig=${KUBECONFIG}
-
 
 expose-wait:
 	@echo "Waiting for loadBalancer to get an IP"
 	@while true; do \
-		IP=`kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
+		IP=`kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
 		if [ ! -z $${IP} ]; then \
 			break; \
 		fi; \
@@ -341,7 +304,7 @@ clean-cinder-volumes:
 reset-config:
 	git checkout $(CONFIG_FILE)
 
-curl-run: IP := $(shell kubectl get service nginx-deployment --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+curl-run: IP := $(shell kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 curl-run:
 	@echo "Loadbalancer IP:" $(IP);
 	@echo "Waiting for service to become available:"
@@ -351,8 +314,8 @@ check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
 
 clean-lb-after-integration-test:
-	@kubectl describe service nginx-deployment --kubeconfig=${KUBECONFIG};
-	@kubectl delete service nginx-deployment --kubeconfig=${KUBECONFIG}
+	@kubectl describe service external-http-nginx-service --kubeconfig=${KUBECONFIG};
+	@kubectl delete service external-http-nginx-service --kubeconfig=${KUBECONFIG}
 	# wait for deletion of LB by kubernetes
 	@sleep 60
 
@@ -386,16 +349,26 @@ security-checks-nodes:
 	@sleep 30
 	@kubectl logs kube-bench-node --kubeconfig=${KUBECONFIG}
 
+# FIP is selected from 1 of 2 floating IPs which are allocated to the project.
+# The jq magic line simply selects one of those in the correct network (since we
+# can select a floating IP from an internal network or from the public network).
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
+update-config:	FIP ?= $(shell openstack floating ip list -f json | jq -r -c  '.[$(TESTID)]  | select(.Port == null and ."Floating Network"=="c019250b-aea8-497e-9b3b-fd94020684b6")."Floating IP Address"')
 update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" $(CONFIG_FILE)
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" $(CONFIG_FILE)
 	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" $(CONFIG_FILE)
+	@sed -i 's/\s*floatingip: "%%FLOATING_IP%%"/  floatingip: '$(FIP)'/g' $(CONFIG_FILE)
 	@cat $(CONFIG_FILE)
 
 clean-cluster: update-config
 	$(PY) -m coverage run -m koris -v debug destroy $(CONFIG_FILE) --force
+
+clean-floating-ips:
+	for ip in $$(openstack floating ip list -f json | jq -c -r '.[-2:] | .[].ID'); do \
+		openstack floating ip delete $$ip; \
+	done
 
 clean-all:
 	@if [ -r tests/koris_test.updated.yml ]; then \
@@ -451,19 +424,6 @@ complete-release:
 
 abort-release:
 	make -f release.mk $@
-
-update-config-with-floating-ip:	FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
-update-config-with-floating-ip:	FIP ?= $(shell openstack floating ip list -f json | jq -c  '.[]  | select(.Port == null) ' | head -n 1 | jq -r '."Floating IP Address"')
-update-config-with-floating-ip: update-config
-	sed 's/floatingip: false/floatingip: '$(FIP)'/g' $(CONFIG_FILE) >  $(FILENAME)
-	sed -i "s/n-masters: 3/n-masters: 1/g" $(FILENAME)
-	sed -i "s/n-nodes: 3/n-nodes: 0/g" $(FILENAME)
-	sed -i "s/cluster-name: '$(CLUSTER_NAME)'/cluster-name: '$(CLUSTER_NAME)-fip'/g" $(FILENAME)
-	cat $(FILENAME)
-
-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
-cluster-with-floating-ip: update-config-with-floating-ip
-	$(PY) -m coverage run -m koris -v debug apply $(FILENAME)
 
 destroy-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
 destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip
