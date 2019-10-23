@@ -149,6 +149,8 @@ integration-test: \
 	check-cluster-dns \
 	clean-lb-after-integration-test
 
+curl-run:
+	bash tests/integration/curl-lb.sh
 
 compliance-test: ## run the complete compliance test from your local machine
 compliance-test: \
@@ -304,11 +306,6 @@ clean-cinder-volumes:
 reset-config:
 	git checkout $(CONFIG_FILE)
 
-curl-run: IP := $(shell kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-curl-run:
-	@echo "Loadbalancer IP:" $(IP);
-	@echo "Waiting for service to become available:"
-	@until curl -s http://$(IP):80; do echo -n "."; sleep 1; done;
 
 check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
