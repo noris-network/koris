@@ -9,7 +9,7 @@ koris
   :target: https://gitlab.com/noris-network/koris/badges/dev/coverage.svg
 
 .. image:: https://img.shields.io/badge/docs-passed-green.svg
-  :target: https://pi.docs.noris.net/koris/
+  :target: https://noris-network.gitlab.io/koris/
 
 
 Launch kubernetes clusters on OpenStack.
@@ -50,7 +50,7 @@ If you just want to use koris to create a cluster follow the steps below, for mo
 
 If you want to develop, please refer to :doc:`/contributing`.
 
-The complete compiled `documentation of koris can be found here <https://pi.docs.noris.net/koris/>`_.
+The complete compiled `documentation of koris can be found here <https://noris-network.gitlab.io/koris>`_.
 
 Prerequisites
 ^^^^^^^^^^^^^
