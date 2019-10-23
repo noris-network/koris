@@ -160,8 +160,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
         """
         write out flags for kubelet systemd unit
         """
-        content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=openstack'''
-                   ''' --cloud-config=/etc/kubernetes/cloud.config"''')
+        content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=external''')
         self.write_file("/etc/default/kubelet", content, "root",
                         "root", "0600")
 
