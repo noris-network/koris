@@ -153,7 +153,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
         write out the cloud provider configuration file for OpenStack
         """
         content = str(self.cloud_config)
-        self.write_file("/etc/kubernetes/cloud.config", content, "root",
+        self.write_file("/etc/kubernetes/cloud-config", content, "root",
                         "root", "0600")
 
     def _write_kubelet_default(self):

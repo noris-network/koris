@@ -95,11 +95,11 @@ controllerManager:
     cluster-cidr: ${POD_SUBNET}
   extraArgs:
     external-cloud-volume-plugin: "openstack"
-    cloud-config: /etc/kubernetes/cloud.config
+    cloud-config: /etc/kubernetes/cloud-config
   extraVolumes:
-   - hostPath: /etc/kubernetes/cloud.config
+   - hostPath: /etc/kubernetes/cloud-config
      name: cloud-config
-     mountPath: /etc/kubernetes/cloud.config
+     mountPath: /etc/kubernetes/cloud-config
      pathType: File
 TMPL
 
@@ -224,11 +224,10 @@ function make_secrets() {
 
     if [[ ${OPENSTACK} -eq 1 ]]; then
         # shellcheck disable=SC2086
-        kubectl ${del_secret_args} cloud.config
+        kubectl ${del_secret_args} cloud-config
         kubectl ${del_secret_args} cloud-config
         # shellcheck disable=SC2086
-        kubectl ${secret_args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
-        kubectl ${secret_args} generic cloud-config --from-file=/etc/kubernetes/cloud.config
+        kubectl ${secret_args} generic cloud-config --from-file=/etc/kubernetes/cloud-config
     fi
 
     if [[ ! -z ${OIDC_CA_FILE} ]]; then
@@ -278,8 +277,8 @@ function copy_keys() {
 EOF
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
-	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
-	chmod 0600 /home/${USER}/kubernetes/cloud.config
+	put /etc/kubernetes/cloud-config /home/${USER}/kubernetes/
+	chmod 0600 /home/${USER}/kubernetes/cloud-config
 EOF
     fi
 
@@ -296,8 +295,8 @@ EOF
 
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
-	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
-	chmod 0600 /home/${USER}/kubernetes/cloud.config
+	put /etc/kubernetes/cloud-config /home/${USER}/kubernetes/
+	chmod 0600 /home/${USER}/kubernetes/cloud-config
 EOF
     fi
 

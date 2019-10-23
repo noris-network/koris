@@ -46,7 +46,7 @@ function get_docker() {
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
-    apt-get -y install docker-ce="${docker_version}*"
+    apt-get -y install docker-ce="${DOCKER_VERSION}*"
     apt-get install -y socat conntrack ipset
     log "Finished ${FUNCNAME[0]}"
 }
@@ -97,7 +97,7 @@ function fetch_secrets(){
 
     kubectl get cm -n kube-system audit-policy -o="jsonpath={.data['audit-policy\.yml']}" > /etc/kubernetes/audit-policy.yml
 
-    kubectl get secret -n kube-system cloud.config -o="jsonpath={.data['cloud\.config']}" | base64 -d > /etc/kubernetes/cloud.config
+    kubectl get secret -n kube-system cloud-config -o="jsonpath={.data['cloud-config']}" | base64 -d > /etc/kubernetes/cloud-config
 
     # this should be reviewed
     set +e

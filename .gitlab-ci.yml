@@ -287,6 +287,7 @@ check-added-node-labels:
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
+# TODO: add assertion that cloud provider is running
 
 assert-metrics-server-is-running:
   stage: integration-test
