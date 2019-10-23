@@ -13,11 +13,11 @@ import gitlab
 
 
 def main():
-    URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.noris.net/PI/koris/"))
+    URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.com/noris-network/koris/"))
     gl = gitlab.Gitlab(URL.scheme + "://" + URL.hostname,
                        private_token=os.getenv("ACCESS_TOKEN"))
 
-    project = gl.projects.get(os.getenv("CI_PROJECT_ID", 1260))
+    project = gl.projects.get(os.getenv("CI_PROJECT_ID", "14251052"))
     branch = project.branches.get(sys.argv[1])
 
     if branch.attributes['protected']:
