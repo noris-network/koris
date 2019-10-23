@@ -506,8 +506,9 @@ ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
 set -ex;
 iptables -P FORWARD ACCEPT;
 swapoff -a;
-export KUBE_VERSION=${KUBE_VERSION};
-export DOCKER_VERSION=${DOCKER_VERSION};
+export TRANSPORT_PACKAGES="${TRANSPORT_PACKAGES}";
+export KUBE_VERSION="${KUBE_VERSION}";
+export DOCKER_VERSION="${DOCKER_VERSION}";
 export first_master="${first_master}";
 $(typeset -f log);
 $(typeset -f get_yq);

@@ -63,13 +63,8 @@ function get_kubeadm {
 
 
 function fetch_all() {
-    apt-get update
-    if [ -z "$(type -P docker)" ]; then
-        get_docker
-    fi
-    if [ -z "$(type -P kubeadm)" ]; then
-        get_kubeadm
-    fi
+    get_docker
+    get_kubeadm
 }
 
 
