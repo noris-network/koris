@@ -326,56 +326,6 @@ fi
 # in that version
 function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
 
-# bootstrap first master for 1.12 serires
-function bootstrap_first_master_one_twelve() {
-   HOST_NAME=$1
-   HOST_IP=$2
-
-   CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
-
-   echo "******* Preparing kubeadm config for $1 *******"
-   create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
-
-   create_audit_policy
-   local CONFIG=kubeadm-"${HOST_NAME}".yaml
-
-   echo "*********** Bootstrapping master-1 ******************"
-   kubeadm -v=${V} alpha phase certs all --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubelet config write-to-disk --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubelet write-env-file --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubeconfig kubelet --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubeconfig all --config "${CONFIG}"
-   systemctl start kubelet
-   kubeadm -v=${V} alpha phase etcd local --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase controlplane all --config "${CONFIG}"
-   until kubeadm -v=${V} alpha phase mark-master --config "${CONFIG}"; do
-       sleep 1
-   done
-
-   # wait for the API server, we need to do this before installing the addons,
-   # otherwise weird timing problems occur irregularly:
-   # "error when creating kube-proxy service account: unable to create
-   # serviceaccount: namespaces "kube-system" not found"
-   until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
-       do echo "api server is not up! trying again ...";
-   done
-
-   until kubeadm -v=${V} alpha phase addon kube-proxy --config "${CONFIG}"; do
-       sleep 1
-   done
-   until kubeadm -v=${V} alpha phase addon coredns --config "${CONFIG}"; do
-       sleep 1
-   done
-   until kubeadm alpha phase bootstrap-token all --config "${CONFIG}"; do
-       sleep 1
-   done
-   test -d /root/.kube || mkdir -p /root/.kube
-   cp /etc/kubernetes/admin.conf /root/.kube/config
-   chown root:root /root/.kube/config
-
-   kubeadm -v=${V} alpha phase kubelet config upload  --config "${CONFIG}"
-   kubectl get nodes
-}
 
 # bootstrap the first master.
 # the process is slightly different than for the rest of the N masters
@@ -387,8 +337,7 @@ function bootstrap_first_master() {
 
    CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
 
-   # this is for v1.13
-   echo "Bootstaping 1.13"
+   echo "Bootstaping k8s ${KUBE_VERSION}"
    create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
    kubeadm init --config "${CONFIG}"
    kubeadm -v=${V} init phase upload-config all --config "${CONFIG}"
@@ -554,15 +503,12 @@ function main() {
     get_net_plugin &
     pid_get_net_plugin=$!
 
-    get_yq &
-    get_docker
-    get_kubeadm &
-    pid_get_kubeadm=$!
+    for i in $(seq 1 10); do get_yq && break; sleep 30; done;
+    for i in $(seq 1 10); do get_docker && break; sleep 30; done;
+    for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
 
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
-
-    wait $pid_get_kubeadm
 
     bootstrap_first_master "${first_master}" "${first_master_ip}"
     wait_for_etcd "${first_master}"
@@ -634,8 +580,8 @@ function join_all_hosts() {
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
 function fetch_all() {
-    get_docker
-    get_kubeadm
+    for i in $(seq 1 10); do get_docker && break; sleep 30; done;
+    for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
 }
 
 # The script is called as user 'root' in the directory '/'. Since we add some

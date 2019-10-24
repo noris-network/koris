@@ -63,8 +63,8 @@ function get_kubeadm {
 
 
 function fetch_all() {
-    get_docker
-    get_kubeadm
+    for i in $(seq 1 10); do get_docker && break; sleep 30; done;
+    for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
 }
 
 

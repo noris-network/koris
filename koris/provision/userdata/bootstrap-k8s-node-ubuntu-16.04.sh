@@ -86,20 +86,14 @@ function config_pod_network(){
     esac
 }
 
-function patch_config() {
-   #/etc/default/kubelet
-   echo "foo"
-}
-
 function join() {
 	kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
-	patch_config
 }
 
 function main() {
 
-    version_found docker --version "${DOCKER_VERSION}" || fetch_all
-    version_found kubeadm version "${KUBE_VERSION}" || fetch_all
+    version_found docker --version "${DOCKER_VERSION}" || for i in $(seq 1 10); do (fetch_all && break; sleep 30); done
+    version_found kubeadm version "${KUBE_VERSION}" || for i in $(seq 1 10); do (fetch_all && break; sleep 30); done
     config_pod_network
 
     # join !
