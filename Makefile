@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-run \
+.PHONY: clean clean-test clean-pyc clean-build docs help curl-run \
 	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
@@ -428,5 +428,21 @@ abort-release:
 destroy-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
 destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip
 	$(PY) -m coverage run -m koris -v debug destroy -f $(FILENAME)
+launch-gitlab-worker: USERDATA ?= tests/misc/provision-gitlab-worker.sh
+launch-gitlab-worker: NETWORK ?= koris-net
+launch-gitlab-worker:  # start a gitlab worker
+	@[ "${IMAGE}" ] || ( echo ">> IMAGE is not set"; exit 1 )
+	@[ "${AZ}" ] || ( echo ">> AZ is not set"; exit 1 )
+	@[ "${KEY}" ] || ( echo ">> KEY is not set"; exit 1 )
+	@[ "${TOKEN}" ] || ( echo ">> TOKEN is not set"; exit 1 )
+	@[ "${WORKER}" ] || ( echo ">> WORKER is not set"; exit 1 )
+	sed -i '3iexport RUNNER_TOKEN="$(TOKEN)"' $(USERDATA)
+	sed -i '4iexport WORKER="$(WORKER)"' $(USERDATA)
+	openstack volume create --size 25 --bootable --availability-zone $(AZ) --type BSS-Performance-Storage --image $(IMAGE) gitlab-${WORKER}-volume
+	sleep 30;
+	openstack server create --network $(NETWORK) --flavor ECS.C1.4-8 --availability-zone $(AZ) --key-name $(KEY) \
+		--security-group default --volume gitlab-$(WORKER)-volume gitlab-runner-$(WORKER) \
+		--user-data $(USERDATA);
 
 # vim: tabstop=4 shiftwidth=4
+#
