@@ -5,8 +5,16 @@
 # integration test.
 ##
 
-set -eu
+set -eux
+
 export LB="kube_service_kubernetes_default_external-http-nginx-service"
+
+EXTERNAL_IP=$(openstack floating ip list -c 'Fixed IP Address' -c 'Floating IP Address' -f value |  grep None | cut -d" " -f 1 | head -n 1)
+
+echo ${EXTERNAL_IP};
+
+sed -i 's/%%FLOATING_IP%%/'${EXTERNAL_IP}'/' tests/integration/nginx-deployment.yml
+kubectl apply -f tests/integration/nginx-deployment.yml --kubeconfig=${KUBECONFIG}
 
 echo "waiting for loadbalancer to become active"
 until openstack loadbalancer show -c provisioning_status -f value $LB | grep -q "ACTIVE"; do
@@ -14,10 +22,6 @@ until openstack loadbalancer show -c provisioning_status -f value $LB | grep -q 
 	sleep 2;
 done
 
-
-IP=$(openstack floating ip list -c "Fixed IP Address" -c "Floating IP Address" -f value | \
-	grep $(openstack loadbalancer show ${LB} -f value -c vip_address) | cut -d" " -f 1)
-
-echo "Loadbalancer IP:" "${IP}";
+echo "Loadbalancer IP:" "${EXTERNAL_IP}";
 echo "Waiting for service to become available:"
-until curl -s http://${IP}:80; do echo -n "."; sleep 1; done;
+until curl -s http://${EXTERNAL_IP}:80; do echo -n "."; sleep 1; done;

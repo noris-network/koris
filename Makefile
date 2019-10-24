@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: clean clean-test clean-pyc clean-build docs help integration-run \
+.PHONY: clean clean-test clean-pyc clean-build docs help curl-run \
 	clean-lb-after-integration-test clean-lb
 
 .DEFAULT_GOAL := help
@@ -143,14 +143,12 @@ integration-test: \
 	launch-cluster \
 	add-nodes \
 	add-master \
-	integration-run \
-	expose-wait \
 	curl-run \
 	check-cluster-dns \
 	clean-lb-after-integration-test
 
 curl-run:
-	bash tests/integration/curl-lb.sh
+	export KUBECONFIG=$(KUBECONFIG); bash tests/integration/curl-lb.sh
 
 compliance-test: ## run the complete compliance test from your local machine
 compliance-test: \
@@ -276,25 +274,6 @@ show-nodes:
 		sleep 1; \
 		kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
 	done
-
-integration-run:
-	kubectl apply -f tests/integration/nginx-deployment.yml --kubeconfig=${KUBECONFIG}
-	# wait for the pod to be available
-	@echo "started"
-
-expose-wait:
-	@echo "Waiting for loadBalancer to get an IP"
-	@while true; do \
-		IP=`kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
-		if [ ! -z $${IP} ]; then \
-			break; \
-		fi; \
-		echo -n "."; \
-		sleep 1; \
-	done;
-	@echo
-	@echo "Got an IP!"
-
 
 test-cinder-volumes:
 	KUBECONFIG=${KUBECONFIG} ./tests/scripts/assert-cinder-volumes.sh
@@ -427,3 +406,4 @@ destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip
 	$(PY) -m coverage run -m koris -v debug destroy -f $(FILENAME)
 
 # vim: tabstop=4 shiftwidth=4
+#

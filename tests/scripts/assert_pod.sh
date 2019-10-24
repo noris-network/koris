@@ -4,7 +4,7 @@
 set -e
 
 CURR=0
-MAX=10
+MAX=60
 
 for (( i=1; i<=${NUM}; i++ )); do
     TO_CHECK="${POD_NAME}-${CLUSTER_NAME}-master-${i}"
