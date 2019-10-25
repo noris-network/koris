@@ -3,29 +3,27 @@
 
 set -e
 
-CURR=0
-MAX=60
+export KUBECONFIG=${KUBECONFIG}
 
-for (( i=1; i<=${NUM}; i++ )); do
-    TO_CHECK="${POD_NAME}-${CLUSTER_NAME}-master-${i}"
-    echo -n "Checking if ${TO_CHECK} is available: "
-    for (( j=1; j<=${MAX}; j++ )); do
-        STATUS=$(kubectl --kubeconfig=${KUBECONFIG} -n ${NAMESPACE} -o jsonpath='{.status.phase}' get po ${TO_CHECK})
-        if [ "Running" == "${STATUS}" ]; then
-            echo "-- OK"
-            break
-        fi
-        sleep 15
-        echo -n "."
-        CURR=$(expr ${CURR} + 1)
-    done
-
-    if [ "${CURR}" -eq ${MAX} ]; then
-        echo
-        echo "Pod not ready, dumping debug information"
-        kubectl --kubeconfig=${KUBECONFIG} -n ${NAMESPACE} describe pod/${TO_CHECK}
-        kubectl --kubeconfig=${KUBECONFIG} -n ${NAMESPACE} logs ${TO_CHECK}
-        exit 1
+function checkpod() {
+    local name=$1
+    STATUS=$(kubectl -n ${NAMESPACE} -o jsonpath='{.status.phase}' get po ${name})
+    if [ "Running" == "${STATUS}" ]; then
+	echo "$name is fine!"
+        return 0
     fi
-done
+    return 1
+}
 
+for (( j=1; j<=${NUM}; j++ )); do
+    name="${POD_NAME}-${CLUSTER_NAME}-master-"
+    number=$j
+    for i in $(seq 1 60); do checkpod ${name}${number} && break;
+	sleep 15;
+	if [ $i -eq 60 ]; then
+            echo "Pod $j not ready, dumping debug information"
+            kubectl -n ${NAMESPACE} describe pod/${name}${number}
+            kubectl -n ${NAMESPACE} logs ${name}${number}
+	fi
+    done
+done
