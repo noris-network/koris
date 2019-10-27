@@ -285,11 +285,20 @@ EOF
     log "Finished ${FUNCNAME[0]}"
 }
 
+
+function get_jq() {
+    if [ -z "$(type -P jq)" ]; then
+        apt update
+        apt install -y jq
+    fi
+}
+
+
 # the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
 function main() {
-
+    get_jq
     kubeadm version | grep -qi "${KUBE_VERSION}" || fetch_all
     kubeadm config images pull
     config_pod_network
