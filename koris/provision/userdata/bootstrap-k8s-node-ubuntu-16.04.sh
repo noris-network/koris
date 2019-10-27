@@ -38,8 +38,7 @@ preferences: {}
 users: []
 EOF
 
-# config for 1.12.8
-	cat << EOF > /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml
+cat << EOF > /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml
 ---
 apiVersion: kubeadm.k8s.io/v1beta1
 discovery:
