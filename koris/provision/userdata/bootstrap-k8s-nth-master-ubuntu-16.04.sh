@@ -34,6 +34,17 @@ function log() {
 	echo -e "$datestring - $@" | tee $LOGFILE
 }
 
+# minimal configuration so that the correct images are pulled
+function create_kubeadm_config() {
+    HOST_NAME=$1
+    cat <<TMPL > kubeadm-"${HOST_NAME}".yaml
+apiVersion: kubeadm.k8s.io/v1beta1
+kind: ClusterConfiguration
+kubernetesVersion: v${KUBE_VERSION}
+TMPL
+}
+
+
 # create a configuration file for kubeadm 1.12
 function create_kubeadm_config_one_twelve () {
 
@@ -157,7 +168,7 @@ function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
 
 # enforce docker version
 function get_docker() {
-    log "stated ${FUNCNAME[0]}"
+    log "started ${FUNCNAME[0]}"
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
@@ -169,7 +180,7 @@ function get_docker() {
 
 # enforce kubeadm version
 function get_kubeadm {
-    log "stated ${FUNCNAME[0]}"
+    log "started ${FUNCNAME[0]}"
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
@@ -183,9 +194,8 @@ function fetch_all() {
     if [ -z "$(type -P docker)" ]; then
         get_docker
     fi
-    if [ -z "$(type -P kubeadm)" ]; then
-        get_kubeadm
-    fi
+    get_kubeadm
+
 }
 
 
@@ -300,7 +310,8 @@ function get_jq() {
 function main() {
     get_jq
     kubeadm version | grep -qi "${KUBE_VERSION}" || fetch_all
-    kubeadm config images pull
+    create_kubeadm_config $(hostname -s)
+    kubeadm config images pull --config  kubeadm-"$(hostname -s)".yaml
     config_pod_network
     if [ ${AUTO_JOIN} -eq 1 ]; then
         fetch_secrets

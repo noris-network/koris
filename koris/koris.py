@@ -130,7 +130,7 @@ def add_master(builder,
     uri = urllib.parse.urlparse(k8s.host)
     loc, port = uri.netloc.split(":")
     master = builder.add_master(
-        zone, flavor, k8s_version, k8s.config,
+        zone, flavor, k8s_version=k8s_version, k8s_conf=k8s.config,
         koris_env={'bootstrap_token': k8s.get_bootstrap_token(),
                    'lb_dns': loc,
                    'lb_ip': loc,
