@@ -683,11 +683,8 @@ swapoff -a;
 KUBE_VERSION=${KUBE_VERSION};
 DOCKER_VERSION=${DOCKER_VERSION};
 first_master=${first_master}
+$(typeset -f log);
 $(typeset -f get_yq);
-$(typeset -f get_docker_ubuntu);
-$(typeset -f get_docker_centos);
-$(typeset -f get_kubeadm_ubuntu);
-$(typeset -f get_kubeadm_centos);
 $(typeset -f get_docker);
 $(typeset -f get_kubeadm);
 $(typeset -f fetch_all);
@@ -709,7 +706,7 @@ function get_docker() {
 }
 
 # enforce kubeadm version
-function get_kubeadm_ubuntu() {
+function get_kubeadm() {
     apt-get update
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -722,14 +719,6 @@ function get_yq() {
 		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/2.3.0/yq_linux_amd64 -o /usr/local/bin/yq
 		chmod +x /usr/local/bin/yq
 	fi
-}
-
-function get_kubeadm(){
-    if [ -z "$(type -P apt)" ]; then
-        get_kubeadm_centos;
-    else
-        get_kubeadm_ubuntu;
-    fi
 }
 
 # the entry point of the whole script.
