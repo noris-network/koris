@@ -496,7 +496,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # create a load balancer for accessing the API server of the cluster;
         # do not add a listener, since we created no machines yet.
         LOGGER.info("Creating the LoadBalancer ...")
-        lbinst = LoadBalancer(config, self.conn)
+        lbinst = LoadBalancer(config, self.conn, self.neutron)
         lb, floatingip = lbinst.get_or_create()
         lb_port = "6443"
 
@@ -540,14 +540,15 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
             dex=self.dex_conf,
             k8s_version=k8s_version)
         loop = asyncio.get_event_loop()
-        results = loop.run_until_complete(asyncio.gather(*master_tasks))
+        master_results = loop.run_until_complete(asyncio.gather(*master_tasks))
 
-        master_ips = [x.ip_address for x in results if isinstance(x, Instance)]
+        master_ips = [x.ip_address for x in master_results if
+                      isinstance(x, Instance)]
 
         # add a listener for the first master node, since this is the node we
         # call kubeadm init on
         LOGGER.info("Configuring the LoadBalancer ...")
-        first_master_ip = results[0].ip_address
+        first_master_ip = master_results[0].ip_address
         configure_lb_task = loop.create_task(
             lbinst.configure([first_master_ip]))
 
@@ -561,10 +562,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         )
 
         node_tasks.append(configure_lb_task)
-        results = loop.run_until_complete(asyncio.gather(*node_tasks))
+        node_results = loop.run_until_complete(asyncio.gather(*node_tasks))
         LOGGER.debug("Finished node tasks")
 
-        node_ips = [x.ip_address for x in results if isinstance(x, Instance)]
+        node_ips = [x.ip_address for x in node_results if isinstance(x, Instance)]
 
         if self.deploy_dex:
             LOGGER.info("Configuring the LoadBalancer for Dex ...")
@@ -616,12 +617,20 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("", color=None)
         LOGGER.success("Kubernetes API is ready!")
         LOGGER.info("Waiting for all masters to become Ready ...")
-
-        k8s.add_all_masters_to_loadbalancer(config['cluster-name'],
-                                            len(master_tasks), lbinst)
+        lb_masters = [{"name": x.name,
+                       "address": x.ip_address,
+                       "protocol_port": 6443,
+                       "monitor_port": 6443} for x in master_results if
+                      isinstance(x, Instance)]
+        lb_nodes = [{"name": x.name,
+                     "address": x.ip_address,
+                     } for x in node_results if isinstance(x, Instance)]
+        if not lbinst.bulk_update_members(lb_masters):
+            k8s.add_all_masters_to_loadbalancer(config['cluster-name'],
+                                                len(master_tasks), lbinst)
         k8s.apply_addons(config)
         add_ingress_listeners(k8s.nginx_ingress_ports, lbinst,
-                              master_ips + node_ips)
+                              lb_masters + lb_nodes)
         LOGGER.success("Configured LoadBalancer to use all API servers")
         LOGGER.success("Kubernetes cluster is ready to use !")
         loop.close()

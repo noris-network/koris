@@ -5,6 +5,7 @@ functions and classes to interact with openstack
 import asyncio
 import base64
 import copy
+import json
 import os
 import sys
 import textwrap
@@ -15,11 +16,12 @@ from netaddr import IPNetwork, valid_ipv4, valid_ipv6
 from novaclient import client as nvclient
 from novaclient.exceptions import (NotFound as NovaNotFound, NoUniqueMatch)  # noqa
 from cinderclient import client as cclient
-from neutronclient.v2_0 import client as ntclient
 
+from neutronclient.v2_0 import client as ntclient
 from neutronclient.common.exceptions import (Conflict as NeutronConflict,
                                              StateInvalidClient, NotFound,
                                              BadRequest)
+from octaviaclient.api.v2.octavia import OctaviaAPI
 
 from openstack.exceptions import ConflictException as OSConflict
 from openstack.exceptions import ResourceNotFound as OSNotFound
@@ -39,17 +41,17 @@ LOGGER = Logger(__name__)
 # OpenStack clients. Initialized at time of calling get_clients. You should not
 # use these directly bur rather call get_clients to ensure those variables
 # get initialized correctly.
-NOVA, NEUTRON, CINDER = None, None, None
+NOVA, NEUTRON, CINDER, OCTAVIA = None, None, None, None
 
 
 # pylint: disable=redefined-outer-name, global-statement
-def get_clients():
+def get_clients(with_octavia=False):
     """
     get openstack low level clients
 
     This should be replaced in the future with ``openstack.connect``
     """
-    global NOVA, NEUTRON, CINDER
+    global NOVA, NEUTRON, CINDER, OCTAVIA
     if(not NOVA or not NEUTRON or not CINDER):
         # at least one client has not already been initialized
         try:
@@ -58,6 +60,10 @@ def get_clients():
             NOVA = nvclient.Client('2.1', session=sess)
             NEUTRON = ntclient.Client(session=sess)
             CINDER = cclient.Client('3.0', session=sess)
+            if with_octavia:
+                endpoint = os.environ.get("OCTAVIA_ENDPOINT",
+                                          "https://de-nbg6-1.noris.cloud:9876/v2.0/")
+                OCTAVIA = OctaviaAPI(session=sess, endpoint=endpoint)
 
         except TypeError:
             LOGGER.error("Did you source your OS rc file in v3?")
@@ -67,6 +73,8 @@ def get_clients():
         except KeyError:
             LOGGER.error("Did you source your OS rc file?")
             sys.exit(1)
+    if with_octavia:
+        return NOVA, NEUTRON, CINDER, OCTAVIA
     return NOVA, NEUTRON, CINDER
 
 
@@ -295,10 +303,12 @@ class LoadBalancer:
     of the LoadBalancer, is then stored in the SSL certificates.
     During the boot of the machines, we configure the LoadBalancer.
     """
+    members_uri = '/v2.0/lbaas/pools/%s/members'
 
-    def __init__(self, config, conn):
+    def __init__(self, config, conn, neutron=None):
         self.config = config
         self.name = "%s-lb" % config['cluster-name']
+        self.neutron = neutron
 
         try:
             self.subnet_name = config.get('private_net')['subnet'].get('name', self.name)
@@ -798,6 +808,41 @@ class LoadBalancer:
             LOGGER.debug("Deleted member %s from pool %s", member_id, pool_id)
         except OSNotFound:
             LOGGER.debug("Member %s not found in pool %s", member_id, pool_id)
+
+    @retry(exceptions=(OSConflict), backoff=1, tries=5, delay=5,
+           logger=LOGGER.debug)
+    def bulk_update_members(self, members, pool_id=None):
+        """bulk update members of a listener
+
+        Using this method, a Health Monitor is automatically added by openstack.
+
+        Args:
+            members (list): list containing member information
+            pool_id (str):  the Id of the pool
+
+        Return:
+            bool: indicates whether the operation succeeded or not
+        """
+
+        if not pool_id:
+            pool_id = self.default_pool
+        # [{"name": "foo", "address": "10.0.0.38", "protocol_port": "6443"},
+        #  {"name": "bar", "address": "10.0.0.29", "protocol_port": "6443"},
+        # ]
+        response, _ = self.neutron.httpclient.do_request(
+            self.members_uri % pool_id, 'PUT',
+            body=json.dumps({"members": members}))
+        if response.status_code in list(range(200, 207)):
+            return True
+        if response.status_code == 409:
+            # raising this exception causes retry
+            raise OSConflict(response.reason)
+        return False
+
+    @property
+    def default_pool(self):
+        """get the default pool"""
+        return self.conn.load_balancer.find_load_balancer(self.name).pools[0]['id']
 
 
 class SecurityGroup:
