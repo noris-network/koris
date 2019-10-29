@@ -257,7 +257,7 @@ add-master:
     - "make assert-members NUM=4"
     - "make assert-masters NUM=4"
     - "make assert-control-plane NUM=4"
-    - "make assert-audit-log USER=ubuntu"
+    - "make assert-audit-log"
     - "make rename-coverage NAME=\"add-master\""
   artifacts:
     paths:

@@ -200,12 +200,14 @@ add-master:
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
+	NUM=${NUM} \
 	KUBECONFIG=${KUBECONFIG} \
 	CLUSTER_NAME=${CLUSTER_NAME} ./tests/scripts/check-joined-master.sh
 
-assert-audit-log: USER ?= ubuntu
+assert-audit-log: NUM ?= 4
 assert-audit-log:
-	KUBECONFIG=${KUBECONFIG} ./tests/scripts/assert_audit_logging.sh
+	NUM=${NUM} \
+	KUBECONFIG=${KUBECONFIG} CLUSTER_NAME=${CLUSTER_NAME} ./tests/scripts/assert_audit_logging.sh
 
 assert-metrics:
 	KUBECONFIG=$(KUBECONFIG) ./tests/scripts/assert_metrics.sh
