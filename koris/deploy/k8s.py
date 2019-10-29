@@ -590,7 +590,7 @@ def get_addons(config):
     for item in config.get('addons', {}):
         yield KorisAddon(item)
 
-    for item in ['metrics-server', 'nginx-ingress']:
+    for item in ['metrics-server', 'nginx-ingress', 'ext-cloud-openstack']:
         yield KorisAddon(item)
 
 

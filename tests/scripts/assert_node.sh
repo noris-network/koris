@@ -47,7 +47,7 @@ function ready() {
 # Assert labels on a worker node.
 function labels() {
     echo "Asserting node labels on ${NODE_NAME} ..."
-    for i in {1..10}
+    for i in {1..20}
     do
         kubectl describe nodes --kubeconfig=${KUBECONFIG} ${NODE_NAME} | grep -q failure-domain.beta.kubernetes.io/region=de-nbg6-1
         if [ $? -eq 0 ]; then
@@ -65,7 +65,7 @@ function labels() {
 # Assert that a node has been deleted from OpenStack
 function deleted-openstack() {
     echo "Asserting that ${NODE_NAME} has been removed from OpenStack ..."
-    for i in {1..10}
+    for i in {1..20}
     do
         openstack server list -f value -c Name | grep -q ${NODE_NAME}
         if [ $? -eq 1 ]; then

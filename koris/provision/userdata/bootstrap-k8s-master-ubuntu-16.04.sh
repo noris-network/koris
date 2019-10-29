@@ -41,7 +41,7 @@ export CLUSTER_STATE=""
 
 
 #### Versions for Kube 1.12.X
-export KUBE_VERSION=${KUBE_VERSION:-1.12.8}
+export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
 export DOCKER_VERSION=18.06
 export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
@@ -71,126 +71,7 @@ function log() {
 SSHOPTS="-i /etc/ssh/ssh_host_rsa_key -o StrictHostKeyChecking=no -o ConnectTimeout=60"
 SFTPOPTS=${SSHOPTS}
 
-
-# create a configuration file for kubeadm
-# this function excpects CURRENT_CLUSTER, HOST_IP and HOST_NAME
-# to be defined as global variables
-function create_kubeadm_config () {
-
-    HOST_NAME=$1
-    HOST_IP=$2
-    CURRENT_CLUSTER=$3
-    CLUSTER_STATE=$4
-
-    cat <<TMPL > kubeadm-"${HOST_NAME}".yaml
-apiVersion: kubeadm.k8s.io/v1alpha2
-kind: MasterConfiguration
-kubernetesVersion: v${KUBE_VERSION}
-apiServerCertSANs:
-- "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
-api:
-    controlPlaneEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
-etcd:
-  local:
-    extraArgs:
-      listen-client-urls: "https://127.0.0.1:2379,https://${HOST_IP}:2379"
-      advertise-client-urls: "https://${HOST_IP}:2379"
-      listen-peer-urls: "https://${HOST_IP}:2380"
-      initial-advertise-peer-urls: "https://${HOST_IP}:2380"
-      initial-cluster: "${CURRENT_CLUSTER}"
-      initial-cluster-state: "${CLUSTER_STATE}"
-    serverCertSANs:
-      - ${HOST_NAME}
-      - ${HOST_IP}
-    peerCertSANs:
-      - ${HOST_NAME}
-      - ${HOST_IP}
-networking:
-    # This CIDR is a Calico default. Substitute or remove for your CNI provider.
-    podSubnet: ${POD_SUBNET}
-controllerManagerExtraArgs:
-  allocate-node-cidrs: "true"
-  cluster-cidr: ${POD_SUBNET}
-TMPL
-# if On baremetal we don't need all OpenStack cloud provider flags
-if [[ ${OPENSTACK} -eq 1 ]]; then
-cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
-  cloud-provider: "openstack"
-  cloud-config: /etc/kubernetes/cloud.config
-apiServerExtraVolumes:
-- name: "cloud-config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
-  writable: false
-  pathType: File
-controllerManagerExtraVolumes:
-- name: "cloud-config"
-  hostPath: "/etc/kubernetes/cloud.config"
-  mountPath: "/etc/kubernetes/cloud.config"
-  writable: false
-  pathType: File
-apiServerExtraArgs:
-  cloud-provider: openstack
-  cloud-config: /etc/kubernetes/cloud.config
-TMPL
-else
-cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
-apiServerExtraArgs:
-TMPL
-fi
-
-# If Dex is to be deployed, we need to start the apiserver with extra args.
-if [[ ! -z ${OIDC_CLIENT_ID} ]]; then
-cat <<TMPL > dex.tmpl
-  oidc-issuer-url: "${OIDC_ISSUER_URL}"
-  oidc-client-id: ${OIDC_CLIENT_ID}
-  oidc-ca-file: ${OIDC_CA_FILE}
-  oidc-username-claim: ${OIDC_USERNAME_CLAIM}
-  oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
-TMPL
-    cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
-fi
-
-# add audit policy
-cat <<AUDITPOLICY >> kubeadm-"${HOST_NAME}".yaml
-  audit-log-maxsize: "24"
-  audit-log-maxbackup: "30"
-  audit-log-maxage: "90"
-  audit-log-path: /var/log/kubernetes/audit.log
-  audit-policy-file: /etc/kubernetes/audit-policy.yml
-AUDITPOLICY
-
-# add volumes for audit logs
-cat << AV >> auditVolumes.yml
-apiServerExtraVolumes:
-- name: var-log-kubernetes
-  hostPath: /var/log/kubernetes
-  mountPath: /var/log/kubernetes
-  writable: true
-  pathType: DirectoryOrCreate
-- name: "audit-policy"
-  hostPath: "/etc/kubernetes/audit-policy.yml"
-  mountPath: "/etc/kubernetes/audit-policy.yml"
-  writable: false
-  pathType: File
-AV
-
-yq m -i -a kubeadm-"${HOST_NAME}".yaml auditVolumes.yml
-
-if [[ ${ADDTOKEN} -eq 1 ]]; then
-cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
-bootstrapTokens:
-- groups:
-  - system:bootstrappers:kubeadm:default-node-token
-  token: "${BOOTSTRAP_TOKEN}"
-  ttl: 24h0m0s
-  usages:
-  - signing
-  - authentication
-TOKEN
-fi
-}
-
+# used for k8s v1.13.X
 function create_kubeadm_config_new_version () {
     HOST_NAME=$1
     HOST_IP=$2
@@ -212,33 +93,15 @@ controllerManager:
   extraArgs:
     allocate-node-cidrs: "true"
     cluster-cidr: ${POD_SUBNET}
-TMPL
-# if On baremetal we don't need all OpenStack cloud provider flags
-if [[ ${OPENSTACK} -eq 1 ]]; then
-cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
-    cloud-provider: openstack
-    cloud-config: /etc/kubernetes/cloud.config
-    cloud-config: /etc/kubernetes/cloud.config
+  extraArgs:
+    external-cloud-volume-plugin: "openstack"
+    cloud-config: /etc/kubernetes/cloud-config
   extraVolumes:
-   - hostPath: /etc/kubernetes/cloud.config
+   - hostPath: /etc/kubernetes/cloud-config
      name: cloud-config
-     mountPath: /etc/kubernetes/cloud.config
+     mountPath: /etc/kubernetes/cloud-config
      pathType: File
-apiServer:
-  extraArgs:
-    cloud-provider: openstack
-  extraVolumes:
-  - hostPath: /etc/kubernetes/cloud.config
-    name: cloud-config
-    mountPath: /etc/kubernetes/cloud.config
-    pathType: File
 TMPL
-else
-cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
-apiServer:
-  extraArgs:
-TMPL
-fi
 
 # If Dex is to be deployed, we need to start the apiserver with extra args.
 if [[ ! -z ${OIDC_CLIENT_ID} ]]; then
@@ -317,43 +180,43 @@ DISCOVERY_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
 # these are used by the master pod which we call from the CLI
 function make_secrets() {
     local k8senv="--kubeconfig=/etc/kubernetes/admin.conf -n kube-system"
-    local del_args="${k8senv} --ignore-not-found=true delete secret"
-    local args="${k8senv} create secret"
+    local del_secret_args="${k8senv} --ignore-not-found=true delete secret"
+    local secret_args="${k8senv} create secret"
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} ssh-key
+    kubectl ${del_secret_args} ssh-key
     # shellcheck disable=SC2086
-    kubectl ${args} generic ssh-key --from-file=/etc/ssh/ssh_host_rsa_key
+    kubectl ${secret_args} generic ssh-key --from-file=/etc/ssh/ssh_host_rsa_key
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} "cluster-ca"
+    kubectl ${del_secret_args} "cluster-ca"
     # shellcheck disable=SC2086
-    kubectl ${args} tls "cluster-ca" --key /etc/kubernetes/pki/ca.key --cert /etc/kubernetes/pki/ca.crt
+    kubectl ${secret_args} tls "cluster-ca" --key /etc/kubernetes/pki/ca.key --cert /etc/kubernetes/pki/ca.crt
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} "front-proxy"
+    kubectl ${del_secret_args} "front-proxy"
     # shellcheck disable=SC2086
-    kubectl ${args} tls "front-proxy" --key /etc/kubernetes/pki/front-proxy-ca.key --cert /etc/kubernetes/pki/front-proxy-ca.crt
+    kubectl ${secret_args} tls "front-proxy" --key /etc/kubernetes/pki/front-proxy-ca.key --cert /etc/kubernetes/pki/front-proxy-ca.crt
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} "etcd-ca"
+    kubectl ${del_secret_args} "etcd-ca"
     # shellcheck disable=SC2086
-    kubectl ${args} tls "etcd-ca" --key /etc/kubernetes/pki/etcd/ca.key --cert /etc/kubernetes/pki/etcd/ca.crt
+    kubectl ${secret_args} tls "etcd-ca" --key /etc/kubernetes/pki/etcd/ca.key --cert /etc/kubernetes/pki/etcd/ca.crt
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} "sa-pub"
+    kubectl ${del_secret_args} "sa-pub"
     # shellcheck disable=SC2086
-    kubectl ${args} generic "sa-pub" --from-file=/etc/kubernetes/pki/sa.pub
+    kubectl ${secret_args} generic "sa-pub" --from-file=/etc/kubernetes/pki/sa.pub
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} "sa-key"
+    kubectl ${del_secret_args} "sa-key"
     # shellcheck disable=SC2086
-    kubectl ${args} generic "sa-key" --from-file=/etc/kubernetes/pki/sa.key
+    kubectl ${secret_args} generic "sa-key" --from-file=/etc/kubernetes/pki/sa.key
 
     # shellcheck disable=SC2086
-    kubectl ${del_args} admin.conf
+    kubectl ${del_secret_args} admin.conf
     # shellcheck disable=SC2086
-    kubectl ${args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
+    kubectl ${secret_args} generic admin.conf --from-file=/etc/kubernetes/admin.conf
 
     # shellcheck disable=SC2086
     kubectl ${k8senv} create configmap audit-policy --from-file="/etc/kubernetes/audit-policy.yml"
@@ -361,15 +224,16 @@ function make_secrets() {
 
     if [[ ${OPENSTACK} -eq 1 ]]; then
         # shellcheck disable=SC2086
-        kubectl ${del_args} cloud.config
+        kubectl ${del_secret_args} cloud-config
+        kubectl ${del_secret_args} cloud-config
         # shellcheck disable=SC2086
-        kubectl ${args} generic cloud.config --from-file=/etc/kubernetes/cloud.config
+        kubectl ${secret_args} generic cloud-config --from-file=/etc/kubernetes/cloud-config
     fi
 
     if [[ ! -z ${OIDC_CA_FILE} ]]; then
-        kubectl ${del_args} oidc-ca
+        kubectl ${del_secret_args} oidc-ca
         # shellcheck disable=SC2086
-        kubectl ${args} generic oidc-ca --from-file="${OIDC_CA_FILE}"
+        kubectl ${secret_args} generic oidc-ca --from-file="${OIDC_CA_FILE}"
         # shellcheck disable=SC2086
         kubectl ${k8senv} delete configmap dex-config --ignore-not-found=true
         # shellcheck disable=SC2086
@@ -413,8 +277,8 @@ function copy_keys() {
 EOF
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
-	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
-	chmod 0600 /home/${USER}/kubernetes/cloud.config
+	put /etc/kubernetes/cloud-config /home/${USER}/kubernetes/
+	chmod 0600 /home/${USER}/kubernetes/cloud-config
 EOF
     fi
 
@@ -431,8 +295,8 @@ EOF
 
     if [[ ${OPENSTACK} -eq 1 ]]; then
         sftp ${SFTPOPTS} ${USER}@$host << EOF
-	put /etc/kubernetes/cloud.config /home/${USER}/kubernetes/
-	chmod 0600 /home/${USER}/kubernetes/cloud.config
+	put /etc/kubernetes/cloud-config /home/${USER}/kubernetes/
+	chmod 0600 /home/${USER}/kubernetes/cloud-config
 EOF
     fi
 
@@ -462,79 +326,21 @@ fi
 # in that version
 function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
 
-# bootstrap first master for 1.12 serires
-function bootstrap_first_master_one_twelve() {
-   HOST_NAME=$1
-   HOST_IP=$2
-
-   CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
-
-   echo "******* Preparing kubeadm config for $1 *******"
-   create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
-
-   create_audit_policy
-   local CONFIG=kubeadm-"${HOST_NAME}".yaml
-
-   echo "*********** Bootstrapping master-1 ******************"
-   kubeadm -v=${V} alpha phase certs all --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubelet config write-to-disk --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubelet write-env-file --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubeconfig kubelet --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase kubeconfig all --config "${CONFIG}"
-   systemctl start kubelet
-   kubeadm -v=${V} alpha phase etcd local --config "${CONFIG}"
-   kubeadm -v=${V} alpha phase controlplane all --config "${CONFIG}"
-   until kubeadm -v=${V} alpha phase mark-master --config "${CONFIG}"; do
-       sleep 1
-   done
-
-   # wait for the API server, we need to do this before installing the addons,
-   # otherwise weird timing problems occur irregularly:
-   # "error when creating kube-proxy service account: unable to create
-   # serviceaccount: namespaces "kube-system" not found"
-   until curl -k --connect-timeout 3  https://${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}/api/v1/nodes/foo;
-       do echo "api server is not up! trying again ...";
-   done
-
-   until kubeadm -v=${V} alpha phase addon kube-proxy --config "${CONFIG}"; do
-       sleep 1
-   done
-   until kubeadm -v=${V} alpha phase addon coredns --config "${CONFIG}"; do
-       sleep 1
-   done
-   until kubeadm alpha phase bootstrap-token all --config "${CONFIG}"; do
-       sleep 1
-   done
-   test -d /root/.kube || mkdir -p /root/.kube
-   cp /etc/kubernetes/admin.conf /root/.kube/config
-   chown root:root /root/.kube/config
-
-   kubeadm -v=${V} alpha phase kubelet config upload  --config "${CONFIG}"
-   kubectl get nodes
-}
 
 # bootstrap the first master.
 # the process is slightly different than for the rest of the N masters
 # we add
 function bootstrap_first_master() {
-    HOST_NAME=$1
-    HOST_IP=$2
-    CONFIG=kubeadm-${HOST_NAME}.yaml
+   HOST_NAME=$1
+   HOST_IP=$2
+   CONFIG=kubeadm-${HOST_NAME}.yaml
 
-    CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
+   CURRENT_CLUSTER="$HOST_NAME=https://${HOST_IP}:2380"
 
-    if [ "$KUBE_VERSION_COMPARE" -lt "13" ]; then
-        #    this is for v1.12
-        create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "new"
-        bootstrap_first_master_one_twelve "${HOST_NAME}" "${HOST_IP}"
-        kubeadm -v=${V} alpha phase kubelet config upload  --config "${CONFIG}"
-   else
-        #    this is for v1.13
-        echo "Bootstaping 1.13"
-        create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
-        kubeadm init --config "${CONFIG}"
-        kubeadm -v=${V} init phase upload-config all --config "${CONFIG}"
-    fi
+   echo "Bootstaping k8s ${KUBE_VERSION}"
+   create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
+   kubeadm init --config "${CONFIG}"
+   kubeadm -v=${V} init phase upload-config all --config "${CONFIG}"
 
    test -d /root/.kube || mkdir -p /root/.kube
    cp /etc/kubernetes/admin.conf /root/.kube/config
@@ -543,33 +349,6 @@ function bootstrap_first_master() {
    kubectl get nodes
 }
 
-
-function add_master_one_twelve() {
-    scp ${SFTPOPTS} kubeadm-$1.yaml ${USER}@$1:/home/${USER}
-
-    set -x
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase certs all --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet config write-to-disk --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubelet write-env-file --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig kubelet --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 sudo systemctl start kubelet
-
-    # join the etcd host to the cluster, this is executed on local node!
-    until kubectl --kubeconfig=/etc/kubernetes/admin.conf exec -n kube-system etcd-${ETCD_HOST} -- etcdctl \
-        --ca-file /etc/kubernetes/pki/etcd/ca.crt \
-        --cert-file /etc/kubernetes/pki/etcd/peer.crt \
-        --key-file /etc/kubernetes/pki/etcd/peer.key \
-        --endpoints=https://${ETCD_IP}:2379 member add ${HOST_NAME} https://${HOST_IP}:2380; do \
-	    sleep 2; \
-	done
-
-    # launch etcd
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase etcd local --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase kubeconfig all --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm alpha phase controlplane all --config "${CONFIG}"
-    ssh ${SSHOPTS} ${USER}@$1 "until sudo kubeadm alpha phase mark-master --config "${CONFIG}"; do sleep 1; done"
-    set +x
-}
 
 function add_master_one_thirteen() {
 	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join --token ${BOOTSTRAP_TOKEN} --discovery-token-ca-cert-hash \
@@ -580,6 +359,7 @@ function add_master_one_thirteen() {
 # the first argument is the host name to add
 # the second argument is the host IP
 function add_master {
+    set -x
     USER=${SSH_USER:-ubuntu}
 
     HOST_NAME=$1
@@ -602,15 +382,9 @@ function add_master {
     fi
 
     echo "******* Preparing kubeadm config for $1 ******"
-	if [ "$KUBE_VERSION_COMPARE" -lt "13" ]; then
-
-        create_kubeadm_config "${HOST_NAME}" "${HOST_IP}" "${CURRENT_CLUSTER}" "existing"
-        add_master_one_twelve $HOSTNAME $CONFIG
-    else
-        echo "bootstrapping 1.13"
-    	create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
-        add_master_one_thirteen $HOST_NAME $CONFIG
-    fi
+    echo "bootstrapping 1.13"
+    create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
+    add_master_one_thirteen $HOST_NAME $CONFIG
 }
 
 
@@ -680,14 +454,12 @@ ssh ${SSHOPTS} ${SSH_USER}@${1} sudo bash << EOF
 set -ex;
 iptables -P FORWARD ACCEPT;
 swapoff -a;
-KUBE_VERSION=${KUBE_VERSION};
-DOCKER_VERSION=${DOCKER_VERSION};
-first_master=${first_master}
+export TRANSPORT_PACKAGES="${TRANSPORT_PACKAGES}";
+export KUBE_VERSION="${KUBE_VERSION}";
+export DOCKER_VERSION="${DOCKER_VERSION}";
+export first_master="${first_master}";
+$(typeset -f log);
 $(typeset -f get_yq);
-$(typeset -f get_docker_ubuntu);
-$(typeset -f get_docker_centos);
-$(typeset -f get_kubeadm_ubuntu);
-$(typeset -f get_kubeadm_centos);
 $(typeset -f get_docker);
 $(typeset -f get_kubeadm);
 $(typeset -f fetch_all);
@@ -709,7 +481,7 @@ function get_docker() {
 }
 
 # enforce kubeadm version
-function get_kubeadm_ubuntu() {
+function get_kubeadm() {
     apt-get update
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -724,14 +496,6 @@ function get_yq() {
 	fi
 }
 
-function get_kubeadm(){
-    if [ -z "$(type -P apt)" ]; then
-        get_kubeadm_centos;
-    else
-        get_kubeadm_ubuntu;
-    fi
-}
-
 # the entry point of the whole script.
 # this function bootstraps the who etcd cluster and control plane components
 # accross N hosts
@@ -739,22 +503,34 @@ function main() {
     get_net_plugin &
     pid_get_net_plugin=$!
 
-    get_yq &
-    get_docker
-    get_kubeadm &
-    pid_get_kubeadm=$!
+    for i in $(seq 1 10); do get_yq && break; sleep 30; done;
+    for i in $(seq 1 10); do get_docker && break; sleep 30; done;
+    for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
 
     export first_master=${MASTERS[0]}
     export first_master_ip=${MASTERS_IPS[0]}
-
-    wait $pid_get_kubeadm
 
     bootstrap_first_master "${first_master}" "${first_master_ip}"
     wait_for_etcd "${first_master}"
     make_secrets
 
+
     wait $pid_get_net_plugin
     apply_net_plugin
+
+    # this is how we enbale the external CSI provider needed in kubenetes 1.16
+    # and later. Current, koris versions will provision volumes with the built
+    # in cloud-provider, all other cloud operations go through the external
+    # cloud provider
+    #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-controllerplugin-rbac.yaml
+    #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-controllerplugin.yaml
+    #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-nodeplugin-rbac.yaml
+    #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-nodeplugin.yaml
+    #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/csi-cinder-driver.yaml
+
+    # TODO: fix:
+    # [WARNING IsDockerSystemdCheck]: detected "cgroupfs" as the Docker cgroup driver.
+    # The recommended driver is "systemd". Please follow the guide at https://kubernetes.io/docs/setup/cri/
 
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
         echo "bootstrapping master ${MASTERS[$i]}";
@@ -804,8 +580,8 @@ function join_all_hosts() {
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
 function fetch_all() {
-    get_docker
-    get_kubeadm
+    for i in $(seq 1 10); do get_docker && break; sleep 30; done;
+    for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
 }
 
 # The script is called as user 'root' in the directory '/'. Since we add some

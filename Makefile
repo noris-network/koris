@@ -143,12 +143,12 @@ integration-test: \
 	launch-cluster \
 	add-nodes \
 	add-master \
-	integration-run \
-	expose-wait \
 	curl-run \
 	check-cluster-dns \
 	clean-lb-after-integration-test
 
+curl-run:
+	export KUBECONFIG=$(KUBECONFIG); bash tests/integration/curl-lb.sh
 
 compliance-test: ## run the complete compliance test from your local machine
 compliance-test: \
@@ -275,25 +275,6 @@ show-nodes:
 		kubectl get nodes -o wide --kubeconfig=${KUBECONFIG} | grep -v "No resources found."; \
 	done
 
-integration-run:
-	kubectl apply -f tests/integration/nginx-deployment.yml --kubeconfig=${KUBECONFIG}
-	# wait for the pod to be available
-	@echo "started"
-
-expose-wait:
-	@echo "Waiting for loadBalancer to get an IP"
-	@while true; do \
-		IP=`kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`; \
-		if [ ! -z $${IP} ]; then \
-			break; \
-		fi; \
-		echo -n "."; \
-		sleep 1; \
-	done;
-	@echo
-	@echo "Got an IP!"
-
-
 test-cinder-volumes:
 	KUBECONFIG=${KUBECONFIG} ./tests/scripts/assert-cinder-volumes.sh
 
@@ -304,11 +285,6 @@ clean-cinder-volumes:
 reset-config:
 	git checkout $(CONFIG_FILE)
 
-curl-run: IP := $(shell kubectl get service external-http-nginx-service --kubeconfig=${KUBECONFIG} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-curl-run:
-	@echo "Loadbalancer IP:" $(IP);
-	@echo "Waiting for service to become available:"
-	@until curl -s http://$(IP):80; do echo -n "."; sleep 1; done;
 
 check-cluster-dns:
 	./tests/scripts/test-cluster-dns.sh $(KUBECONFIG)
