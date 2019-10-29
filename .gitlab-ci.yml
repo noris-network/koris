@@ -122,8 +122,6 @@ integration-test:
     LANG: "C.UTF-8"
   script:
   - "pip3 install -q -e ."
-  - "make integration-run"
-  - "make expose-wait"
   - "make curl-run"
   - "make clean-lb-after-integration-test"
   artifacts:
@@ -287,6 +285,7 @@ check-added-node-labels:
       - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
       - $SKIP_E2E
 
+# TODO: add assertion that cloud provider is running
 
 assert-metrics-server-is-running:
   stage: integration-test

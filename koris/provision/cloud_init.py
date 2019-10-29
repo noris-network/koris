@@ -153,15 +153,14 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
         write out the cloud provider configuration file for OpenStack
         """
         content = str(self.cloud_config)
-        self.write_file("/etc/kubernetes/cloud.config", content, "root",
+        self.write_file("/etc/kubernetes/cloud-config", content, "root",
                         "root", "0600")
 
     def _write_kubelet_default(self):
         """
         write out flags for kubelet systemd unit
         """
-        content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=openstack'''
-                   ''' --cloud-config=/etc/kubernetes/cloud.config"''')
+        content = ('''KUBELET_EXTRA_ARGS="--cloud-provider=external''')
         self.write_file("/etc/default/kubelet", content, "root",
                         "root", "0600")
 

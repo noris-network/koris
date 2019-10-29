@@ -16,7 +16,7 @@ fi
 
 KUBE_VERSION_COMPARE="$(echo "${KUBE_VERSION}" | cut -d '.' -f 2 )"
 
-export KUBE_VERSION=${KUBE_VERSION:-1.12.8}
+export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
 export DOCKER_VERSION=18.06
 
 iptables -P FORWARD ACCEPT
@@ -38,23 +38,7 @@ preferences: {}
 users: []
 EOF
 
-# config for 1.12.8
-if [ "$KUBE_VERSION_COMPARE" -lt "13" ]; then
-	cat << EOF > /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml
----
-apiVersion: kubeadm.k8s.io/v1alpha2
-clusterName: kubernetes
-discoveryFile: /etc/kubernetes/cluster-info.yaml
-discoveryTimeout: 15m0s
-discoveryTokenUnsafeSkipCAVerification: true
-kind: NodeConfiguration
-nodeRegistration:
-  criSocket: /var/run/dockershim.sock
-  name: $(hostname -s)
-tlsBootstrapToken: "${BOOTSTRAP_TOKEN}"
-EOF
-else
-	cat << EOF > /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml
+cat << EOF > /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml
 ---
 apiVersion: kubeadm.k8s.io/v1beta1
 discovery:
@@ -69,7 +53,6 @@ kind: JoinConfiguration
 nodeRegistration:
   criSocket: /var/run/dockershim.sock
 EOF
-fi
 
 function fetch_all() {
     apt-get update
@@ -102,16 +85,18 @@ function config_pod_network(){
     esac
 }
 
+function join() {
+	kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
+}
 
 function main() {
 
-    version_found docker --version "${DOCKER_VERSION}" || fetch_all
-    version_found kubeadm version "${KUBE_VERSION}" || fetch_all
+    version_found docker --version "${DOCKER_VERSION}" || for i in $(seq 1 10); do (fetch_all && break; sleep 30); done
+    version_found kubeadm version "${KUBE_VERSION}" || for i in $(seq 1 10); do (fetch_all && break; sleep 30); done
     config_pod_network
 
     # join !
-    until kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
-        do sudo kubeadm reset --force
+    until join; do sudo kubeadm reset --force
     done
 }
 

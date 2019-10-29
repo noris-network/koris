@@ -138,7 +138,7 @@ def test_first_master(ci_first_master):
 def test_cloud_config(ci_first_master):
     ci_first_master._write_cloud_config()
     cloud_config = ci_first_master._cloud_config_data['write_files'][-1]
-    assert cloud_config['path'] == '/etc/kubernetes/cloud.config'
+    assert cloud_config['path'] == '/etc/kubernetes/cloud-config'
 
 
 def test_bootstrap_script_first_master(ci_first_master):
@@ -170,4 +170,4 @@ def test_node_has_cloud_init(ci_node):
     ci_node._write_cloud_config()
     cloud_config = ci_node._cloud_config_data['write_files'][-1]
     assert b'username' in base64.b64decode(cloud_config['content'])
-    assert cloud_config['path'] == '/etc/kubernetes/cloud.config'
+    assert cloud_config['path'] == '/etc/kubernetes/cloud-config'
