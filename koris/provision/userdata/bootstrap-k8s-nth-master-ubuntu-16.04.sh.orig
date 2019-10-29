@@ -34,7 +34,7 @@ function log() {
 	echo -e "$datestring - $@" | tee $LOGFILE
 }
 
-
+<<<<<<< HEAD
 # minimal configuration so that the correct images are pulled
 function create_kubeadm_config() {
     HOST_NAME=$1
@@ -45,6 +45,125 @@ kubernetesVersion: v${KUBE_VERSION}
 TMPL
 }
 
+
+# create a configuration file for kubeadm 1.12
+function create_kubeadm_config_one_twelve () {
+
+    HOST_NAME=$1
+    HOST_IP=$2
+    CURRENT_CLUSTER=$3
+
+    cat <<TMPL > kubeadm-"${HOST_NAME}".yaml
+apiVersion: kubeadm.k8s.io/v1alpha2
+kind: MasterConfiguration
+kubernetesVersion: v${KUBE_VERSION}
+apiServerCertSANs:
+- "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}"
+api:
+    controlPlaneEndpoint: "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
+etcd:
+  local:
+    extraArgs:
+      listen-client-urls: "https://127.0.0.1:2379,https://${HOST_IP}:2379"
+      advertise-client-urls: "https://${HOST_IP}:2379"
+      listen-peer-urls: "https://${HOST_IP}:2380"
+      initial-advertise-peer-urls: "https://${HOST_IP}:2380"
+      initial-cluster: "${CURRENT_CLUSTER},${HOST_NAME}=https://${HOST_IP}:2380"
+      initial-cluster-state: "existing"
+    serverCertSANs:
+      - ${HOST_NAME}
+      - ${HOST_IP}
+    peerCertSANs:
+      - ${HOST_NAME}
+      - ${HOST_IP}
+networking:
+    # This CIDR is a Calico default. Substitute or remove for your CNI provider.
+    podSubnet: ${POD_SUBNET}
+controllerManagerExtraArgs:
+  allocate-node-cidrs: "true"
+  cluster-cidr: ${POD_SUBNET}
+TMPL
+# if On baremetal we don't need all OpenStack cloud provider flags
+if [[ ${OPENSTACK} -eq 1 ]]; then
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+  cloud-provider: "openstack"
+  cloud-config: /etc/kubernetes/cloud.config
+apiServerExtraVolumes:
+- name: "cloud-config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
+  writable: false
+  pathType: File
+controllerManagerExtraVolumes:
+- name: "cloud-config"
+  hostPath: "/etc/kubernetes/cloud.config"
+  mountPath: "/etc/kubernetes/cloud.config"
+  writable: false
+  pathType: File
+apiServerExtraArgs:
+  cloud-provider: openstack
+  cloud-config: /etc/kubernetes/cloud.config
+TMPL
+else
+cat <<TMPL >> kubeadm-"${HOST_NAME}".yaml
+apiServerExtraArgs:
+TMPL
+fi
+
+# If Dex is to be deployed, we need to start the apiserver with extra args.
+if [[ ! -z ${OIDC_CLIENT_ID} ]]; then
+cat <<TMPL > dex.tmpl
+  oidc-issuer-url: "${OIDC_ISSUER_URL}"
+  oidc-client-id: ${OIDC_CLIENT_ID}
+  oidc-ca-file: ${OIDC_CA_FILE}
+  oidc-username-claim: ${OIDC_USERNAME_CLAIM}
+  oidc-groups-claim: ${OIDC_GROUPS_CLAIM}
+TMPL
+    cat dex.tmpl >> kubeadm-"${HOST_NAME}".yaml
+fi
+
+# add audit policy
+cat <<AUDITPOLICY >> kubeadm-"${HOST_NAME}".yaml
+  audit-log-maxsize: "24"
+  audit-log-maxbackup: "30"
+  audit-log-maxage: "90"
+  audit-log-path: /var/log/kubernetes/audit.log
+  audit-policy-file: /etc/kubernetes/audit-policy.yml
+AUDITPOLICY
+
+# add volumes for audit logs
+cat << AV >> auditVolumes.yml
+apiServerExtraVolumes:
+- name: var-log-kubernetes
+  hostPath: /var/log/kubernetes
+  mountPath: /var/log/kubernetes
+  writable: true
+  pathType: DirectoryOrCreate
+- name: "audit-policy"
+  hostPath: "/etc/kubernetes/audit-policy.yml"
+  mountPath: "/etc/kubernetes/audit-policy.yml"
+  writable: false
+  pathType: File
+AV
+
+yq m -i -a kubeadm-"${HOST_NAME}".yaml auditVolumes.yml
+
+if [[ ${ADDTOKEN} -eq 1 ]]; then
+cat <<TOKEN >> kubeadm-"${HOST_NAME}".yaml
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: "${BOOTSTRAP_TOKEN}"
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+TOKEN
+fi
+}
+
+=======
+>>>>>>> dev
 # check if a binary version is found
 # version_check kube-scheduler --version v1.10.4 return 1 if binary is found
 # in that version
@@ -74,12 +193,17 @@ function get_kubeadm {
 
 
 function fetch_all() {
+<<<<<<< HEAD
     apt-get update
     if [ -z "$(type -P docker)" ]; then
         get_docker
-    	for i in $(seq 1 10); do get_docker && break; sleep 30; done;
     fi
+    get_kubeadm
+
+=======
+    for i in $(seq 1 10); do get_docker && break; sleep 30; done;
     for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
+>>>>>>> dev
 }
 
 

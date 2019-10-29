@@ -200,12 +200,14 @@ add-master:
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
+	NUM=${NUM} \
 	KUBECONFIG=${KUBECONFIG} \
 	CLUSTER_NAME=${CLUSTER_NAME} ./tests/scripts/check-joined-master.sh
 
-assert-audit-log: USER ?= ubuntu
+assert-audit-log: NUM ?= 4
 assert-audit-log:
-	KUBECONFIG=${KUBECONFIG} ./tests/scripts/assert_audit_logging.sh
+	NUM=${NUM} \
+	KUBECONFIG=${KUBECONFIG} CLUSTER_NAME=${CLUSTER_NAME} ./tests/scripts/assert_audit_logging.sh
 
 assert-metrics:
 	KUBECONFIG=$(KUBECONFIG) ./tests/scripts/assert_metrics.sh
@@ -328,6 +330,7 @@ security-checks-nodes:
 # FIP is selected from 1 of 2 floating IPs which are allocated to the project.
 # The jq magic line simply selects one of those in the correct network (since we
 # can select a floating IP from an internal network or from the public network).
+update-config: TESTID ?= 0
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
 update-config:	FIP ?= $(shell openstack floating ip list -f json | jq -r -c  '.[$(TESTID)]  | select(.Port == null and ."Floating Network"=="c019250b-aea8-497e-9b3b-fd94020684b6")."Floating IP Address"')
