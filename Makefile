@@ -44,9 +44,6 @@ TEST_ID ?= 0
 
 BROWSER := $(PY) -c "$$BROWSER_PYSCRIPT"
 
-SONOBUOY_URL = https://github.com/heptio/sonobuoy/releases/download/v0.13.0/sonobuoy_0.13.0_linux_amd64.tar.gz
-SONOBUOY_COMPLETED_INDICATOR = "Sonobuoy has completed"
-SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
 CIS_VERSION=1.11
 
 help:
@@ -366,6 +363,10 @@ clean-all:
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
 
+
+check-sonobuoy: SONOBUOY_URL = https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.16.0/sonobuoy_0.16.0_linux_amd64.tar.gz
+check-sonobuoy: SONOBUOY_COMPLETED_INDICATOR = "Sonobuoy has completed"
+check-sonobuoy:SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
 check-sonobuoy:
 	SONOBUOY_URL=$(SONOBUOY_URL) KUBECONFIG=$(KUBECONFIG) SONOBUOY_CHECK_TIMEOUT_SECONDS=$(SONOBUOY_CHECK_TIMEOUT_SECONDS) \
 	SONOBUOY_COMPLETED_INDICATOR=$(SONOBUOY_COMPLETED_INDICATOR) ./tests/scripts/sonobuoy.sh
