@@ -17,6 +17,7 @@ static-analysis-python:
   stage: static-analysis
   image: oz123/koris-alpine:0.1.6
   script:
+    - pylint --version
     - make lint
 
 static-analysis-bash:

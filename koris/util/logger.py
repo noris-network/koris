@@ -8,7 +8,7 @@ import time
 from koris.util.hue import (bad, red, info as infomsg, yellow, run, grey,
                             que, good, green)
 
-LOG_LEVELS = [x for x in range(5)]
+LOG_LEVELS = list(range(5))
 DEFAULT_LOG_LEVEL = 3
 
 

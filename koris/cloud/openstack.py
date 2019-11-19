@@ -287,7 +287,7 @@ class Instance:  # pylint: disable=too-many-arguments
         """stop and terminate an instance"""
         try:
             server = self.nova.servers.find(name=self.name)
-            nics = [nic for nic in server.interface_list()]
+            nics = list(server.interface_list())
             server.delete()
             list(netclient.delete_port(nic.id) for nic in nics)
             LOGGER.success("Instance '%s' deleted successfully", server.name)
