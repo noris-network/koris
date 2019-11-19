@@ -4,7 +4,7 @@ curl -s -L -o sonobuoy.tgz ${SONOBUOY_URL};
 tar --skip-old-files -x -z -f sonobuoy.tgz;
 echo "Running sonobuoy on the cluster. This can take a very long time (up to 3 hours and more!)...";
 
-kubectl --config ${KUBECONFIG} get namespace sonobuoy || if ! ./sonobuoy --kubeconfig ${KUBECONFIG} run; then echo "Failed to run sonobuoy!"; exit 1; fi
+kubectl --kubeconfig ${KUBECONFIG} get namespace sonobuoy || if ! ./sonobuoy --kubeconfig ${KUBECONFIG} run; then echo "Failed to run sonobuoy!"; exit 1; fi
 
 STARTTIME=`date +%s`;
 echo "Starttime: `date`";
