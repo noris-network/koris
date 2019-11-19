@@ -17,11 +17,11 @@ while true; do
         echo -e "\nMaximum alloted time for sonobuoy of ${SONOBUOY_CHECK_TIMEOUT_SECONDS} seconds to complete elapsed without result :[";
         exit 1;
     fi;
-    SONOBUOY_CURR_STATUS=`./sonobuoy --kubeconfig ${KUBECONFIG} status`;
-    if [ $? -ne 0 ]; then
+    SONOBUOY_CURR_STATUS=$(./sonobuoy --kubeconfig ${KUBECONFIG} status 2>&1) || (
         echo "Failed to check sonobuoy status!";
+	echo ${SONOBUOY_CURR_STATUS};
         exit 1;
-    fi;
+	)
     echo ${SONOBUOY_CURR_STATUS} | grep "${SONOBUOY_COMPLETED_INDICATOR}" > /dev/null;
     if [ $? -eq 0 ]; then
         echo -e "\nResults are in! Retrieving and displaying for e2e tests...";
