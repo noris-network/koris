@@ -363,8 +363,8 @@ clean-all:
 clean-network-ports:  ## remove dangling ports in Openstack
 	openstack port delete $$(openstack port list -f value -c id -c status | grep DOWN | cut -f 1 -d" " | xargs)
 
-
-check-sonobuoy: SONOBUOY_URL = https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.16.0/sonobuoy_0.16.0_linux_amd64.tar.gz
+check-sonobuoy: SONOBUOY_VERSION ?= 0.16.4
+check-sonobuoy: SONOBUOY_URL = https://github.com/vmware-tanzu/sonobuoy/releases/download/v$(SONOBUOY_VERSION)/sonobuoy_$(SONOBUOY_VERSION)_linux_amd64.tar.gz
 check-sonobuoy: SONOBUOY_COMPLETED_INDICATOR = "Sonobuoy has completed"
 check-sonobuoy:SONOBUOY_CHECK_TIMEOUT_SECONDS = 14400
 check-sonobuoy:
