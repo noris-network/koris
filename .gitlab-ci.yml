@@ -15,13 +15,14 @@ stages:
 # --[ STATIC ANALYSIS ]--
 static-analysis-python:
   stage: static-analysis
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
+    - pylint --version
     - make lint
 
 static-analysis-bash:
   stage: static-analysis
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
     - make test-bash
 
@@ -29,7 +30,7 @@ static-analysis-bash:
 # --[ UNIT TESTS ]--
 unittest:
   stage: unittest
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
     - "pip3 install -r requirements_ci.txt"
     - pip3 install -q -e .
@@ -77,7 +78,7 @@ wait-for-resources:
 
 build-cluster:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
@@ -98,7 +99,7 @@ build-cluster:
 
 build-cluster-with-vanilla-image:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
@@ -116,7 +117,7 @@ build-cluster-with-vanilla-image:
 
 integration-test:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -137,7 +138,7 @@ integration-test:
 
 check-dns:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -153,7 +154,7 @@ check-dns:
 
 check-cinder:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -169,7 +170,7 @@ check-cinder:
 
 check-members:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -184,7 +185,7 @@ check-members:
 
 assert-control-plane:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -199,7 +200,7 @@ assert-control-plane:
 
 check-node-labels:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -216,7 +217,7 @@ check-node-labels:
 
 add-nodes:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -241,7 +242,7 @@ add-nodes:
 
 add-master:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -271,7 +272,7 @@ add-master:
 
 check-added-node-labels:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -289,7 +290,7 @@ check-added-node-labels:
 
 assert-metrics-server-is-running:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -303,7 +304,7 @@ assert-metrics-server-is-running:
 
 check-added-nodes-ready:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -319,7 +320,7 @@ check-added-nodes-ready:
 
 check-nginx-ingress-ready:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -335,7 +336,7 @@ check-nginx-ingress-ready:
 # --[ RESIZE DELETE ]--
 delete-added-nodes:
   stage: resize-delete
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -365,7 +366,7 @@ delete-added-nodes:
 
 delete-added-master:
   stage: resize-delete
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -395,7 +396,7 @@ delete-added-master:
 # --[ SECURITY CHECKS ]--
 security-checks-masters:
   stage: security-checks
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -409,7 +410,7 @@ security-checks-masters:
 
 security-checks-nodes:
   stage: security-checks
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -427,7 +428,7 @@ security-checks-nodes:
 # --[ COMPLIANCE CHECKS ]--
 compliance-checks:
   stage: compliance-checks
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -452,7 +453,7 @@ compliance-checks:
 # --[ CLEANUP ]--
 cleanup:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -474,7 +475,7 @@ cleanup:
 
 clean-vanilla-cluster:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -507,7 +508,7 @@ clean-vanilla-cluster:
 
 clean-cinder-volumes:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -524,7 +525,7 @@ clean-cinder-volumes:
 # --[ COVERAGE REPORT ]--
 coverage-report:
   stage: coverage-report
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
@@ -546,7 +547,7 @@ coverage-report:
 # --[ PAGES ]--
 dev-docs:
   stage: pages
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - pip3 install .
@@ -566,7 +567,7 @@ dev-docs:
 
 pages:
   stage: pages
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build

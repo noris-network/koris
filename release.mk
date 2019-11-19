@@ -18,8 +18,8 @@ from urllib.parse import urlparse
 
 import gitlab
 
-URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.noris.net/PI/koris/"))
-PROJECT_ID=os.getenv("CI_PROJECT_ID", 1260)
+URL = urlparse(os.getenv("CI_PROJECT_URL", "https://gitlab.com/noris-network/koris"))
+PROJECT_ID=os.getenv("CI_PROJECT_ID", 14251052)
 VERSION=os.environ['VER']
 REVISION = sys.argv[-1]
 

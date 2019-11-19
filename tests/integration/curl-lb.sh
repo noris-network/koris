@@ -9,7 +9,12 @@ set -eux
 
 export LB="kube_service_kubernetes_default_external-http-nginx-service"
 
-EXTERNAL_IP=$(openstack floating ip list -c 'Fixed IP Address' -c 'Floating IP Address' -f value |  grep None | cut -d" " -f 1 | head -n 1)
+# add a floating IP so one isn't assigned
+EXTERNAL_IP=$(openstack floating ip create c019250b-aea8-497e-9b3b-fd94020684b6 -f value -c floating_ip_address || echo "Quota exceeded")
+
+if [[ ${EXTERNAL_IP} =~ "Quota exceeded" ]]; then
+	EXTERNAL_IP=$(openstack floating ip list -c 'Fixed IP Address' -c 'Floating IP Address' -f value |  grep None | cut -d" " -f 1 | head -n 1)
+fi
 
 echo ${EXTERNAL_IP};
 
