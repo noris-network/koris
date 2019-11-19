@@ -50,7 +50,7 @@ unittest:
 # --[ WAIT FOR RESOURCES ]--
 wait-for-resources:
   stage: wait-for-resources
-  image: oz123/koris-alpine:0.1.5
+  image: oz123/koris-alpine:0.1.6
   script:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
