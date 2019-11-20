@@ -30,7 +30,6 @@ static-analysis-bash:
 # --[ UNIT TESTS ]--
 unittest:
   stage: unittest
-  image: oz123/koris-alpine:0.1.6
   script:
     - "pip3 install -r requirements_ci.txt"
     - pip3 install -q -e .
