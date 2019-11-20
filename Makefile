@@ -388,7 +388,7 @@ build-exec: ## build a single file executable of koris
 	pyinstaller koris.spec
 
 build-exec-in-docker:
-	docker run --rm -w /usr/src -v $(PWD):/usr/src/ $(ORG)/koris-builder:$(TAG) bash -c "make install build-exec PY=python3.6"
+	docker run --rm -w /usr/src -v $(CURDIR):/usr/src/ $(ORG)/koris-builder:$(TAG) bash -c "make install build-exec PY=python3.6"
 
 start-release:
 	make -f release.mk $@  # $@ is the name of the target
