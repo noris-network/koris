@@ -15,14 +15,14 @@ stages:
 # --[ STATIC ANALYSIS ]--
 static-analysis-python:
   stage: static-analysis
-  image: oz123/koris-alpine:0.1.6
+  image: registry.gitlab.com/noris-network/koris/koris-alpine:0.1.6
   script:
     - pylint --version
     - make lint
 
 static-analysis-bash:
   stage: static-analysis
-  image: oz123/koris-alpine:0.1.6
+  image: registry.gitlab.com/noris-network/koris/koris-alpine:0.1.6
   script:
     - make test-bash
 
