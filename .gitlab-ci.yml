@@ -1,3 +1,5 @@
+image: registry.gitlab.com/noris-network/koris/koris-alpine:0.1.6
+
 stages:
  - static-analysis
  - unittest
@@ -15,14 +17,12 @@ stages:
 # --[ STATIC ANALYSIS ]--
 static-analysis-python:
   stage: static-analysis
-  image: registry.gitlab.com/noris-network/koris/koris-alpine:0.1.6
   script:
     - pylint --version
     - make lint
 
 static-analysis-bash:
   stage: static-analysis
-  image: registry.gitlab.com/noris-network/koris/koris-alpine:0.1.6
   script:
     - make test-bash
 
@@ -50,7 +50,6 @@ unittest:
 # --[ WAIT FOR RESOURCES ]--
 wait-for-resources:
   stage: wait-for-resources
-  image: oz123/koris-alpine:0.1.6
   script:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
@@ -78,7 +77,6 @@ wait-for-resources:
 
 build-cluster:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.6
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
@@ -99,7 +97,6 @@ build-cluster:
 
 build-cluster-with-vanilla-image:
   stage: build-cluster
-  image: oz123/koris-alpine:0.1.6
   script:
   - "pip3 install -r requirements_ci.txt"
   - "pip3 install -q -e ."
@@ -117,7 +114,6 @@ build-cluster-with-vanilla-image:
 
 integration-test:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -154,7 +150,6 @@ check-dns:
 
 check-cinder:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -185,7 +180,6 @@ check-members:
 
 assert-control-plane:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -200,7 +194,6 @@ assert-control-plane:
 
 check-node-labels:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -217,7 +210,6 @@ check-node-labels:
 
 add-nodes:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -242,7 +234,6 @@ add-nodes:
 
 add-master:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -272,7 +263,6 @@ add-master:
 
 check-added-node-labels:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -290,7 +280,6 @@ check-added-node-labels:
 
 assert-metrics-server-is-running:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -320,7 +309,6 @@ check-added-nodes-ready:
 
 check-nginx-ingress-ready:
   stage: integration-test
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -366,7 +354,6 @@ delete-added-nodes:
 
 delete-added-master:
   stage: resize-delete
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -453,7 +440,6 @@ compliance-checks:
 # --[ CLEANUP ]--
 cleanup:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -475,7 +461,6 @@ cleanup:
 
 clean-vanilla-cluster:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -508,7 +493,6 @@ clean-vanilla-cluster:
 
 clean-cinder-volumes:
   stage: cleanup
-  image: oz123/koris-alpine:0.1.6
   variables:
     LC_ALL: "C.UTF-8"
     LANG: "C.UTF-8"
@@ -525,7 +509,6 @@ clean-cinder-volumes:
 # --[ COVERAGE REPORT ]--
 coverage-report:
   stage: coverage-report
-  image: oz123/koris-alpine:0.1.6
   script:
    - "pip3 install -r requirements_ci.txt"
    - pip3 install -q -e .
@@ -547,7 +530,6 @@ coverage-report:
 # --[ PAGES ]--
 dev-docs:
   stage: pages
-  image: oz123/koris-alpine:0.1.6
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - pip3 install .
@@ -567,7 +549,6 @@ dev-docs:
 
 pages:
   stage: pages
-  image: oz123/koris-alpine:0.1.6
   script:
   - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
   - which sphinx-build
