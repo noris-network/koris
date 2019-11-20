@@ -567,7 +567,7 @@ pages:
 # sudo make docker-build-pyinstaller TAG=0.3.1 ORG=registry.gitlab.com/noris-network/koris
 build:
   stage: build
-  image: oz123/koris-builder:0.3
+  image: registry.gitlab.com/noris-network/koris/koris-builder:0.3
   script:
    - make install build-exec
    - python3 setup.py sdist
