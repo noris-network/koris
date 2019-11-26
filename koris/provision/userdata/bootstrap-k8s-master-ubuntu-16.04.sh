@@ -137,7 +137,6 @@ apiServer:
   - name: var-log-kubernetes
     hostPath: /var/log/kubernetes
     mountPath: /var/log/kubernetes
-    readOnly: true
     pathType: DirectoryOrCreate
   - name: "audit-policy"
     hostPath: "/etc/kubernetes/audit-policy.yml"
