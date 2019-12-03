@@ -52,12 +52,14 @@ sdk_dist = get_distribution('openstacksdk')
 nova = get_distribution('python-novaclient')
 debtc = get_distribution('debtcollector')
 cinder_ = get_distribution('python-cinderclient')
+octavia = get_distribution('python-octaviaclient')
+munch = get_distribution('munch')
 
 
 a = Entrypoint('koris', 'console_scripts', 'koris',
                datas=[('koris/provision/userdata/*', 'provision/userdata'),
-	              ('koris/provision/userdata/manifests/*', 'provision/userdata/manifests'),
-		      ('koris/deploy/manifests/*', 'deploy/manifests'),
+                      ('koris/provision/userdata/manifests/*', 'provision/userdata/manifests'),
+                      ('koris/deploy/manifests/*', 'deploy/manifests'),
                       (os_service_types, 'os_service_types'),
                       (os_defaults, 'openstack'),
                       (keystoneauth1.egg_info,
@@ -68,6 +70,8 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                       (nova.egg_info, 'python_novaclient-%s.dist-info' % nova.parsed_version.base_version),
                       (debtc.egg_info, 'debtcollector-%s.dist-info' % debtc.parsed_version.base_version),
                       (cinder_.egg_info, 'python_cinderclient-%s.dist-info' % cinder_.parsed_version.base_version),
+                      (octavia.egg_info, 'python_octaviaclient-%s.dist-info' % octavia.parsed_version.base_version),
+                      (munch.egg_info, 'munch-%s.dist-info' % munch.parsed_version.base_version),
                       ],
                hiddenimports=['novaclient.v2', 'cinderclient.v3',
                               'keystoneauth1', 'keystoneclient',
@@ -77,7 +81,9 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                               'keystoneauth1.identity',
                               'os_service_types',
                               'openstacksdk',
-                              'openstack'])
+                              'openstack',
+                              'octaviaclient.api',
+                              'munch'])
 
 
 pyz = PYZ(a.pure, a.zipped_data,
