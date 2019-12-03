@@ -53,6 +53,7 @@ nova = get_distribution('python-novaclient')
 debtc = get_distribution('debtcollector')
 cinder_ = get_distribution('python-cinderclient')
 octavia = get_distribution('python-octaviaclient')
+munch = get_distribution('munch')
 
 
 a = Entrypoint('koris', 'console_scripts', 'koris',
@@ -70,6 +71,7 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                       (debtc.egg_info, 'debtcollector-%s.dist-info' % debtc.parsed_version.base_version),
                       (cinder_.egg_info, 'python_cinderclient-%s.dist-info' % cinder_.parsed_version.base_version),
                       (octavia.egg_info, 'python_octaviaclient-%s.dist-info' % octavia.parsed_version.base_version),
+                      (munch.egg_info, 'munch-%s.dist-info' % munch.parsed_version.base_version),
                       ],
                hiddenimports=['novaclient.v2', 'cinderclient.v3',
                               'keystoneauth1', 'keystoneclient',
@@ -80,7 +82,8 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                               'os_service_types',
                               'openstacksdk',
                               'openstack',
-                              'octaviaclient.api'])
+                              'octaviaclient.api',
+                              'munch'])
 
 
 pyz = PYZ(a.pure, a.zipped_data,
