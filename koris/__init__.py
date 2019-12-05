@@ -3,7 +3,7 @@ try:
     import pkg_resources
     __version__ = pkg_resources.get_distribution('koris').version
 except pkg_resources.DistributionNotFound:
-    __version__ = '1.3.3'
+    __version__ = '1.3.4'
 
 # Defining some constants
 MASTER_PREFIX = "master"
