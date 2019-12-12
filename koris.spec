@@ -43,7 +43,6 @@ def Entrypoint(dist, group, name, **kwargs):
 
 os_service_types = resource_filename(Requirement("os_service_types"),
                                      "os_service_types")
-
 os_defaults = resource_filename(Requirement('openstacksdk'), 'openstack')
 
 os_service_types_ = get_distribution('os_service_types')
@@ -54,6 +53,7 @@ debtc = get_distribution('debtcollector')
 cinder_ = get_distribution('python-cinderclient')
 octavia = get_distribution('python-octaviaclient')
 munch = get_distribution('munch')
+osc_lib = get_distribution('osc_lib')
 
 
 a = Entrypoint('koris', 'console_scripts', 'koris',
@@ -72,6 +72,7 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                       (cinder_.egg_info, 'python_cinderclient-%s.dist-info' % cinder_.parsed_version.base_version),
                       (octavia.egg_info, 'python_octaviaclient-%s.dist-info' % octavia.parsed_version.base_version),
                       (munch.egg_info, 'munch-%s.dist-info' % munch.parsed_version.base_version),
+                      (osc_lib.egg_info, 'osc_lib-%s.dist-info' % osc_lib.parsed_version.base_version),
                       ],
                hiddenimports=['novaclient.v2', 'cinderclient.v3',
                               'keystoneauth1', 'keystoneclient',
@@ -80,6 +81,7 @@ a = Entrypoint('koris', 'console_scripts', 'koris',
                               'keystoneauth1.loading._plugins.identity.generic',
                               'keystoneauth1.identity',
                               'os_service_types',
+			      'osc_lib',
                               'openstacksdk',
                               'openstack',
                               'octaviaclient.api',
