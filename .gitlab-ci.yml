@@ -570,11 +570,13 @@ build:
   image: registry.gitlab.com/noris-network/koris/koris-builder:0.3
   script:
    - make install build-exec
+   - cp dist/koris koris-linux-amd64
+   - koris-linux-amd64 -h
    - python3 setup.py sdist
   artifacts:
     paths:
      - dist/koris-*.tar.gz
-     - dist/koris
+     - koris-linux-amd64
   only:
     - tags
     - master
