@@ -4,7 +4,7 @@
 master_flavor: 'ECS.GP1.2-8'
 node_flavor: 'ECS.C1.4-8'
 version:
-  k8s: "1.14.8"
+  k8s: "1.14.10"
 # If your project has multiple networks you MUST specify the subnetwork too
 # don't change this unless you know what you are doing
 # per default koris will create a network for your cluster and route
