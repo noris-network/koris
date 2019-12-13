@@ -2,7 +2,7 @@ image: registry.gitlab.com/noris-network/koris/koris-alpine:0.1.6
 
 stages:
  - static-analysis
- - unittest
+ - build-and-test
  - wait-for-resources
  - build-cluster
  - integration-test
@@ -12,7 +12,6 @@ stages:
  - cleanup
  - coverage-report
  - pages
- - build
 
 # --[ STATIC ANALYSIS ]--
 static-analysis-python:
@@ -29,7 +28,7 @@ static-analysis-bash:
 
 # --[ UNIT TESTS ]--
 unittest:
-  stage: unittest
+  stage: build-and-test
   script:
     - "pip3 install -r requirements_ci.txt"
     - pip3 install -q -e .
@@ -45,6 +44,26 @@ unittest:
   # of the pipeline.
   coverage: '/a^/'
 
+# --[ BUILD ]--
+# build this image with
+# sudo make docker-build-pyinstaller TAG=0.3.1 ORG=registry.gitlab.com/noris-network/koris
+build:
+  stage: build-and-test
+  image: registry.gitlab.com/noris-network/koris/koris-builder:0.3
+  script:
+   - make install build-exec
+   - ls dist
+   - cp -v dist/koris koris-linux-amd64
+   - ./koris-linux-amd64 -h
+   - python3 setup.py sdist
+  artifacts:
+    paths:
+     - dist/koris-*.tar.gz
+     - koris-linux-amd64
+  only:
+    - tags
+    - master
+    - dev
 
 # --[ WAIT FOR RESOURCES ]--
 wait-for-resources:
@@ -562,22 +581,3 @@ pages:
     - master
 
 
-# --[ BUILD ]--
-# build this image with
-# sudo make docker-build-pyinstaller TAG=0.3.1 ORG=registry.gitlab.com/noris-network/koris
-build:
-  stage: build
-  image: registry.gitlab.com/noris-network/koris/koris-builder:0.3
-  script:
-   - make install build-exec
-   - cp dist/koris koris-linux-amd64 .
-   - ./koris-linux-amd64 -h
-   - python3 setup.py sdist
-  artifacts:
-    paths:
-     - dist/koris-*.tar.gz
-     - koris-linux-amd64
-  only:
-    - tags
-    - master
-    - dev
