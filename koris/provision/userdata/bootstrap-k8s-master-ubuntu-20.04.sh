@@ -543,10 +543,6 @@ function main() {
     #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-nodeplugin.yaml
     #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/csi-cinder-driver.yaml
 
-    # TODO: fix:
-    # [WARNING IsDockerSystemdCheck]: detected "cgroupfs" as the Docker cgroup driver.
-    # The recommended driver is "systemd". Please follow the guide at https://kubernetes.io/docs/setup/cri/
-
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
         echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
