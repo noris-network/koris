@@ -1,6 +1,6 @@
 """
 This modules contains some helper functions to inject cloud-init
-to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
+to booted machines. At the moment only Cloud Inits for Ubunut 20.04 are
 provided
 """
 import base64
@@ -195,7 +195,7 @@ class NthMasterInit(BaseInit):
             cloud_config,
             ssh_key,
             os_type='ubuntu',
-            os_version="16.04",
+            os_version="20.04",
             dex=None,
             koris_env=None,
             k8s_conf=None,):
@@ -311,7 +311,7 @@ class FirstMasterInit(NthMasterInit):
     """
 
     def __init__(self, ssh_key, ca_bundle, cloud_config,
-                 os_type='ubuntu', os_version="16.04", dex=None,
+                 os_type='ubuntu', os_version="20.04", dex=None,
                  koris_env=None):
         super().__init__(cloud_config, ssh_key, os_type, os_version,
                          dex=dex, koris_env=koris_env)
@@ -346,7 +346,7 @@ class NodeInit(BaseInit):
     """
     def __init__(self, ca_cert, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
-                 os_version="16.04",
+                 os_version="20.04",
                  k8s_version=KUBERNETES_BASE_VERSION,
                  pod_network="CALICO"):
         """
