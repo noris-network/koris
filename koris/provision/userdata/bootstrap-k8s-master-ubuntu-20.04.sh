@@ -42,8 +42,6 @@ export CLUSTER_STATE=""
 
 #### Versions for Kube 1.12.X
 export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
-export DOCKER_VERSION=18.06
-export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
 export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
@@ -399,14 +397,15 @@ TRANSPORT_PACKAGES="apt-transport-https ca-certificates curl software-properties
 
 # fetch and prepare calico manifests
 function get_calico(){
-    while [ ! -f rbac-kdd.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+    while [ ! -f tigera-operator.yaml ]; do
+        curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/tigera-operator.yaml
     done
-    while [ ! -f calico.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+    while [ ! -f custom-resources.yaml ]; do
+        curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/custom-resources.yaml
+	curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/custom-resources.yaml
     done
 
-    sed -i 's@192.168.0.0/16@'"${POD_SUBNET}"'@g' calico.yaml
+    sed -i 's@192.168.0.0/16@'"${POD_SUBNET}"'@g' custom-resources.yaml
 }
 
 
@@ -437,8 +436,8 @@ function apply_net_plugin(){
     case "${POD_NETWORK}" in
         "CALICO"|"")
             echo "installing calico"
-            kubectl apply -f rbac-kdd.yaml
-            kubectl apply -f calico.yaml
+            kubectl apply -f tigera-operator.yaml
+            kubectl apply -f custom-resources.yaml
             ;;
         "FLANNEL")
             echo "installing flannel"
@@ -455,7 +454,6 @@ iptables -P FORWARD ACCEPT;
 swapoff -a;
 export TRANSPORT_PACKAGES="${TRANSPORT_PACKAGES}";
 export KUBE_VERSION="${KUBE_VERSION}";
-export DOCKER_VERSION="${DOCKER_VERSION}";
 export first_master="${first_master}";
 $(typeset -f log);
 $(typeset -f get_yq);
@@ -572,7 +570,6 @@ function main() {
     echo "the installation has finished."
 }
 
-
 # when building bare metal cluster or vSphere clusters this is used to
 # install dependencies on each host and join the host to the cluster
 function join_all_hosts() {
@@ -591,8 +588,6 @@ function join_all_hosts() {
        ssh ${K} sudo kubeadm join --token $BOOTSTRAP_TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
    done
 }
-
-
 
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters
