@@ -258,7 +258,7 @@ class K8SConfigurator:  # pylint: disable=no-member
         # {'members': [{'ID': 9007573287841766007, 'name': 'master-7-am',
         #  'peerURLs': ['https://10.32.192.11:2380'],
         #  'clientURLs': ['https://10.32.192.11:2379']}]}
-        response = yaml.load(response)
+        response = yaml.safe_load(response)
         etcd_cluster = ",".join(("=".join((m['name'], m['peerURLs'][0])) for m
                                  in response['members'] if 'name' in m))
         LOGGER.debug("Current etcd cluster state is: %s", etcd_cluster)
