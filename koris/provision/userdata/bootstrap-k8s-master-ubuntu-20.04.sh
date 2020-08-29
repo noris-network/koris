@@ -347,9 +347,12 @@ function bootstrap_first_master() {
 }
 
 
-function add_master_one_thirteen() {
-	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join --token ${BOOTSTRAP_TOKEN} --discovery-token-ca-cert-hash \
-		 sha256:${DISCOVERY_HASH} control-plane ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}
+function add_master_kubeadm() {
+	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm -v=5 join ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT} \
+		--token ${BOOTSTRAP_TOKEN} \
+		--discovery-token-ca-cert-hash \
+		 sha256:${DISCOVERY_HASH} \
+		--control-plane
 }
 
 # add a master to the cluster
@@ -361,9 +364,6 @@ function add_master {
 
     HOST_NAME=$1
     HOST_IP=$2
-    CURRENT_CLUSTER=$3
-    ETCD_HOST=$4
-    ETCD_IP=$5
 
     local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
 
@@ -380,8 +380,7 @@ function add_master {
 
     echo "******* Preparing kubeadm config for $1 ******"
     echo "bootstrapping 1.13"
-    create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
-    add_master_one_thirteen $HOST_NAME $CONFIG
+    add_master_kubeadm $HOST_NAME $CONFIG
 }
 
 
@@ -547,11 +546,8 @@ function main() {
         echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
-        CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
-        copy_keys "${HOST_IP}"
-        until add_master $HOST_NAME $HOST_IP $CURRENT_CLUSTER $first_master $first_master_ip; do
+        until add_master $HOST_NAME $HOST_IP; do
             ssh ${SSHOPTS} $HOST_NAME sudo kubeadm reset -f
-            copy_keys $HOST_IP
         done
 
         wait_for_etcd $HOST_NAME
