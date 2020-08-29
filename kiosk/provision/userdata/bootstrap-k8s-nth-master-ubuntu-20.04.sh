@@ -4,7 +4,7 @@
 # install nth master required packages if not alredy installed
 ###
 
-set -e
+set -eE
 
 iptables -P FORWARD ACCEPT
 swapoff -a
@@ -15,7 +15,7 @@ if [ -f /etc/kubernetes/kiosk.env ]; then
 fi
 
 #### Versions for Kube 1.14.1
-export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
+export KUBE_VERSION=${KUBE_VERSION:-1.18.8}
 export AUTO_JOIN=${AUTO_JOIN:-0}
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
@@ -28,7 +28,7 @@ V=${LOGLEVEL}
 LOGFILE=/dev/stderr
 
 function log() {
-	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	datestring=$(date +"%Y-%m-%d %H:%M:%S")
 	echo -e "$datestring - $@" | tee $LOGFILE
 }
 
@@ -189,6 +189,10 @@ function main() {
     echo "Success! ${HOSTNAME} should now be part of the cluster."
 }
 
+
+# This line and the if condition bellow allow sourcing the script without executing
+# the main function
+(return 0 2>/dev/null) && sourced=1 || sourced=0
 
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.

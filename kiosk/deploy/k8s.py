@@ -108,7 +108,7 @@ def parse_etcd_response(resp):
     # Reconstructing the response so we get a dict where the key is the
     # member name and and value is a dict with the other info.
     out = {}
-    resp_yaml = yaml.load(resp)
+    resp_yaml = yaml.safe_load(resp)
     for mem in resp_yaml['members']:
         if 'name' in mem:
             out[mem['name']] = {k: v for k, v in mem.items() if k != "name"}
@@ -642,6 +642,7 @@ def _add_listener_and_pool(lbinst, listener_config):
 
         yield lbinst.add_pool(listener.id, protocol=protocol, name=name)
 
+
 def add_ssh_listeners(lbinst, lb_masters):
     """
     Reconfigure the Openstack LoadBalancer - add SSH listener.
@@ -664,6 +665,7 @@ def add_ssh_listeners(lbinst, lb_masters):
         for master in lb_masters:
             lbinst.add_member(pool.id, master['address'], protocol_port=22)
     LOGGER.info("Added SSH listeners to Loadbalancer")
+
 
 def add_ingress_listeners(nginx_ingress_ports, lbinst, lb_masters):
     """
