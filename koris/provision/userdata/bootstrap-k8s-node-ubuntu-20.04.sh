@@ -65,7 +65,6 @@ EOF
 
 function get_kubeadm {
     log "started ${FUNCNAME[0]}"
-    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     apt-add-repository -u "deb http://apt.kubernetes.io kubernetes-xenial main"
     apt-get install -y --allow-downgrades kubeadm=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00
@@ -74,8 +73,6 @@ function get_kubeadm {
 
 function get_docker() {
     log "Started get_docker"
-    apt-get update
-    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
@@ -101,11 +98,6 @@ EOF
     systemctl enable docker
     log "Finished ${FUNCNAME[0]}"
 }
-# check if a binary version is found
-# version_check kube-scheduler --version v1.10.4 return 1 if binary is found
-# in that version
-function version_found() {  return $("$1" "$2" | grep -qi "$3"); }
-
 
 # run commands needed for network plugins
 function config_pod_network(){
@@ -122,10 +114,20 @@ function join() {
 	kubeadm -v=10 join --config /etc/kubernetes/kubeadm-node-"${KUBE_VERSION}".yaml "${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}"
 }
 
+function fetch_all() {
+    apt-get update
+    dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
+
+    if [ -z "$(type -P docker)" ]; then
+        get_docker
+        for i in $(seq 1 10); do get_docker && break; sleep 30; done;
+    fi
+    for i in $(seq 1 10); do get_kubeadm && break; sleep 30; done;
+}
+
 function main() {
 
-    version_found docker --version "${DOCKER_VERSION}" || for i in $(seq 1 10); do (get_docker && break; sleep 30); done
-    version_found kubeadm version "${KUBE_VERSION}" || for i in $(seq 1 10); do (get_kubeadm && break; sleep 30); done
+    kubeadm version | grep -qi "${KUBE_VERSION}" || fetch_all
     config_pod_network
 
     # join !
