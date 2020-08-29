@@ -493,6 +493,25 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         loop.run_until_complete(asyncio.gather(*tasks))
         LOGGER.info("Finished configuring LoadBalancer for Dex")
 
+    def _configure_dex(self, lbinst, lb_ip, lb_dns, cert_dir):
+        LOGGER.info("Setting up Dex SSL infrastructure ...")
+        # Dex Issuer will be set to the Floating IP, or LoadBalancer DNS Name
+        if lb_dns == lb_ip or lb_dns is None:
+            issuer = lb_ip
+        else:
+            issuer = lb_dns
+        LOGGER.info("Dex CA Issuer set to %s", issuer)
+        dex_ssl = DexSSL(cert_dir, issuer)
+        dex_ssl.save_certs()
+
+        try:
+            self.dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
+        except (ValidationError, TypeError, KeyError) as exc:
+            LOGGER.error(f"Unable to parse dex config: {exc}")
+            LOGGER.error("Skipping Dex deployment")
+            self.deploy_dex = False
+            self.dex_conf = None
+
     def run(self, config):  # pylint: disable=too-many-locals,too-many-statements
         """
         execute the complete cluster build
@@ -535,24 +554,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
         if self.deploy_dex:
-            LOGGER.info("Setting up Dex SSL infrastructure ...")
-            # Dex Issuer will be set to the Floating IP, or LoadBalancer DNS Name
-            if lb_dns == lb_ip or lb_dns is None:
-                issuer = lb_ip
-            else:
-                issuer = lb_dns
-            LOGGER.info("Dex CA Issuer set to %s", issuer)
-            dex_ssl = DexSSL(cert_dir, issuer)
-            dex_ssl.save_certs()
-
-            try:
-                self.dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
-            except (ValidationError, TypeError, KeyError) as exc:
-                LOGGER.error(f"Unable to parse dex config: {exc}")
-                LOGGER.error("Skipping Dex deployment")
-                self.deploy_dex = False
-                self.dex_conf = None
-
+            self._configure_dex(lb_inst, lb_ip,lb_dns, cert_dir)
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for master instances to be launched...")
