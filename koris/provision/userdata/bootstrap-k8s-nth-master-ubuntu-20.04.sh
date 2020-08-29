@@ -192,5 +192,15 @@ function main() {
 
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
-cd /root
-main
+if [[ $sourced == 1 ]]; then
+    set +e
+    echo "You can now use any of these functions:"
+    echo ""
+    typeset -F |  cut -d" " -f 3
+else
+    set -eu
+    cd /root
+    iptables -P FORWARD ACCEPT
+    swapoff -a
+    main "$@"
+fi
