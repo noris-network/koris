@@ -15,6 +15,7 @@ import sys
 import urllib
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
+import textwrap
 import yaml
 
 from mach import mach1
@@ -260,16 +261,31 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
     def _get_verbosity(self):
         pass
 
+    def about(self):
+        """
+        Show version and copyright information
+        """
+        print(textwrap.dedent("""
+        kiosk - a kubernetes installer on OpenStack
+
+        Copyright (C) 2020 - Oz Tiram.
+
+        This software is based on koris by noris network AG (c) 2019.
+        koris is distributed under the temrs of APACHE license v2.0.
+
+        kiosk has made changes to this software and is distributed under
+        the terms of the GNU AFFERO PUBLIC LICENSE version 3.
+        """.strip("\n")))
+
     def apply(self, config):
         """
         Bootstrap a Kubernetes cluster
-
         config - configuration file
         """
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        nova, neutron, cinder = get_clients()
+        nova, neutron, cinder = get_clients()  # pylint: disable=unbalanced-tuple-unpacking # noqa
         conn = get_connection()
         oscinfo = OSClusterInfo(nova, neutron, cinder, config, conn)
         oscinfo.setup_networking(config)
@@ -290,7 +306,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         with open(config, 'r') as stream:
             config = yaml.safe_load(stream)
 
-        nova, neutron, cinder = get_clients()
+        nova, neutron, cinder = get_clients()  # pylint: disable=unbalanced-tuple-unpacking # noqa
         if not force:
             LOGGER.question(
                 "Deleting cluster '{}'".format(
@@ -387,7 +403,7 @@ class Koris:  # pylint: disable=no-self-use,too-many-locals
         with open(config, 'r') as stream:
             config_dict = yaml.safe_load(stream)
 
-        nova, neutron, cinder = get_clients()
+        nova, neutron, cinder = get_clients()  # pylint: disable=unbalanced-tuple-unpacking  # noqa
         conn = get_connection()
 
         k8s = K8S(os.getenv("KUBECONFIG"))
