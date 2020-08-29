@@ -373,13 +373,12 @@ function add_master {
        sleep 2
     done
 
-    ssh ${SSHOPTS} ${USER}@1 "kubeadm | grep -qi ${KUBE_VERSION}" || BOOTSTRAP_NODES=1
+    ssh ${SSHOPTS} ${USER}@$1 "kubeadm | grep -qi ${KUBE_VERSION}" || BOOTSTRAP_NODES=1
     if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
         bootstrap_deps_node $1
     fi
 
     echo "******* Preparing kubeadm config for $1 ******"
-    echo "bootstrapping 1.13"
     add_master_kubeadm $HOST_NAME $CONFIG
 }
 
@@ -546,8 +545,10 @@ function main() {
         echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
+        copy_keys "${HOST_IP}"
         until add_master $HOST_NAME $HOST_IP; do
             ssh ${SSHOPTS} $HOST_NAME sudo kubeadm reset -f
+            copy_keys "${HOST_IP}"
         done
 
         wait_for_etcd $HOST_NAME
