@@ -331,8 +331,10 @@ update-config: TESTID ?= 0
 update-config: KEY ?= kube  ## create a test configuration file
 update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
 update-config:	FIP ?= $(shell openstack floating ip list -f json | jq -r -c  '.[$(TESTID)]  | select(.Port == null and ."Floating Network"=="c019250b-aea8-497e-9b3b-fd94020684b6")."Floating IP Address"')
+update-config: K8S ?= 1.18.8
 update-config:
 	@sed -i "s/%%CLUSTER_NAME%%/$(CLUSTER_NAME)/g" $(CONFIG_FILE)
+	@sed -i "s/%%K8S_VERSION%%/$(K8S_VERSION)/g" $(CONFIG_FILE)
 	@sed -i "s/%%LATEST_IMAGE%%/$(IMAGE)/g" $(CONFIG_FILE)
 	@sed -i "s/keypair: 'kube'/keypair: ${KEY}/g" $(CONFIG_FILE)
 	@sed -i 's/\s*floatingip: "%%FLOATING_IP%%"/  floatingip: '$(FIP)'/g' $(CONFIG_FILE)
