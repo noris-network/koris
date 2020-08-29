@@ -14,10 +14,17 @@ if [ -f /etc/kubernetes/koris.env ]; then
     source /etc/kubernetes/koris.env
 fi
 
+LOGFILE=/dev/stderr
+
+function log() {
+	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	echo -e "$datestring - $@" | tee $LOGFILE
+}
+
 KUBE_VERSION_COMPARE="$(echo "${KUBE_VERSION}" | cut -d '.' -f 2 )"
 
 export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
-
+export DOCKER_VERSION=${DOCKER_VERSION:-"1.19"}
 TRANSPORT_PACKAGES="apt-transport-https ca-certificates curl software-properties-common gnupg2"
 
 iptables -P FORWARD ACCEPT
