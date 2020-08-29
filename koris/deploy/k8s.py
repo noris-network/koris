@@ -622,6 +622,49 @@ class KorisAddon:  # pylint: disable=too-few-public-methods
         apply_func(k8s_client, self.file, verbose=False)
 
 
+def _add_listener_and_pool(lbinst, listener_config):
+    """
+    Add a listener and pool to loadbalancer
+
+    Args:
+        lbinst (:class:`.cloud.openstack.LoadBalancer`): A configured
+            LoadBalancer instance.
+        listener_config (dict): dict containining information about the listener
+    """
+
+    for key, port in listener_config.items():
+        protocol = key.split("-")[-1]
+        name = '-'.join((key, lbinst.config['cluster-name']))
+        listener = lbinst.add_listener(
+            name=name,
+            protocol=protocol,
+            protocol_port=port)
+
+        yield lbinst.add_pool(listener.id, protocol=protocol, name=name)
+
+def add_ssh_listeners(lbinst, lb_masters):
+    """
+    Reconfigure the Openstack LoadBalancer - add SSH listener.
+
+    Args:
+        lbinst (:class:`.cloud.openstack.LoadBalancer`): A configured
+            LoadBalancer instance.
+        members (list): list containining memebr information
+    """
+    pool = next(_add_listener_and_pool(lbinst, {"SSH-TCP": 22}))
+
+    updated_masters = lb_masters.copy()
+
+    for master in updated_masters:
+        master['protocol_port'] = 22
+        master["monitor_port"] = 22
+
+    if not lbinst.bulk_update_members(updated_masters, pool['id']):
+        LOGGER.debug("Bulk update failed, falling back to serial update")
+        for master in lb_masters:
+            lbinst.add_member(pool.id, master['address'], protocol_port=22)
+    LOGGER.info("Added SSH listeners to Loadbalancer")
+
 def add_ingress_listeners(nginx_ingress_ports, lbinst, lb_masters):
     """
     Reconfigure the Openstack LoadBalancer - add an HTTP and HTTPS listener
@@ -636,20 +679,14 @@ def add_ingress_listeners(nginx_ingress_ports, lbinst, lb_masters):
     #  {"name": "bar", "address": "10.0.0.29", "protocol_port": "6443"},
     # ]
 
-    for key, port in {'Ingress-HTTP': 80, 'Ingress-HTTPS': 443}.items():
-        protocol = key.split("-")[-1]
-        name = '-'.join((key, lbinst.config['cluster-name']))
-        listener = lbinst.add_listener(
-            name=name,
-            protocol=protocol,
-            protocol_port=port)
-
-        pool = lbinst.add_pool(listener.id, protocol=protocol, name=name)
+    for pool in _add_listener_and_pool(lbinst,
+                                       {'Ingress-HTTP': 80,
+                                        'Ingress-HTTPS': 443}):
         updated_masters = lb_masters.copy()
 
         for master in updated_masters:
-            master['protocol_port'] = nginx_ingress_ports[protocol].node_port
-            master["monitor_port"] = nginx_ingress_ports[protocol].node_port
+            master['protocol_port'] = nginx_ingress_ports[pool.protocol].node_port
+            master["monitor_port"] = nginx_ingress_ports[pool.protocol].node_port
 
         if not lbinst.bulk_update_members(updated_masters, pool['id']):
             LOGGER.debug("Bulk update failed, falling back to serial update")
