@@ -694,4 +694,4 @@ def add_ingress_listeners(nginx_ingress_ports, lbinst, lb_masters):
             LOGGER.debug("Bulk update failed, falling back to serial update")
             for master in lb_masters:
                 lbinst.add_member(pool.id, master['address'],
-                                  protocol_port=nginx_ingress_ports[protocol].node_port)  # noqa
+                                  protocol_port=nginx_ingress_ports[pool.protocol].node_port)  # noqa
