@@ -7,16 +7,16 @@ version:
   k8s: "%%K8S_VERSION%%"
 # If your project has multiple networks you MUST specify the subnetwork too
 # don't change this unless you know what you are doing
-# per default koris will create a network for your cluster and route
+# per default kiosk will create a network for your cluster and route
 # this network to ext02 network in openstack if this is undesired change this
 private_net:
-  name: 'koris-net'
+  name: 'kiosk-net'
   subnet:
-    name: 'koris-subnet'
+    name: 'kiosk-subnet'
     cidr: '10.0.0.0/24'
     #  This is optional - if no router name is given a new one will be created
     router:
-      name: 'koris-router'
+      name: 'kiosk-router'
 cluster-name: '%%CLUSTER_NAME%%'
 availibility-zones:
  - de-nbg6-1b
@@ -27,7 +27,7 @@ keypair: 'kube'
 #security_group: 'default'
 user_data: 'cloud-init-parts/generic'
 # while any generic *ubuntu* image will work
-# you should currently use koris-base
+# you should currently use kiosk-base
 # this image includes all k8s binaries and a special kernel
 # optimized for KVM (this image is built from
 # ubuntu-16.04-minimal-cloudimg-amd64-disk1.img

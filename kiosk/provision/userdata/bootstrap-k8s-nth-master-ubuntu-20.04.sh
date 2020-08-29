@@ -9,9 +9,9 @@ set -e
 iptables -P FORWARD ACCEPT
 swapoff -a
 
-# load koris environment file if available
-if [ -f /etc/kubernetes/koris.env ]; then
-    source /etc/kubernetes/koris.env
+# load kiosk environment file if available
+if [ -f /etc/kubernetes/kiosk.env ]; then
+    source /etc/kubernetes/kiosk.env
 fi
 
 #### Versions for Kube 1.14.1

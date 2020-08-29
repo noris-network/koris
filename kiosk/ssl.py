@@ -15,7 +15,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
-from koris.util.logger import Logger
+from kiosk.util.logger import Logger
 
 LOGGER = Logger(__name__)
 

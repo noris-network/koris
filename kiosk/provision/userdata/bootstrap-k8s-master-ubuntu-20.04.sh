@@ -14,7 +14,7 @@ set -e
 #
 # The addition of master nodes is done via SSH!
 #
-# This should be the content of /etc/kubernetes/koris.env
+# This should be the content of /etc/kubernetes/kiosk.env
 #
 #	export BOOTSTRAP_NODES=1  # for bootstrapping baremetal nodes (i.e. not an Openstack Image
 #	export SSH_USER="root"    # for ubuntu use ubuntu
@@ -31,9 +31,9 @@ set -e
 #
 ###
 
-# load koris environment file if available
-if [ -f /etc/kubernetes/koris.env ]; then
-    source /etc/kubernetes/koris.env
+# load kiosk environment file if available
+if [ -f /etc/kubernetes/kiosk.env ]; then
+    source /etc/kubernetes/kiosk.env
 fi
 
 export CURRENT_CLUSTER=""
@@ -532,7 +532,7 @@ function main() {
     apply_net_plugin
 
     # this is how we enbale the external CSI provider needed in kubenetes 1.16
-    # and later. Current, koris versions will provision volumes with the built
+    # and later. Current, kiosk versions will provision volumes with the built
     # in cloud-provider, all other cloud operations go through the external
     # cloud provider
     #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-controllerplugin-rbac.yaml

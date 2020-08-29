@@ -35,10 +35,10 @@ PYTEST_FLAGS ?=
 REV ?= HEAD
 BUILD_SUFFIX := $(shell ${PY} -c 'import os;val=os.getenv("CI_PIPELINE_ID");print("-"+val) if val else print("")')
 REV_NUMBER = $(shell git rev-parse --short ${REV})
-CLUSTER_NAME ?= koris-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
+CLUSTER_NAME ?= kiosk-pipeline-$(REV_NUMBER)$(BUILD_SUFFIX)
 KUBECONFIG ?= $(CLUSTER_NAME)-admin.conf
 CIDR ?= 192.168.1.0\/16
-CONFIG_FILE ?= tests/koris_test.yml
+CONFIG_FILE ?= tests/kiosk_test.yml
 UBUNTU_VER ?= 16.04
 TEST_ID ?= 0
 
@@ -74,10 +74,10 @@ clean-test: ## remove test and coverage artifacts
 lint: pylint flake8  ## check style with pylint and flake8
 
 pylint: ## check style with pylint
-	pylint --rcfile=.pylintrc koris
+	pylint --rcfile=.pylintrc kiosk
 
 flake8: ## check style with flake8
-	flake8 koris tests
+	flake8 kiosk tests
 
 test: test-python test-bash
 
@@ -87,7 +87,7 @@ test-python: ## run tests quickly with the default Python
 
 test-bash:
 	@echo "Checking bash script syntax ..."
-	find koris/provision/userdata/ -name "*.sh" -print0 | xargs -0 -n1 bash -n
+	find kiosk/provision/userdata/ -name "*.sh" -print0 | xargs -0 -n1 bash -n
 
 coverage: ## check code coverage quickly with the default Python
 	$(PY) -m pytest -vv --cov .
@@ -100,25 +100,25 @@ rename-coverage:
 	mv .coverage .coverage.$(NAME)
 
 docs: ## generate Sphinx HTML documentation, including API docs
-	sphinx-apidoc -o docs/ koris
+	sphinx-apidoc -o docs/ kiosk
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
 
 docker-alpine:
-	docker build -t $(ORG)/koris-alpine:$(TAG) -f docker/Dockerfile.alpine .
+	docker build -t $(ORG)/kiosk-alpine:$(TAG) -f docker/Dockerfile.alpine .
 
 docker-ubuntu:
-	docker build -t $(ORG)/koris-ubuntu:$(TAG) -f docker/Dockerfile.ubuntu .
+	docker build -t $(ORG)/kiosk-ubuntu:$(TAG) -f docker/Dockerfile.ubuntu .
 
 docker-push-alpine:
-	docker push $(ORG)/koris-alpine:$(TAG)
+	docker push $(ORG)/kiosk-alpine:$(TAG)
 
 docker-push-ubuntu:
-	docker push $(ORG)/koris-ubuntu:$(TAG)
+	docker push $(ORG)/kiosk-ubuntu:$(TAG)
 
 docker-build-pyinstaller:
-	docker build -t $(ORG)/koris-builder:$(TAG) -f docker/Docker-pyinstaller-builder .
+	docker build -t $(ORG)/kiosk-builder:$(TAG) -f docker/Docker-pyinstaller-builder .
 
 
 servedocs: docs ## compile the docs watching for changes
@@ -156,12 +156,12 @@ compliance-test: \
 
 launch-cluster: KEY ?= kube  ## launch a cluster with KEY=your_ssh_keypair
 launch-cluster: update-config
-	$(PY) -m coverage run -m koris -v debug apply $(CONFIG_FILE)
+	$(PY) -m coverage run -m kiosk -v debug apply $(CONFIG_FILE)
 
 add-nodes: FLAVOR ?= ECS.UC1.4-4
 add-nodes: NUM ?= 2
 add-nodes:
-	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris -v debug add --amount $(NUM) --zone de-nbg6-1a --flavor $(FLAVOR) tests/koris_test.yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m kiosk -v debug add --amount $(NUM) --zone de-nbg6-1a --flavor $(FLAVOR) tests/kiosk_test.yml
 	# wait for the 2 nodes to join.
 	# assert cluster has now 5 nodes
 	echo "waiting for nodes to join"; \
@@ -169,7 +169,7 @@ add-nodes:
 		echo -n "."; \
 		sleep 1; \
 	done
-	@mv tests/koris_test.updated.yml tests/koris_test.add_node.yml
+	@mv tests/kiosk_test.updated.yml tests/kiosk_test.add_node.yml
 	@echo "OK"
 
 assert-node: NUM ?= 4
@@ -182,18 +182,18 @@ assert-node:
 
 delete-node: NUM ?= 4
 delete-node: NODE_TYPE ?= node
-delete-node: KORIS_CONF ?= tests/koris_test
+delete-node: KORIS_CONF ?= tests/kiosk_test
 delete-node:
-	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris -v debug delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml -f
-	mv ${KORIS_CONF}.updated.yml tests/koris_test.delete_$(NODE_TYPE).yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m kiosk -v debug delete node --name $(CLUSTER_NAME)-$(NODE_TYPE)-$(NUM) ${KORIS_CONF}.yml -f
+	mv ${KORIS_CONF}.updated.yml tests/kiosk_test.delete_$(NODE_TYPE).yml
 
 add-master: FLAVOR ?= ECS.UC1.4-4
-add-master: KORIS_CONF ?= tests/koris_test
+add-master: KORIS_CONF ?= tests/kiosk_test
 add-master:
-	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m koris -v debug add --role master --zone de-nbg6-1a --flavor $(FLAVOR) $(KORIS_CONF).yml
+	KUBECONFIG=${KUBECONFIG} $(PY) -m coverage run -m kiosk -v debug add --role master --zone de-nbg6-1a --flavor $(FLAVOR) $(KORIS_CONF).yml
 	# wait for the master to join.
 	@echo "OK"
-	@mv $(KORIS_CONF).updated.yml tests/koris_test.add_master.yml
+	@mv $(KORIS_CONF).updated.yml tests/kiosk_test.add_master.yml
 
 assert-masters: NUM ?= 4
 assert-masters:  ##
@@ -296,8 +296,8 @@ clean-lb-after-integration-test:
 
 # to delete a loadbalancer the environment variable LOADBALANCER_NAME needs to
 # be set to the cluster's name. For example, if one want to delete the
-# loadbalancer koris-pipe-line-6e754fe-7008-lb one would need to set
-# LOADBALANCER_NAME to koris-pipe-line-6e754fe-7008 (without the -lb)
+# loadbalancer kiosk-pipe-line-6e754fe-7008-lb one would need to set
+# LOADBALANCER_NAME to kiosk-pipe-line-6e754fe-7008 (without the -lb)
 clean-lb: ## delete a loadbalancer with all it's components
 	$(call ndef,LOADBALANCER_NAME)
 	LOADBALANCER_NAME=$(LOADBALANCER_NAME) $(PY) tests/scripts/load_balacer_create_and_destroy.py destroy
@@ -329,7 +329,7 @@ security-checks-nodes:
 # can select a floating IP from an internal network or from the public network).
 update-config: TESTID ?= 0
 update-config: KEY ?= kube  ## create a test configuration file
-update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'koris-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
+update-config: IMAGE ?= $(shell openstack image list -c Name -f value --sort name:desc | grep 'kiosk-ubuntu-${UBUNTU_VER}-[[:digit:]]' | head -n 1)
 update-config:	FIP ?= $(shell openstack floating ip list -f json | jq -r -c  '.[$(TESTID)]  | select(.Port == null and ."Floating Network"=="c019250b-aea8-497e-9b3b-fd94020684b6")."Floating IP Address"')
 update-config: K8S ?= 1.18.8
 update-config:
@@ -341,7 +341,7 @@ update-config:
 	@cat $(CONFIG_FILE)
 
 clean-cluster: update-config
-	$(PY) -m coverage run -m koris -v debug destroy $(CONFIG_FILE) --force
+	$(PY) -m coverage run -m kiosk -v debug destroy $(CONFIG_FILE) --force
 
 clean-floating-ips:
 	for ip in $$(openstack floating ip list -f json | jq -c -r '.[-2:] | .[].ID'); do \
@@ -349,15 +349,15 @@ clean-floating-ips:
 	done
 
 clean-all:
-	@if [ -r tests/koris_test.updated.yml ]; then \
-		mv -v tests/koris_test.updated.yml  $(CONFIG_FILE); \
-		if [ -r tests/koris_test.master.yml ]; then \
+	@if [ -r tests/kiosk_test.updated.yml ]; then \
+		mv -v tests/kiosk_test.updated.yml  $(CONFIG_FILE); \
+		if [ -r tests/kiosk_test.master.yml ]; then \
 			sed -i 's/n-masters:\ 3/n-masters:\ 4/' $(CONFIG_FILE); \
 		fi; \
 	else \
 		$(MAKE) reset-config update-config; \
 	fi
-	$(PY) -m coverage run -m koris -v debug destroy $(CONFIG_FILE) --force
+	$(PY) -m coverage run -m kiosk -v debug destroy $(CONFIG_FILE) --force
 	@git checkout $(CONFIG_FILE)
 	@rm -fv ${KUBECONFIG}
 	@rm -vfR certs-${CLUSTER_NAME}
@@ -386,11 +386,11 @@ install-git-hooks:
 	echo "git-pylint-commit-hook" >> .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 
-build-exec: ## build a single file executable of koris
-	pyinstaller koris.spec
+build-exec: ## build a single file executable of kiosk
+	pyinstaller kiosk.spec
 
 build-exec-in-docker:
-	docker run --rm -w /usr/src -v $(CURDIR):/usr/src/ $(ORG)/koris-builder:$(TAG) bash -c "make install build-exec PY=python3.6"
+	docker run --rm -w /usr/src -v $(CURDIR):/usr/src/ $(ORG)/kiosk-builder:$(TAG) bash -c "make install build-exec PY=$(PY)"
 
 start-release:
 	make -f release.mk $@  # $@ is the name of the target
@@ -409,9 +409,9 @@ abort-release:
 
 destroy-cluster-with-floating-ip: FILENAME ?= $(subst .yml,-floating-ip.yml, $(CONFIG_FILE))
 destroy-cluster-with-floating-ip: reset-config update-config-with-floating-ip
-	$(PY) -m coverage run -m koris -v debug destroy -f $(FILENAME)
+	$(PY) -m coverage run -m kiosk -v debug destroy -f $(FILENAME)
 launch-gitlab-worker: USERDATA ?= tests/misc/provision-gitlab-worker.sh
-launch-gitlab-worker: NETWORK ?= koris-net
+launch-gitlab-worker: NETWORK ?= kiosk-net
 launch-gitlab-worker:  # start a gitlab worker
 	@[ "${IMAGE}" ] || ( echo ">> IMAGE is not set"; exit 1 )
 	@[ "${AZ}" ] || ( echo ">> AZ is not set"; exit 1 )

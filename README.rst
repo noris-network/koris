@@ -1,15 +1,15 @@
 =====
-koris
+kiosk
 =====
 
-.. image:: https://gitlab.com/noris-network/koris/badges/dev/pipeline.svg
-  :target: https://gitlab.com/noris-network/koris/badges/dev/pipeline.svg
+.. image:: https://gitlab.com/oz123/kiosk/badges/dev/pipeline.svg
+  :target: https://gitlab.com/oz123/kiosk/badges/dev/pipeline.svg
 
-.. image:: https://gitlab.com/noris-network/koris/badges/dev/coverage.svg
-  :target: https://gitlab.com/noris-network/koris/badges/dev/coverage.svg
+.. image:: https://gitlab.com/oz123/kiosk/badges/dev/coverage.svg
+  :target: https://gitlab.com/oz123/kiosk/badges/dev/coverage.svg
 
 .. image:: https://img.shields.io/badge/docs-passed-green.svg
-  :target: https://noris-network.gitlab.io/koris/
+  :target: https://oz123.gitlab.io/kiosk/
 
 
 Launch kubernetes clusters on OpenStack.
@@ -20,7 +20,7 @@ Features
 
  * Get your kubernetes cluster on noris.cloud in about 5 minutes.
  * Complete provisioning of openstack infrastructure via the installer.
- * Kubernetes 1.14.X supported
+ * Kubernetes 1.18.X supported
  * You can use a pre-built binary installer or the Python sources
  * Resize your cluster as needed (add or remove masters and worker nodes)
  * Multiple plugins already installed (you can add more easily by deploying
@@ -45,17 +45,17 @@ Features
 Quickstart
 ----------
 
-If you just want to use koris to create a cluster follow the steps below, for more details refer to
+If you just want to use kiosk to create a cluster follow the steps below, for more details refer to
 :doc:`/installation` and :doc:`/usage`.
 
 If you want to develop, please refer to :doc:`/contributing`.
 
-The complete compiled `documentation of koris can be found here <https://noris-network.gitlab.io/koris>`_.
+The complete compiled `documentation of kiosk can be found here <https://oz123.gitlab.io/kiosk>`_.
 
 Prerequisites
 ^^^^^^^^^^^^^
 
-Install Python 3.6:
+Install Python 3.6 or later:
 
 .. code:: shell
 
@@ -66,19 +66,19 @@ Follow the instructions to install `kubectl`_ .
 Installation
 ^^^^^^^^^^^^
 
-1. Create a local virtual environment for koris (using your favorite tool).
+1. Create a local virtual environment for kiosk (using your favorite tool).
    For example the standard Python has a simple virtual environment tool:
 
    .. code:: shell
 
-     $ mkdir koris
-     $ cd koris && python3 -m venv koris-env
+     $ mkdir kiosk
+     $ cd kiosk && python3 -m venv kiosk-env
 
 2. Activate the environment with:
 
    .. code:: shell
 
-     $ source koris-env/bin/activate
+     $ source kiosk-env/bin/activate
 
    You can leave your virtual environment by typing ``deactivate``.
 
@@ -87,27 +87,27 @@ Installation
 
    .. code:: shell
 
-     $ pip install -e git+git@gitlab.com:noris-network/koris.git@v<LATEST_TAG>#egg=koris
+     $ pip install -e git+git@gitlab.com:oz123/kiosk.git@v<LATEST_TAG>#egg=kiosk
 
-  Koris is now installed in ``./koris-env/bin`` and usable with an activated virtual environment.
+  Kiosk is now installed in ``./kiosk-env/bin`` and usable with an activated virtual environment.
 
 .. note::
 
-   If the machine you would like to install koris on does not have access to
-   ``gitlab.com`noris-network download the source distribution on a machine that has,
+   If the machine you would like to install kiosk on does not have access to
+   ``gitlab.com`oz123 download the source distribution on a machine that has,
    and copy it over to your desired machine:
 
    .. code:: shell
 
-      curl https://gitlab.com/noris-network/koris/-/archive/v<LATEST_TAG>/koris-v<LATEST_TAG>.zip
-      scp koris-v<LATEST_TAG>.zip remotehost:~/
+      curl https://gitlab.com/oz123/kiosk/-/archive/v<LATEST_TAG>/kiosk-v<LATEST_TAG>.zip
+      scp kiosk-v<LATEST_TAG>.zip remotehost:~/
 
    Repeat the steps to create and activate a virtual environment, then install
    the package via ``pip``:
 
    .. code:: shell
 
-    $ pip install koris-v<LATEST_TAG>.zip
+    $ pip install kiosk-v<LATEST_TAG>.zip
 
 Usage
 ^^^^^
@@ -119,17 +119,17 @@ Usage
       $ source ~/path/to/your/openstack-openrc.sh
       Please enter your OpenStack Password for project <PROJECT> as user <USER>\:
 
-2. Koris is executed with ``koris <subcommand>``. You can get a list of subcommands
+2. Kiosk is executed with ``kiosk <subcommand>``. You can get a list of subcommands
    with ``-h`` or ``--help``.
 
    .. code:: shell
 
-      $ koris -h
-      usage: koris [-h] [--version]
+      $ kiosk -h
+      usage: kiosk [-h] [--version]
                   [--verbosity {0,1,2,3,4,quiet,error,warning,info,debug}]
                   {add,apply,delete,destroy} ...
 
-      Before any koris command can be run, an OpenStack RC file has to be sourced in
+      Before any kiosk command can be run, an OpenStack RC file has to be sourced in
       the shell. See online documentation for more information.
 
       positional arguments:
@@ -158,8 +158,8 @@ Usage
 
    .. code:: shell
 
-      $ koris destroy -h
-      usage: koris destroy [-h] [--force] config
+      $ kiosk destroy -h
+      usage: kiosk destroy [-h] [--force] config
 
       positional arguments:
         config
@@ -168,7 +168,7 @@ Usage
         -h, --help   show this help message and exit
         --force, -f
 
-4. Koris creates the proper security groups needed for a working cluster. However,
+4. Kiosk creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
    BGP communication, add correct security rules in OpenStack:
 
@@ -180,19 +180,19 @@ Usage
 5. Create a configuration file. For more information check the :download:`example-config.yml <../configs/example-config.yml>`)
    or refer to the section :ref:`usage_deploy_cluster`.
 
-6. Run ``koris apply`` with your configuration file as the argument:
+6. Run ``kiosk apply`` with your configuration file as the argument:
 
    .. code:: shell
 
-      $ koris apply your-config.yaml
+      $ kiosk apply your-config.yaml
 
 7. A ``kubectl`` configuration file will be created into your project root with the name of ``<clustername>-admin.conf``.
-   You can either pass that with each execution via ``kubectl --kubeconfig=/path/to/koris/your-admin.conf``
+   You can either pass that with each execution via ``kubectl --kubeconfig=/path/to/kiosk/your-admin.conf``
    or by exporting it as an environment variable:
 
    .. code:: shell
 
-       $ export KUBECONFIG=/path/to/koris/your-admin.conf
+       $ export KUBECONFIG=/path/to/kiosk/your-admin.conf
        $ kubectl get nodes
 
 Credits

@@ -14,16 +14,16 @@ import urllib
 import openstack
 from cryptography.hazmat.primitives import serialization
 
-from koris import KUBERNETES_BASE_VERSION
-from koris.cli import write_kubeconfig
-from koris.deploy.k8s import K8S, add_ingress_listeners, add_ssh_listeners
-from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
-from koris.ssl import create_key, create_ca, CertBundle
-from koris.ssl import discovery_hash as get_discovery_hash
-from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
+from kiosk import KUBERNETES_BASE_VERSION
+from kiosk.cli import write_kubeconfig
+from kiosk.deploy.k8s import K8S, add_ingress_listeners, add_ssh_listeners
+from kiosk.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
+from kiosk.ssl import create_key, create_ca, CertBundle
+from kiosk.ssl import discovery_hash as get_discovery_hash
+from kiosk.deploy.dex import (create_dex, create_oauth2, DexSSL,
                               create_dex_conf, ValidationError)
-from koris.util.logger import Logger
-from koris.ssl import b64_cert, b64_key
+from kiosk.util.logger import Logger
+from kiosk.ssl import b64_cert, b64_key
 from .openstack import (Instance, OSCloudConfig, LoadBalancer, InstanceExists)
 
 
@@ -99,7 +99,7 @@ class NodeBuilder:
                            amount=1,
                            k8s_version=KUBERNETES_BASE_VERSION):
         """
-        Create tasks for adding nodes when running ``koris add --args ...``
+        Create tasks for adding nodes when running ``kiosk add --args ...``
 
         Args:
             ca_cert (CertBundle.cert)
@@ -138,7 +138,7 @@ class NodeBuilder:
     @staticmethod
     def launch_new_nodes(node_tasks):
         """
-        Launch all nodes when running ``koris add ...``
+        Launch all nodes when running ``kiosk add ...``
         """
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.gather(*node_tasks))
@@ -164,7 +164,7 @@ class NodeBuilder:
                              k8s_version=KUBERNETES_BASE_VERSION,
                              pod_network="CALICO"):
         """
-        Create all initial nodes when running ``koris apply <config>``
+        Create all initial nodes when running ``kiosk apply <config>``
         """
         self.cloud_config = cloud_config
 
@@ -303,7 +303,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
             flavor (str): The noris.cloude instance flavor of the master.
 
         Returns:
-            An instance of `:class:koris.cloud.openstack.Instance` which
+            An instance of `:class:kiosk.cloud.openstack.Instance` which
             represents the added master.
         """
         role = 'master'

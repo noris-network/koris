@@ -11,7 +11,7 @@ import asyncio
 
 from cinderclient.exceptions import BadRequest, NotFound
 
-from koris.cloud.openstack import OSClusterInfo, LoadBalancer
+from kiosk.cloud.openstack import OSClusterInfo, LoadBalancer
 from .util.hue import que, bold  # pylint: disable=no-name-in-module
 from .util.util import get_kubeconfig_yaml
 from .util.logger import Logger

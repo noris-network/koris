@@ -1,5 +1,5 @@
 """
-Test koris.cloud.builder
+Test kiosk.cloud.builder
 """
 #  pylint: disable=redefined-outer-name
 import copy
@@ -10,11 +10,11 @@ import unittest
 
 from munch import Munch
 
-import koris.cloud.openstack
+import kiosk.cloud.openstack
 
-from koris.cloud.openstack import OSClusterInfo, OSSubnet
-from koris.cloud.builder import NodeBuilder, ControlPlaneBuilder
-from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
+from kiosk.cloud.openstack import OSClusterInfo, OSSubnet
+from kiosk.cloud.builder import NodeBuilder, ControlPlaneBuilder
+from kiosk.ssl import (create_certs, CertBundle, create_key, create_ca)
 
 from .testdata import CONFIG
 
@@ -122,10 +122,10 @@ NEUTRON.list_subnets = mock.MagicMock(
                                'name': 'foosubnet'}]})
 
 NEUTRON.list_routers.return_value = {
-    'routers': [{'id': 'e6d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'koris-router'}]}
+    'routers': [{'id': 'e6d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'kiosk-router'}]}
 
 NEUTRON.list_networks.return_value = {
-    'networks': [{'id': 'e7d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'koris-network'}]}
+    'networks': [{'id': 'e7d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'kiosk-network'}]}
 
 NEUTRON.create_network.return_value = {
     'network': {'id': 'e5d896d9-b1bc-4b1c-96ba-c541b4b5e49c', 'name': 'foobar'}}
@@ -212,7 +212,7 @@ def os_info():  # pylint disable=redefined-outer-name
     return osinfo
 
 
-@mock.patch('koris.cloud.OpenStackAPI')
+@mock.patch('kiosk.cloud.OpenStackAPI')
 def test_create_network_settings_from_config(patch):
     """test create network from config"""
     NEUTRON.create_subnet = mock.MagicMock(
@@ -225,7 +225,7 @@ def test_create_network_settings_from_config(patch):
     assert subs.cidr is not None
 
 
-@mock.patch('koris.cloud.OpenStackAPI')
+@mock.patch('kiosk.cloud.OpenStackAPI')
 def test_create_network_settings_not_in_config(*args):
     """test create network no settings in config"""
     NEUTRON.create_subnet = mock.MagicMock(
@@ -237,7 +237,7 @@ def test_create_network_settings_not_in_config(*args):
     assert subs.cidr is not None
 
 
-@mock.patch('koris.cloud.OpenStackAPI')
+@mock.patch('kiosk.cloud.OpenStackAPI')
 # pylint disable=redefined-outer-name
 def test_node_builder(patch, os_info, dummy_server):
     """ test the node builder class """
@@ -245,7 +245,7 @@ def test_node_builder(patch, os_info, dummy_server):
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.get_nodes()
     list(map(lambda x: setattr(x, "exists", False), nodes))
-    assert isinstance(nodes[0], koris.cloud.openstack.Instance)
+    assert isinstance(nodes[0], kiosk.cloud.openstack.Instance)
     assert nodes[0].name == 'node-1-test'
 
     certs = create_certs(CONFIG, ['node-1-test'], ['192.168.1.103'],
@@ -276,11 +276,11 @@ def test_controlplane_builder(os_info):  # pylint disable=redefined-outer-name
                                  Flavor('ECS.C1.4-8')))
     cpb = ControlPlaneBuilder(CONFIG, os_info)
     masters = cpb.get_masters()
-    assert isinstance(masters[0], koris.cloud.openstack.Instance)
+    assert isinstance(masters[0], kiosk.cloud.openstack.Instance)
     assert masters[0].name == 'master-1-test'
 
 
-@mock.patch('koris.cloud.OpenStackAPI')
+@mock.patch('kiosk.cloud.OpenStackAPI')
 def test_create_nodes(patch, os_info):  # pylint disable=redefined-outer-name
     """ test create nodes"""
     NOVA.servers.list = mock.MagicMock(
@@ -289,11 +289,11 @@ def test_create_nodes(patch, os_info):  # pylint disable=redefined-outer-name
                                   Flavor('ECS.C1.4-8')) for i in range(1, 4)])
     nb = NodeBuilder(CONFIG, os_info)
     nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1")
-    assert isinstance(nodes[0], koris.cloud.openstack.Instance)
+    assert isinstance(nodes[0], kiosk.cloud.openstack.Instance)
     assert nodes[0].name == 'test-node-4'
 
     nodes = nb.create_new_nodes('node', "ECS.C1.2-4", "az-west-1", amount=3)
-    assert isinstance(nodes[0], koris.cloud.openstack.Instance)
+    assert isinstance(nodes[0], kiosk.cloud.openstack.Instance)
     assert nodes[0].name == 'test-node-4'
     assert nodes[1].name == 'test-node-5'
     assert nodes[2].name == 'test-node-6'

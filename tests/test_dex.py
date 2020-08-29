@@ -1,6 +1,6 @@
 # pylint: disable=redefined-outer-name, invalid-name
 """
-Test koris.deploy.dex
+Test kiosk.deploy.dex
 """
 # pylint: disable=missing-docstring
 import asyncio
@@ -10,10 +10,10 @@ import tempfile
 
 from unittest import mock
 
-from koris.deploy.dex import (Pool, Listener, create_dex, create_oauth2,
+from kiosk.deploy.dex import (Pool, Listener, create_dex, create_oauth2,
                               ValidationError, DexSSL, create_dex_conf,
                               is_port, is_ip)
-from koris.ssl import read_cert
+from kiosk.ssl import read_cert
 
 
 LB = mock.MagicMock()

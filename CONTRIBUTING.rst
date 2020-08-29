@@ -32,8 +32,8 @@ and "help wanted" is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-Koris could always use more documentation, whether as part of the
-official koris docs, in docstrings, or even on the web in blog posts,
+KIOSK could always use more documentation, whether as part of the
+official KIOSK docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
 Submit Feedback
@@ -53,12 +53,12 @@ If you are proposing a feature:
 Start contributing
 ------------------
 
-Ready to contribute? Here's how to set up `koris` for local development.
+Ready to contribute? Here's how to set up `kiosk` for local development.
 
 1. Fork the `koris` repo on Gitlab.
 2. Clone your fork locally::
 
-    $ git clone git@gitlab.com:noris-network/koris.git
+    $ git clone git@gitlab.com:oz123/kiosk.git
 
 3. Install your local copy into a virtualenv.
    This is how you set up your fork for local development::
@@ -213,7 +213,7 @@ Run a single test
 
 To run a subset of tests::
 
-$ py.test tests.test_koris
+$ py.test tests.test_kiosk
 
 Developer helper utils - Makefile
 +++++++++++++++++++++++++++++++++
@@ -239,6 +239,6 @@ the resources of this cluster you need an OpenStack account in noris.cloud, and
 your user has to be added to the project ``korispipeline``.
 Make sure you have your user added to the project, talk to the OpenStack team.
 
-.. _Gitlab issues: https://gitlab.com/noris-network/koris/issues
+.. _Gitlab issues: https://gitlab.com/oz123/kiosk/issues
 .. _PBR: https://docs.openstack.org/pbr/latest/
-.. _Gitlab CI: https://gitlab.com/noris-network/koris/pipelines
+.. _Gitlab CI: https://gitlab.com/oz123/kiosk/pipelines

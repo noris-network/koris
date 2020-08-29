@@ -4,7 +4,7 @@
 
 from munch import Munch
 
-from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
+from kiosk import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 NAUGHTY_STRINGS = [
     "",

@@ -9,7 +9,7 @@ from cinderclient.exceptions import BadRequest
 import gitlab
 
 
-from koris.cloud.openstack import get_clients
+from kiosk.cloud.openstack import get_clients
 
 _, _, cinder = get_clients()
 
@@ -45,7 +45,7 @@ def clean_resources():
 
     This should work because volumes are named:
 
-        node-2-koris-pipe-line-<COMMITHASH>-<CI_PIPELINE_ID>
+        node-2-kiosk-pipe-line-<COMMITHASH>-<CI_PIPELINE_ID>
 
 
     Args:

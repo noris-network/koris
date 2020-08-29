@@ -29,10 +29,10 @@ from openstack.exceptions import ResourceNotFound as OSNotFound
 from keystoneauth1 import identity
 from keystoneauth1 import session
 
-from koris.cloud import OpenStackAPI
-from koris.util.util import (host_names, retry)
-from koris.util.logger import Logger
-from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
+from kiosk.cloud import OpenStackAPI
+from kiosk.util.util import (host_names, retry)
+from kiosk.util.logger import Logger
+from kiosk import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 
 LOGGER = Logger(__name__)
@@ -980,7 +980,7 @@ class OSNetwork:  # pylint: disable=too-few-public-methods
     ``cluster-name``-net.
 
     Args:
-        config (dict): A dictionary containing the koris config parameters.
+        config (dict): A dictionary containing the kiosk config parameters.
         conn: An OpenStack connection object.
     """
     def __init__(self, config, conn):
@@ -1062,7 +1062,7 @@ class OSSubnet:  # pylint: disable=too-few-public-methods
 
     Args:
         network_id (str): The UUID of the Network to create the Subnet in.
-        config (dict): A dictionary containing the koris config parameters.
+        config (dict): A dictionary containing the kiosk config parameters.
         conn: An OpenStack Connection object.
     """
     def __init__(self, network_id, config, conn):
@@ -1146,7 +1146,7 @@ class OSRouter:  # pylint: disable=too-few-public-methods
     Args:
         network_id (str): The UUID of the OpenStack Network.
         subnet: An OpenStack Subnetwork Object.
-        config (dcit): A dictionary containing koris config parameters.
+        config (dcit): A dictionary containing kiosk config parameters.
         conn: An OpenStack Connection Object.
     """
     def __init__(self, network_id, subnet, config, conn):
@@ -1325,7 +1325,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         nova_client: An OpenStack NOVA Client
         neutron_client: An OpenStack NEUTRON Client
         cinder_client: An OpenStack CINDER Client
-        config (dict): A dictionary containing koris config parameters.
+        config (dict): A dictionary containing kiosk config parameters.
         conn: An OpenStack Connection Object.
     """
     def __init__(self, nova_client, neutron_client,
@@ -1381,7 +1381,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
         before creating them.
 
         Args:
-            config (dict): A dictionary containing the koris config parameters.
+            config (dict): A dictionary containing the kiosk config parameters.
         """
 
         if not config:
@@ -1423,7 +1423,7 @@ class OSClusterInfo:  # pylint: disable=too-many-instance-attributes
 
     @property
     def image(self):
-        """Find the koris image in OpenStack
+        """Find the kiosk image in OpenStack
 
         We use self._image in order to save us doing multiple calls to OpenStack
         every time the property is called.

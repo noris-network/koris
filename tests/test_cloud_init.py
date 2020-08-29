@@ -1,14 +1,14 @@
 """
-tests for koris.provision.cloud_init
+tests for kiosk.provision.cloud_init
 """
 import base64
 from unittest.mock import patch
 
 import pytest
 
-from koris.provision.cloud_init import NthMasterInit, NodeInit, FirstMasterInit
-from koris.ssl import (create_certs, CertBundle, create_key, create_ca)
-from koris.cloud.openstack import OSCloudConfig
+from kiosk.provision.cloud_init import NthMasterInit, NodeInit, FirstMasterInit
+from kiosk.ssl import (create_certs, CertBundle, create_key, create_ca)
+from kiosk.cloud.openstack import OSCloudConfig
 
 
 class DummyServer:  # pylint: disable=too-few-public-methods
@@ -29,7 +29,7 @@ hostnames, ips = map(list, zip(*[(i.name, i.ip_address) for
                                  i in ETCD_HOST_LISTS]))
 
 
-with patch('koris.cloud.openstack.read_os_auth_variables') as p:
+with patch('kiosk.cloud.openstack.read_os_auth_variables') as p:
     p.return_value = dict(username="kubepipeline", password="s9kr9t",
                           auth_url="keystone.myopenstack.de",
                           project_id="f4c0a6de561e487d8ba5d1cc3f1042e8",

@@ -1,4 +1,4 @@
-Welcome to Koris's documentation!
+Welcome to Kiosk's documentation!
 =================================
 
 .. toctree::

@@ -6,7 +6,7 @@ koris is written in Python and bash, to work on the project you need
 basic understanding of both programming language, plus an understanding
 of OpenStack and Kubernetes.
 
-Koris uses Python to communicate with the OpenStack API to provision
+Kiosk uses Python to communicate with the OpenStack API to provision
 virtual machines and to configure a loadbalancer to serve HTTP request
 to the Kubernetes API.
 

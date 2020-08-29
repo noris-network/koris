@@ -2,7 +2,7 @@ import os
 
 from unittest.mock import MagicMock
 
-from koris.deploy.k8s import get_addons, KorisAddon
+from kiosk.deploy.k8s import get_addons, KorisAddon
 
 KORIS_CONFIG = {'addons': ['dex', 'ingress-nginx', 'metrics-server']}
 

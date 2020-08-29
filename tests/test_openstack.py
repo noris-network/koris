@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from koris.cloud.openstack import (OSNetwork, get_connection, LoadBalancer,
+from kiosk.cloud.openstack import (OSNetwork, get_connection, LoadBalancer,
                                    distribute_host_zones, get_clients)
-from koris.cloud import OpenStackAPI
+from kiosk.cloud import OpenStackAPI
 from .testdata import (CONFIG, default_data, mock_listener,
                        mock_pool, mock_member, mock_pool_info)
-from koris import MASTER_LISTENER_NAME, MASTER_POOL_NAME
+from kiosk import MASTER_LISTENER_NAME, MASTER_POOL_NAME
 
 
 class Network:

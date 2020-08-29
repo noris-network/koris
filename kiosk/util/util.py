@@ -16,8 +16,8 @@ from pkg_resources import parse_version
 
 import yaml
 
-from koris.util.hue import red  # pylint: disable=no-name-in-module
-from koris.util.logger import Logger
+from kiosk.util.hue import red  # pylint: disable=no-name-in-module
+from kiosk.util.logger import Logger
 
 LOGGER = Logger(__name__)
 
@@ -195,7 +195,7 @@ class TitleParser(HTMLParser):  # pylint: disable=abstract-method
 
 
 class KorisVersionCheck:  # pylint: disable=too-few-public-methods
-    """check the version published in the koris docs"""
+    """check the version published in the kiosk docs"""
 
     def __init__(self, html_string):
 
@@ -214,5 +214,5 @@ class KorisVersionCheck:  # pylint: disable=too-few-public-methods
         """compare the published version on the docs to the current_version"""
         if parse_version(self.version) > parse_version(re.sub(r"\.dev\d*", "",
                                                               current_version)):
-            print(red("Version {} of Koris was released, you should upgrade!".format(
+            print(red("Version {} of Kiosk was released, you should upgrade!".format(
                 self.version)))

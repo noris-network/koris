@@ -8,10 +8,10 @@ set -e
 
 # ONLY CHANGE VERSIONS HERE IF YOU KNOW WHAT YOU ARE DOING!
 # MAKE SURE THIS MATCHED THE MASTER K8S VERSION
-# load koris environment file if available
-if [ -f /etc/kubernetes/koris.env ]; then
+# load kiosk environment file if available
+if [ -f /etc/kubernetes/kiosk.env ]; then
 	# shellcheck disable=SC1091
-    source /etc/kubernetes/koris.env
+    source /etc/kubernetes/kiosk.env
 fi
 
 LOGFILE=/dev/stderr

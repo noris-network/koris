@@ -48,7 +48,7 @@ Prepare OpenStack
 6. (**Optional**) If you want a FLoating IP, go to **Network > Floating IPs**. Allocate a new Floating IP to
    the external subnet that is connected with your previously created router.
 
-7. (**Optional**) Koris creates the proper security groups needed for a working cluster. However,
+7. (**Optional**) Kiosk creates the proper security groups needed for a working cluster. However,
    if you are a building a cluster for a customer which has cloud-connect and needs
    BGP communication, add the correct security rules in OpenStack:
 

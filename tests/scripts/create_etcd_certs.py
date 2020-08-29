@@ -6,7 +6,7 @@ https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-config
 import argparse
 import os
 
-from koris.ssl import CertBundle, create_key, create_ca
+from kiosk.ssl import CertBundle, create_key, create_ca
 
 parser = argparse.ArgumentParser(description='create ssl certs + keys for etcd')
 parser.add_argument('--ips', metavar='ips', type=str, nargs='+',
