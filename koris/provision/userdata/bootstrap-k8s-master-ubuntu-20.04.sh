@@ -349,7 +349,7 @@ function bootstrap_first_master() {
 
 function add_master_one_thirteen() {
 	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join --token ${BOOTSTRAP_TOKEN} --discovery-token-ca-cert-hash \
-		 sha256:${DISCOVERY_HASH} --experimental-control-plane ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}
+		 sha256:${DISCOVERY_HASH} control-plane ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}
 }
 
 # add a master to the cluster
