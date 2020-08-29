@@ -637,7 +637,10 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         k8s.apply_addons(config)
         add_ingress_listeners(k8s.nginx_ingress_ports, lb_inst,
                               lb_masters + lb_nodes)
-        add_ssh_listeners(lb_inst, lb_masters)
+
+        if config.get('loadbalancer', {}).get('ssh'):
+            add_ssh_listeners(lb_inst, lb_masters)
+
         LOGGER.success("Configured LoadBalancer to use all API servers")
         LOGGER.success("Kubernetes cluster is ready to use !")
         loop.close()

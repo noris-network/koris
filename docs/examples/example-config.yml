@@ -44,6 +44,9 @@ loadbalancer:
 # This is optional - you can either remove loadbalancer and floatingip completely
 # or you can Specify the Floating IP you want to assign.
   floatingip: 1.2.3.4
+  # per default SSH through the loadbalancer is disabled.
+  # if set to true, SSH listeners will be added to the loadbalancer
+  # ssh: true
 
 # The noris.cloud storage class. For available options check
 # https://www.noris.cloud/services/storage/openstack-cinder/?lang=en#details
