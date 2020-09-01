@@ -5,6 +5,8 @@ set -e
 export KUBECONFIG=${KUBECONFIG}
 export LBIP=""
 
+colors=( blue.bar.com green.bar.com )
+
 DIRECTORY="$(cd "$(dirname "$0")" && pwd)"
 
 function apply_all() {
@@ -25,10 +27,16 @@ function get_info() {
 }
 
 function test() {
-
+	if [ -z  "${LBIP}" ]; then
+		get_info
+	fi
+	if [ ${UID} -eq 0 ]; then
+		echo "${LBIP} ${colors[*]}.bar.com" >> /etc/hosts
+	else
+		echo "${LBIP} ${colors[*]}.bar.com" | sudo -E tee -a /etc/hosts
+	fi
 	for color in blue green; do
-		echo "${LBIP} ${color}.bar.com" >> /etc/hosts
-		cat /etc/hosts
+		cat /etc/hosts;
 		OK=0
 		for i in $(seq 1 60); do
 			curl -qs "${color}.bar.com" | grep $color && { OK=1; break; }
@@ -40,6 +48,37 @@ function test() {
 	done
 }
 
-apply_all
-get_info
-test
+function clean() {
+	kubectl delete configmap welcome-green || echo "not found"
+	kubectl delete configmap welcome-blue || echo "not found"
+	kubectl delete -f "${DIRECTORY}/../integration/nginx-green.yml" || echo "not found"
+	kubectl delete -f "${DIRECTORY}/../integration/nginx-blue.yml" || echo "not found"
+	kubectl delete -f "${DIRECTORY}/../integration/blue-green-fan.yml" || echo "not found"
+	if [ ${UID} -eq 0 ]; then
+		sed -i '/'"${colors[1]}"'/d' /etc/hosts
+	else
+		sudo -E sed -i '/'"${colors[1]}"'/d' /etc/hosts
+	fi
+
+}
+
+function main() {
+	if [ -n "$1" ]; then
+		"$1"
+	else
+		apply_all
+		get_info
+		test
+		clean
+	fi
+}
+
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+
+if [[ $sourced == 1 ]]; then
+	set +e
+	printf "You can now use any of these functions:\n"
+	grep "^function" "${BASH_SOURCE}" | cut -d " " -f 2 | tr -d '()'
+else
+	main "$@"
+fi
