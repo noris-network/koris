@@ -62,7 +62,7 @@ V=${LOGLEVEL}
 LOGFILE=/dev/stderr
 
 function log() {
-	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	datestring=$(date +"%Y-%m-%d %H:%M:%S")
 	echo -e "$datestring - $@" | tee $LOGFILE
 }
 
@@ -394,18 +394,27 @@ function wait_for_etcd () {
 TRANSPORT_PACKAGES="apt-transport-https ca-certificates curl software-properties-common gnupg2"
 
 # fetch and prepare calico manifests
+# following the documentation of calico for clusters with less than 50 nodes
+# https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises
 function get_calico(){
-    while [ ! -f tigera-operator.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/tigera-operator.yaml
-    done
-    while [ ! -f custom-resources.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/custom-resources.yaml
-	curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/custom-resources.yaml
+    while [ ! -f calico.yaml ]; do
+        curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/calico.yaml
     done
 
-    sed -i 's@192.168.0.0/16@'"${POD_SUBNET}"'@g' custom-resources.yaml
+    sed -i 's@# - name: CALICO_IPV4POOL_CIDR@- name: CALICO_IPV4POOL_CIDR@g' calico.yaml
+    sed -i 's@#   value: "192.168.0.0/16"@  value: "192.168.0.0/16"@g'  calico.yaml
+    sed -i "s@192.168.0.0/16@${POD_SUBNET}@g" calico.yaml
+    # get calicoctl
+    curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/calicoctl.yaml
+    mv calicoctl /usr/local/bin/
+    chmod +x /usr/local/bin/calicoctl
 }
 
+function get_cilium(){
+    while [ ! -f quick-install.yaml ]; do
+        curl --retry 10 -sfLO https://raw.githubusercontent.com/cilium/cilium/1.8.2/install/kubernetes/quick-install.yaml
+    done
+}
 
 # fetch the manifest for flannel
 function get_flannel(){
@@ -413,7 +422,7 @@ function get_flannel(){
          curl --retry 10 -sfLO https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
     done
     sed -i "s@\"Type\": \"vxlan\"@\"Type\": \"ipip\"@g" kube-flannel.yml
-    sed -i "s@10.244.0.0/16@${POD_SUBNET}@g" kube-flannel.yml
+    sed -i "s@10.233.0.0/16@${POD_SUBNET}@g" kube-flannel.yml
 }
 
 # get the correct network plugin
@@ -422,6 +431,9 @@ function get_net_plugin(){
         "CALICO"|"")
             get_calico
             ;;
+	"CILIUM")
+	    get_cilium
+	    ;;
         "FLANNEL")
             get_flannel
             sysctl net.bridge.bridge-nf-call-iptables=1
@@ -434,13 +446,17 @@ function apply_net_plugin(){
     case "${POD_NETWORK}" in
         "CALICO"|"")
             echo "installing calico"
-            kubectl apply -f tigera-operator.yaml
-            kubectl apply -f custom-resources.yaml
+            kubectl apply -f calico.yaml
+            kubectl apply -f calicoctl.yaml
             ;;
+	"CILIUM")
+	   echo "installing cilium"
+	   kubectl apply -f quick-install.yaml
+	   ;;
         "FLANNEL")
-            echo "installing flannel"
-            kubectl apply -f kube-flannel.yml
-            ;;
+           echo "installing flannel"
+           kubectl apply -f kube-flannel.yml
+           ;;
     esac
 }
 
@@ -504,8 +520,10 @@ function get_kubeadm() {
 
 function get_yq() {
 	if [ -z "$(type -P yq)" ]; then
+		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/3.3.2/yq_linux_amd64 -o /usr/local/bin/yq3
 		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/2.3.0/yq_linux_amd64 -o /usr/local/bin/yq
 		chmod +x /usr/local/bin/yq
+		chmod +x /usr/local/bin/yq3
 	fi
 }
 
