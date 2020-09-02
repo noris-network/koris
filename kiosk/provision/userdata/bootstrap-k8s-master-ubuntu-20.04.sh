@@ -50,6 +50,8 @@ export K8SNODES=${K8SNODES:-""}
 export OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
 export OIDC_CA_FILE=${OIDC_CA_FILE:-""}
 export ADDTOKEN=1
+export CALICO_VERSION=3.16.0
+export DOCKER_VERSION=19.03
 
 # find if better way to compare versions exists
 # version numbers are splited in the "." and the second part is being compared
@@ -398,16 +400,14 @@ TRANSPORT_PACKAGES="apt-transport-https ca-certificates curl software-properties
 # https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises
 function get_calico(){
     while [ ! -f calico.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/calico.yaml
+	curl --retry 10 -sfLO https://docs.projectcalico.org/archive/v${CALICO_VERSION}/manifests/calico.yaml -O
     done
-
     sed -i 's@# - name: CALICO_IPV4POOL_CIDR@- name: CALICO_IPV4POOL_CIDR@g' calico.yaml
     sed -i 's@#   value: "192.168.0.0/16"@  value: "192.168.0.0/16"@g'  calico.yaml
     sed -i "s@192.168.0.0/16@${POD_SUBNET}@g" calico.yaml
     # get calicoctl
-    curl --retry 10 -sfLO https://docs.projectcalico.org/manifests/calicoctl.yaml
-    mv calicoctl /usr/local/bin/
-    chmod +x /usr/local/bin/calicoctl
+    test -x /usr/local/bin/calicoctl || ( curl --retry 10 -sfLO  https://github.com/projectcalico/calicoctl/releases/download/v${CALICO_VERSION}/calicoctl
+    mv calicoctl /usr/local/bin/ )
 }
 
 function get_cilium(){
@@ -447,7 +447,6 @@ function apply_net_plugin(){
         "CALICO"|"")
             echo "installing calico"
             kubectl apply -f calico.yaml
-            kubectl apply -f calicoctl.yaml
             ;;
 	"CILIUM")
 	   echo "installing cilium"
@@ -481,16 +480,24 @@ EOF
 # enforce docker version
 function get_docker() {
     log "Started get_docker"
-    apt-get update
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    add-apt-repository -u "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
-    apt-get install -y socat conntrack ipset
-    apt-get update && apt-get install -y \
-       containerd.io=1.2.13-2 \
-       docker-ce=5:19.03.11~3-0~ubuntu-$(lsb_release -cs) \
-       docker-ce-cli=5:19.03.11~3-0~ubuntu-$(lsb_release -cs)
+    until apt-get install -y socat conntrack ipset; do
+	    apt-get update
+	    apt-get install -y socat conntrack ipset;
+    done
+
+    VERSION=$(apt-cache madison docker-ce | grep "${DOCKER_VERSION}" | head -n 1 | cut -d "|" -f 2 | tr -d " ")
+    until apt-cache madison docker-ce | grep "${DOCKER_VERSION}" ; do
+    	add-apt-repository -u "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    	VERSION=$(apt-cache madison docker-ce | grep "${DOCKER_VERSION}" | head -n 1 | cut -d "|" -f 2 | tr -d " ")
+    done
+
+    until apt-get install -y containerd.io docker-ce="${VERSION}" docker-ce-cli="${VERSION}"; do
+	    add-apt-repository -u "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    done
     cat > /etc/docker/daemon.json <<EOF
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
