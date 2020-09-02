@@ -31,9 +31,9 @@ function test() {
 		get_info
 	fi
 	if [ ${UID} -eq 0 ]; then
-		echo "${LBIP} ${colors[*]}.bar.com" >> /etc/hosts
+		echo "${LBIP} ${colors[*]}" >> /etc/hosts
 	else
-		echo "${LBIP} ${colors[*]}.bar.com" | sudo -E tee -a /etc/hosts
+		echo "${LBIP} ${colors[*]}" | sudo -E tee -a /etc/hosts
 	fi
 	for color in blue green; do
 		cat /etc/hosts;
