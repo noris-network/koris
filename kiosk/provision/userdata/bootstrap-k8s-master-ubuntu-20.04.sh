@@ -475,23 +475,22 @@ EOF
 # enforce docker version
 function get_docker() {
     log "Started get_docker"
+
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
+
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    add-apt-repository -u "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    apt-get update
-    until apt-get install -y socat conntrack ipset; do
-	    apt-get update
-	    apt-get install -y socat conntrack ipset;
-    done
 
-    VERSION=$(apt-cache madison docker-ce | grep "${DOCKER_VERSION}" | head -n 1 | cut -d "|" -f 2 | tr -d " ")
+    cat <<EOF > /etc/apt/sources.list.d/docker.list
+deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable
+EOF
+
     until apt-cache madison docker-ce | grep "${DOCKER_VERSION}" ; do
-    	add-apt-repository -u "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    	VERSION=$(apt-cache madison docker-ce | grep "${DOCKER_VERSION}" | head -n 1 | cut -d "|" -f 2 | tr -d " ")
+        ( apt-cache madison docker-ce | grep "${DOCKER_VERSION}" | head -n 1 | cut -d "|" -f 2 | tr -d " " ) > /tmp/docker.version
+        apt update
     done
 
-    until apt-get install -y containerd.io docker-ce="${VERSION}" docker-ce-cli="${VERSION}"; do
-	    add-apt-repository -u "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    until apt-get install -y socat conntrack ipset containerd.io docker-ce="$(</tmp/docker.version)" docker-ce-cli="$(</tmp/docker.version)"; do
+	    apt update
     done
     cat > /etc/docker/daemon.json <<EOF
 {
