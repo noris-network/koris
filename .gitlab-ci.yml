@@ -53,7 +53,7 @@ build:
   script:
    - make install build-exec
    - ls dist
-   - cp -v dist/koris koris-linux-amd64
+   - cp -v dist/kiosk kiosk-linux-amd64
    - ./koris-linux-amd64 -h
    - python3 setup.py sdist
   artifacts:
