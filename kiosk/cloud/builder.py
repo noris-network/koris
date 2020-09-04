@@ -493,7 +493,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         loop.run_until_complete(asyncio.gather(*tasks))
         LOGGER.info("Finished configuring LoadBalancer for Dex")
 
-    def _configure_dex(self, lbinst, lb_ip, lb_dns, cert_dir):
+    def _configure_dex(self, lb_ip, lb_dns, cert_dir, config):
         LOGGER.info("Setting up Dex SSL infrastructure ...")
         # Dex Issuer will be set to the Floating IP, or LoadBalancer DNS Name
         if lb_dns == lb_ip or lb_dns is None:
@@ -554,7 +554,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
         if self.deploy_dex:
-            self._configure_dex(lb_inst, lb_ip,lb_dns, cert_dir)
+            self._configure_dex(lb_ip,lb_dns, cert_dir, config)
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for master instances to be launched...")

@@ -410,7 +410,7 @@ class K8SScaler:  # pylint: disable=no-member
 
         except sp.CalledProcessError as exc:
             raise RuntimeError("error calling '%s':"
-                               "%s" % " ".join(cmd), exc)
+                    "%s" % " ".join(cmd), exc) from exc
 
         LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
                      proc.returncode)
@@ -528,7 +528,7 @@ class K8SScaler:  # pylint: disable=no-member
                 LOGGER.info("Skipping removing %s from etcd: %s", name, msg)
                 return
 
-            raise ValueError(msg)
+            raise ValueError(msg) from KeyError
 
         exec_command = ['/bin/sh', '-c',
                         ETCDCTL_BASE.format("member remove %s" % etcd_id, master_ip)]
@@ -693,5 +693,7 @@ def add_ingress_listeners(nginx_ingress_ports, lbinst, lb_masters):
         if not lbinst.bulk_update_members(updated_masters, pool['id']):
             LOGGER.debug("Bulk update failed, falling back to serial update")
             for master in lb_masters:
-                lbinst.add_member(pool.id, master['address'],
-                                  protocol_port=nginx_ingress_ports[pool.protocol].node_port)  # noqa
+                lbinst.add_member(
+                        pool.id, master['address'],
+                        protocol_port=
+                            nginx_ingress_ports[pool.protocol].node_port)

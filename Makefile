@@ -427,4 +427,3 @@ launch-gitlab-worker:  # start a gitlab worker
 		--user-data $(USERDATA);
 
 # vim: tabstop=4 shiftwidth=4
-#
