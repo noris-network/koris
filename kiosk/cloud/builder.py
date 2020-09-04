@@ -554,7 +554,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
         if self.deploy_dex:
-            self._configure_dex(lb_ip,lb_dns, cert_dir, config)
+            self._configure_dex(lb_ip, lb_dns, cert_dir, config)
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for master instances to be launched...")

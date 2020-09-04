@@ -410,7 +410,7 @@ class K8SScaler:  # pylint: disable=no-member
 
         except sp.CalledProcessError as exc:
             raise RuntimeError("error calling '%s':"
-                    "%s" % " ".join(cmd), exc) from exc
+                               "%s" % " ".join(cmd), exc) from exc
 
         LOGGER.debug("STDOUT: %s (Exit code %s)", proc.stdout,
                      proc.returncode)
@@ -694,6 +694,5 @@ def add_ingress_listeners(nginx_ingress_ports, lbinst, lb_masters):
             LOGGER.debug("Bulk update failed, falling back to serial update")
             for master in lb_masters:
                 lbinst.add_member(
-                        pool.id, master['address'],
-                        protocol_port=
-                            nginx_ingress_ports[pool.protocol].node_port)
+                    pool.id, master['address'],
+                    protocol_port=nginx_ingress_ports[pool.protocol].node_port)
