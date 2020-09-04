@@ -53,11 +53,6 @@ export ADDTOKEN=1
 export CALICO_VERSION=3.16.0
 export DOCKER_VERSION=19.03
 
-# find if better way to compare versions exists
-# version numbers are splited in the "." and the second part is being compared
-# ex. "1.12 vs 1.13 means compare 12 with 13"
-KUBE_VERSION_COMPARE="$(echo $KUBE_VERSION | cut -d '.' -f 2 )"
-
 LOGLEVEL=4
 V=${LOGLEVEL}
 
