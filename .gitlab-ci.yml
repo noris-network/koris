@@ -53,530 +53,530 @@ build:
   script:
    - make install build-exec
    - ls dist
-   - cp -v dist/koris koris-linux-amd64
-   - ./koris-linux-amd64 -h
+   - cp -v dist/kiosk kiosk-linux-amd64
+   - ./kiosk-linux-amd64 -h
    - python3 setup.py sdist
   artifacts:
     paths:
-     - dist/koris-*.tar.gz
-     - koris-linux-amd64
+     - dist/kiosk-*.tar.gz
+     - kiosk-linux-amd64
   only:
     - tags
     - master
     - dev
 
 # --[ WAIT FOR RESOURCES ]--
-wait-for-resources:
-  stage: wait-for-resources
-  script:
-   - "pip3 install -r requirements_ci.txt"
-   - pip3 install -q -e .
-   - python3 tests/scripts/wait_for_pipeline.py
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-
-# --[ BUILD ]--
-#bare-metal-build:
-#  stage: build-cluster
-#  image: oz123/koris-alpine:0.1.5
+##wait-for-resources:
+#  stage: wait-for-resources
 #  script:
-#   - apk add openssh
-#   - pip install python-openstackclient python-octaviaclient
-#   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
-#   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
-#   - make -f tests/makefile-bare-metal.mk build-cluster-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+#   - "pip3 install -r requirements_ci.txt"
+#   - pip3 install -q -e .
+#   - python3 tests/scripts/wait_for_pipeline.py
 #  except:
 #    variables:
 #      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
 #      - $SKIP_E2E
-
-build-cluster:
-  stage: build-cluster
-  script:
-  - "pip3 install -r requirements_ci.txt"
-  - "pip3 install -q -e ."
-  - "make launch-cluster TESTID=0"
-  - "make rename-coverage NAME=\"build-cluster\""
-  - "make show-nodes"
-  artifacts:
-    paths:
-      - "*-admin.conf"
-      - "tests/koris_test.yml"
-      - ".coverage.build-cluster"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-
-build-cluster-with-vanilla-image:
-  stage: build-cluster
-  script:
-  - "make update-config TESTID=1 IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'koris-base' | head -n 1) CLUSTER_NAME=koris-pipeline-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}-vanilla"
-  - "cp tests/koris_test.yml tests/koris_test-vanilla.yml"
-  - ./koris-linux-amd64 apply tests/koris_test-vanilla.yml
-  artifacts:
-    paths:
-      - "*-admin.conf"
-      - "tests/koris_test-vanilla.yml"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-integration-test:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make curl-run"
-  - "make clean-lb-after-integration-test"
-  artifacts:
-    paths:
-      - "*-admin.conf"
-      - "tests/koris_test.yml"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
-
-check-dns:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
-  - "pip3 install -q -e ."
-  - "make check-cluster-dns"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
-
-check-cinder:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
-  - "pip3 install -q -e ."
-  - "make test-cinder-volumes"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
-
-check-members:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-members NUM=3"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
-
-assert-control-plane:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-control-plane NUM=3"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
-
-check-node-labels:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-node ACTION=labels NUM=1"
-  - "make assert-node ACTION=labels NUM=2"
-  - "make assert-node ACTION=labels NUM=3"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
-      - $SKIP_E2E
-
-add-nodes:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -r requirements_ci.txt"
-  - "pip3 install -q -e ."
-  - "make add-nodes NUM=2"
-  - "make assert-node ACTION=labels NUM=4"
-  - "make assert-node ACTION=labels NUM=5"
-  - "make rename-coverage NAME=\"add-nodes\""
-  artifacts:
-    paths:
-      - "tests/koris_test.add_node.yml"
-      - "tests/koris_test.yml"
-      - ".coverage.add-nodes"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-
-add-master:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-    - apk add openssh
-    - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
-    - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
-    - "pip3 install  -r requirements_ci.txt"
-    - "pip3 install -q -e ."
-    - "make add-master"
-    - "make assert-members NUM=4"
-    - "make assert-masters NUM=4"
-    - "make assert-control-plane NUM=4"
-    - "make assert-audit-log"
-    - "make rename-coverage NAME=\"add-master\""
-  artifacts:
-    paths:
-      - "tests/koris_test.add_master.yml"
-      - "tests/koris_test.yml"
-      - ".coverage.add-master"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-
-check-added-node-labels:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-node ACTION=labels NUM=4"
-  - "make assert-node ACTION=labels NUM=5"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-
-# TODO: add assertion that cloud provider is running
-
-assert-metrics-server-is-running:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-metrics"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-check-added-nodes-ready:
-  stage: integration-test
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-node ACTION=ready NUM=4"
-  - "make assert-node ACTION=ready NUM=5"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-
-check-nginx-ingress-ready:
-  stage: integration-test
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make assert-nginx-ingress"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-
-# --[ RESIZE DELETE ]--
-delete-added-nodes:
-  stage: resize-delete
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-    - "pip3 install -r requirements_ci.txt"
-    - "pip3 install -q -e ."
-    - make delete-node NODE_TYPE=node NUM=5 KORIS_CONF="tests/koris_test.add_node"
-    - make assert-node NODE_TYPE=node ACTION=deleted NUM=5
-    - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=5
-    - make delete-node NODE_TYPE=node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
-    - make assert-node NODE_TYPE=node ACTION=deleted NUM=4
-    - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=4
-    - "make rename-coverage NAME=\"delete-nodes\""
-  artifacts:
-    paths:
-      - "tests/koris_test.delete_node.yml"
-      - "tests/koris_test.yml"
-      - ".coverage.delete-nodes"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-  when: always
-  allow_failure: true
-
-delete-added-master:
-  stage: resize-delete
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-    - "pip3 install -r requirements_ci.txt"
-    - "pip3 install -q -e ."
-    - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
-    - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
-    - make assert-members NUM=3
-    - "make rename-coverage NAME=\"delete-master\""
-
-  artifacts:
-    paths:
-      - "tests/koris_test.delete_master.yml"
-      - "tests/koris_test.yml"
-      - ".coverage.delete-master"
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
-      - $SKIP_E2E
-  when: always
-  allow_failure: true
-
-
-# --[ SECURITY CHECKS ]--
-security-checks-masters:
-  stage: security-checks
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - "pip3 install -q -e ."
-  - "make security-checks-masters"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-security-checks-nodes:
-  stage: security-checks
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
-  - "pip3 install  -r requirements.txt"
-  - "pip3 install -e ."
-  - "make security-checks-nodes"
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-
-# --[ COMPLIANCE CHECKS ]--
-compliance-checks:
-  stage: compliance-checks
-  image: oz123/koris-alpine:0.1.6
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
-  - "pip3 install -q -e ."
-  - "make compliance-checks"
-  only:
-  - master
-  - tags
-  - compliance_check
-  artifacts:
-    paths:
-      - results
-    expire_in: 1 week
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-
-# --[ CLEANUP ]--
-cleanup:
-  stage: cleanup
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add make
-  - "pip3 install  -r requirements_ci.txt"
-  - "pip3 install -q -e ."
-  - make clean-all
-  - "make rename-coverage NAME=\"destroy\""
-  when: always
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-  artifacts:
-    paths:
-      - ".coverage.destroy"
-    expire_in: 1 week
-
-clean-vanilla-cluster:
-  stage: cleanup
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-  - apk add make
-  - "pip3 install -r requirements_ci.txt"
-  - "pip3 install -q -e ."
-  - make clean-cluster CONFIG_FILE=tests/koris_test-vanilla.yml
-  when: always
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-#clean-bare-metal:
-#  stage: cleanup
-#  image: oz123/koris-alpine:0.1.5
+#
+#
+## --[ BUILD ]--
+##bare-metal-build:
+##  stage: build-cluster
+##  image: oz123/kiosk-alpine:0.1.5
+##  script:
+##   - apk add openssh
+##   - pip install python-openstackclient python-octaviaclient
+##   - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+##   - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
+##   - make -f tests/makefile-bare-metal.mk build-cluster-bare-metal USER=centos CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+##  except:
+##    variables:
+##      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+##      - $SKIP_E2E
+#
+#build-cluster:
+#  stage: build-cluster
+#  script:
+#  - "pip3 install -r requirements_ci.txt"
+#  - "pip3 install -q -e ."
+#  - "make launch-cluster TESTID=0"
+#  - "make rename-coverage NAME=\"build-cluster\""
+#  - "make show-nodes"
+#  artifacts:
+#    paths:
+#      - "*-admin.conf"
+#      - "tests/kiosk_test.yml"
+#      - ".coverage.build-cluster"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#
+#build-cluster-with-vanilla-image:
+#  stage: build-cluster
+#  script:
+#  - "make update-config TESTID=1 IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'kiosk-base' | head -n 1) CLUSTER_NAME=kiosk-pipeline-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}-vanilla"
+#  - "cp tests/kiosk_test.yml tests/kiosk_test-vanilla.yml"
+#  - ./kiosk-linux-amd64 apply tests/kiosk_test-vanilla.yml
+#  artifacts:
+#    paths:
+#      - "*-admin.conf"
+#      - "tests/kiosk_test-vanilla.yml"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#integration-test:
+#  stage: integration-test
 #  variables:
 #    LC_ALL: "C.UTF-8"
 #    LANG: "C.UTF-8"
 #  script:
-#   - pip install python-openstackclient python-octaviaclient
-#   - make -f tests/makefile-bare-metal.mk clean-all CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+#  - "pip3 install -q -e ."
+#  - "make curl-run"
+#  - "make clean-lb-after-integration-test"
+#  artifacts:
+#    paths:
+#      - "*-admin.conf"
+#      - "tests/kiosk_test.yml"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
+#
+#check-dns:
+#  stage: integration-test
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+#  - "pip3 install -q -e ."
+#  - "make check-cluster-dns"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
+#
+#check-cinder:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+#  - "pip3 install -q -e ."
+#  - "make test-cinder-volumes"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
+#
+#check-members:
+#  stage: integration-test
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-members NUM=3"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
+#
+#assert-control-plane:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-control-plane NUM=3"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
+#
+#check-node-labels:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-node ACTION=labels NUM=1"
+#  - "make assert-node ACTION=labels NUM=2"
+#  - "make assert-node ACTION=labels NUM=3"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-integration-tests/
+#      - $SKIP_E2E
+#
+#add-nodes:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -r requirements_ci.txt"
+#  - "pip3 install -q -e ."
+#  - "make add-nodes NUM=2"
+#  - "make assert-node ACTION=labels NUM=4"
+#  - "make assert-node ACTION=labels NUM=5"
+#  - "make rename-coverage NAME=\"add-nodes\""
+#  artifacts:
+#    paths:
+#      - "tests/kiosk_test.add_node.yml"
+#      - "tests/kiosk_test.yml"
+#      - ".coverage.add-nodes"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#
+#add-master:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#    - apk add openssh
+#    - mkdir .ssh; echo $SSH_PRIVATE_KEY_B64 | base64 -d > .ssh/id_rsa; cat .ssh/id_rsa;
+#    - chmod 0600 .ssh/id_rsa; eval $(ssh-agent); ssh-add .ssh/id_rsa
+#    - "pip3 install  -r requirements_ci.txt"
+#    - "pip3 install -q -e ."
+#    - "make add-master"
+#    - "make assert-members NUM=4"
+#    - "make assert-masters NUM=4"
+#    - "make assert-control-plane NUM=4"
+#    - "make assert-audit-log"
+#    - "make rename-coverage NAME=\"add-master\""
+#  artifacts:
+#    paths:
+#      - "tests/kiosk_test.add_master.yml"
+#      - "tests/kiosk_test.yml"
+#      - ".coverage.add-master"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#
+#check-added-node-labels:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-node ACTION=labels NUM=4"
+#  - "make assert-node ACTION=labels NUM=5"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#
+## TODO: add assertion that cloud provider is running
+#
+#assert-metrics-server-is-running:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-metrics"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#check-added-nodes-ready:
+#  stage: integration-test
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-node ACTION=ready NUM=4"
+#  - "make assert-node ACTION=ready NUM=5"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#
+#check-nginx-ingress-ready:
+#  stage: integration-test
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make assert-nginx-ingress"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#
+## --[ RESIZE DELETE ]--
+#delete-added-nodes:
+#  stage: resize-delete
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#    - "pip3 install -r requirements_ci.txt"
+#    - "pip3 install -q -e ."
+#    - make delete-node NODE_TYPE=node NUM=5 KORIS_CONF="tests/koris_test.add_node"
+#    - make assert-node NODE_TYPE=node ACTION=deleted NUM=5
+#    - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=5
+#    - make delete-node NODE_TYPE=node NUM=4 KORIS_CONF="tests/koris_test.delete_node"
+#    - make assert-node NODE_TYPE=node ACTION=deleted NUM=4
+#    - make assert-node NODE_TYPE=node ACTION=deleted-openstack NUM=4
+#    - "make rename-coverage NAME=\"delete-nodes\""
+#  artifacts:
+#    paths:
+#      - "tests/koris_test.delete_node.yml"
+#      - "tests/koris_test.yml"
+#      - ".coverage.delete-nodes"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#  when: always
+#  allow_failure: true
+#
+#delete-added-master:
+#  stage: resize-delete
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#    - "pip3 install -r requirements_ci.txt"
+#    - "pip3 install -q -e ."
+#    - "make delete-node NODE_TYPE=master NUM=4 KORIS_CONF=tests/koris_test.add_master"
+#    - make assert-node NODE_TYPE=master ACTION=deleted-openstack NUM=4
+#    - make assert-members NUM=3
+#    - "make rename-coverage NAME=\"delete-master\""
+#
+#  artifacts:
+#    paths:
+#      - "tests/koris_test.delete_master.yml"
+#      - "tests/koris_test.yml"
+#      - ".coverage.delete-master"
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $CI_COMMIT_MESSAGE =~ /skip-resize-tests/
+#      - $SKIP_E2E
+#  when: always
+#  allow_failure: true
+#
+#
+## --[ SECURITY CHECKS ]--
+#security-checks-masters:
+#  stage: security-checks
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - "pip3 install -q -e ."
+#  - "make security-checks-masters"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#security-checks-nodes:
+#  stage: security-checks
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+#  - "pip3 install  -r requirements.txt"
+#  - "pip3 install -e ."
+#  - "make security-checks-nodes"
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#
+## --[ COMPLIANCE CHECKS ]--
+#compliance-checks:
+#  stage: compliance-checks
+#  image: oz123/koris-alpine:0.1.6
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - apk add --update py3-cryptography python3-dev libffi-dev libressl-dev make
+#  - "pip3 install -q -e ."
+#  - "make compliance-checks"
+#  only:
+#  - master
+#  - tags
+#  - compliance_check
+#  artifacts:
+#    paths:
+#      - results
+#    expire_in: 1 week
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#
+## --[ CLEANUP ]--
+#cleanup:
+#  stage: cleanup
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - apk add make
+#  - "pip3 install  -r requirements_ci.txt"
+#  - "pip3 install -q -e ."
+#  - make clean-all
+#  - "make rename-coverage NAME=\"destroy\""
+#  when: always
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#  artifacts:
+#    paths:
+#      - ".coverage.destroy"
+#    expire_in: 1 week
+#
+#clean-vanilla-cluster:
+#  stage: cleanup
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#  - apk add make
+#  - "pip3 install -r requirements_ci.txt"
+#  - "pip3 install -q -e ."
+#  - make clean-cluster CONFIG_FILE=tests/koris_test-vanilla.yml
 #  when: always
 #  except:
 #    variables:
 #      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
 #      - $SKIP_E2E
 #
-
-clean-cinder-volumes:
-  stage: cleanup
-  variables:
-    LC_ALL: "C.UTF-8"
-    LANG: "C.UTF-8"
-  script:
-   - pip install python-openstackclient python-octaviaclient
-   - make clean-cinder-volumes
-  when: always
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-
-
-# --[ COVERAGE REPORT ]--
-coverage-report:
-  stage: coverage-report
-  script:
-   - "pip3 install -r requirements_ci.txt"
-   - pip3 install -q -e .
-   - python3 tests/scripts/coverage_report.py
-   - python3 -m coverage report -m
-   - python3 -m coverage html
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
-      - $SKIP_E2E
-  when: always
-  artifacts:
-    paths:
-      - ".coverage"
-      - "htmlcov"
-    expire_in: 1 week
-
-
-# --[ PAGES ]--
-dev-docs:
-  stage: pages
-  script:
-  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
-  - pip3 install .
-  - which sphinx-build
-  - pip3 install .
-  - make -C docs html
-  - ls docs
-  - mkdir -pv public/dev
-  - ls docs/_build
-  - mv docs/_build/html/ public/dev/
-  artifacts:
-    paths:
-    - public
-  only:
-    variables:
-      - $CI_COMMIT_REF_NAME == "dev"
-
-pages:
-  stage: pages
-  script:
-  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
-  - which sphinx-build
-  - pip3 install .
-  - make -C docs html
-  - mv docs/_build/html/ public/
-  artifacts:
-    paths:
-    - public
-  only:
-    - tags
-    - master
+##clean-bare-metal:
+##  stage: cleanup
+##  image: oz123/koris-alpine:0.1.5
+##  variables:
+##    LC_ALL: "C.UTF-8"
+##    LANG: "C.UTF-8"
+##  script:
+##   - pip install python-openstackclient python-octaviaclient
+##   - make -f tests/makefile-bare-metal.mk clean-all CLUSTERNAME=bare-metal-${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+##  when: always
+##  except:
+##    variables:
+##      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+##      - $SKIP_E2E
+##
+#
+#clean-cinder-volumes:
+#  stage: cleanup
+#  variables:
+#    LC_ALL: "C.UTF-8"
+#    LANG: "C.UTF-8"
+#  script:
+#   - pip install python-openstackclient python-octaviaclient
+#   - make clean-cinder-volumes
+#  when: always
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#
+#
+## --[ COVERAGE REPORT ]--
+#coverage-report:
+#  stage: coverage-report
+#  script:
+#   - "pip3 install -r requirements_ci.txt"
+#   - pip3 install -q -e .
+#   - python3 tests/scripts/coverage_report.py
+#   - python3 -m coverage report -m
+#   - python3 -m coverage html
+#  except:
+#    variables:
+#      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
+#      - $SKIP_E2E
+#  when: always
+#  artifacts:
+#    paths:
+#      - ".coverage"
+#      - "htmlcov"
+#    expire_in: 1 week
+#
+#
+## --[ PAGES ]--
+#dev-docs:
+#  stage: pages
+#  script:
+#  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+#  - pip3 install .
+#  - which sphinx-build
+#  - pip3 install .
+#  - make -C docs html
+#  - ls docs
+#  - mkdir -pv public/dev
+#  - ls docs/_build
+#  - mv docs/_build/html/ public/dev/
+#  artifacts:
+#    paths:
+#    - public
+#  only:
+#    variables:
+#      - $CI_COMMIT_REF_NAME == "dev"
+#
+#pages:
+#  stage: pages
+#  script:
+#  - pip3 install sphinx sphinx_rtd_theme sphinx_autobuild
+#  - which sphinx-build
+#  - pip3 install .
+#  - make -C docs html
+#  - mv docs/_build/html/ public/
+#  artifacts:
+#    paths:
+#    - public
+#  only:
+#    - tags
+#    - master
 
 

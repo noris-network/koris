@@ -1,6 +1,6 @@
 """
 This modules contains some helper functions to inject cloud-init
-to booted machines. At the moment only Cloud Inits for Ubunut 16.04 are
+to booted machines. At the moment only Cloud Inits for Ubunut 20.04 are
 provided
 """
 import base64
@@ -16,14 +16,14 @@ import yaml
 
 from cryptography.hazmat.primitives import serialization
 
-from koris import __version__, KUBERNETES_BASE_VERSION
-from koris.ssl import b64_cert, b64_key
-from koris.util.logger import Logger
+from kiosk import __version__, KUBERNETES_BASE_VERSION
+from kiosk.ssl import b64_cert, b64_key
+from kiosk.util.logger import Logger
 
 LOGGER = Logger(__name__)
 
 
-BOOTSTRAP_SCRIPTS_DIR = "/koris/provision/userdata/"
+BOOTSTRAP_SCRIPTS_DIR = "/kiosk/provision/userdata/"
 
 
 def get_audit_policy():
@@ -33,7 +33,7 @@ def get_audit_policy():
             sys._MEIPASS,  # pylint: disable=no-member, protected-access
             'provision/userdata/manifests/audit-policy.yml')
     else:
-        path = resource_filename(Requirement('koris'),
+        path = resource_filename(Requirement('kiosk'),
                                  os.path.join(BOOTSTRAP_SCRIPTS_DIR,
                                               'manifests',
                                               'audit-policy.yml'))
@@ -75,7 +75,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
                    permissions="0600", encoder=lambda x: base64.b64encode(x)):
         """
         writes a file to the instance
-        path: e.g. /etc/kubernetes/koris.conf
+        path: e.g. /etc/kubernetes/kiosk.conf
         content: string of the content of the file
         owner: e.g. root
         group: e.g. root
@@ -117,10 +117,10 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
 
     def _write_koris_info(self):
         """
-        Generate the koris.conf configuration file.
+        Generate the kiosk.conf configuration file.
         """
         content = """
-        # This file contains meta information about koris
+        # This file contains meta information about kiosk
         koris_version={}
         creation_date={}
         """.format(
@@ -128,7 +128,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
             datetime.strftime(datetime.now(), format="%c"))
         content = textwrap.dedent(content)
 
-        self.write_file("/etc/kubernetes/koris.conf", content, "root", "root",
+        self.write_file("/etc/kubernetes/kiosk.conf", content, "root", "root",
                         "0644")
 
     def _get_bootstrap_script(self):
@@ -140,7 +140,7 @@ class BaseInit:  # pylint: disable=unnecessary-lambda,no-member
                 sys._MEIPASS,  # pylint: disable=no-member, protected-access
                 'provision/userdata', name)
         else:
-            path = resource_filename(Requirement('koris'),
+            path = resource_filename(Requirement('kiosk'),
                                      os.path.join(BOOTSTRAP_SCRIPTS_DIR,
                                                   name))
         with open(path) as fh:
@@ -195,7 +195,7 @@ class NthMasterInit(BaseInit):
             cloud_config,
             ssh_key,
             os_type='ubuntu',
-            os_version="16.04",
+            os_version="20.04",
             dex=None,
             koris_env=None,
             k8s_conf=None,):
@@ -231,8 +231,8 @@ class NthMasterInit(BaseInit):
 
     def _write_koris_env(self, dex=None):
         """
-        writes the necessary koris information for the node to the file
-        /etc/kubernetes/koris.env
+        writes the necessary kiosk information for the node to the file
+        /etc/kubernetes/kiosk.env
         """
 
         kenv = self.koris_env
@@ -286,7 +286,7 @@ class NthMasterInit(BaseInit):
             content += dex_content
         content = textwrap.dedent(content)
 
-        self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
+        self.write_file("/etc/kubernetes/kiosk.env", content, "root", "root",
                         "0600")
 
 
@@ -297,7 +297,7 @@ class FirstMasterInit(NthMasterInit):
 
     Args:
         ssh_key (RSAkeypair) - an RSA keypair instance from
-                :func:`~koris.ssl.create_key`
+                :func:`~kiosk.ssl.create_key`
         ca_bundle: The CA bundle for the CA that is used to permit accesses
             to the API server.
         cloud_config: An OSCloudConfig instance describing the information
@@ -306,12 +306,12 @@ class FirstMasterInit(NthMasterInit):
         os_version (str): OS version the bootstrap script runs on
         dex (dict): A dictionary containg information for Dex
         koris_env (dict): A dictionary containing information for the
-            koris.env
+            kiosk.env
 
     """
 
     def __init__(self, ssh_key, ca_bundle, cloud_config,
-                 os_type='ubuntu', os_version="16.04", dex=None,
+                 os_type='ubuntu', os_version="20.04", dex=None,
                  koris_env=None):
         super().__init__(cloud_config, ssh_key, os_type, os_version,
                          dex=dex, koris_env=koris_env)
@@ -346,7 +346,7 @@ class NodeInit(BaseInit):
     """
     def __init__(self, ca_cert, cloud_config, lb_ip, lb_port, bootstrap_token,
                  discovery_hash, lb_dns='', os_type='ubuntu',
-                 os_version="16.04",
+                 os_version="20.04",
                  k8s_version=KUBERNETES_BASE_VERSION,
                  pod_network="CALICO"):
         """
@@ -371,8 +371,8 @@ class NodeInit(BaseInit):
 
     def _write_koris_env(self):
         """
-        writes the necessary koris information for the node to the file
-        /etc/kubernetes/koris.env
+        writes the necessary kiosk information for the node to the file
+        /etc/kubernetes/kiosk.env
         """
         content = """
             #!/bin/bash
@@ -389,5 +389,5 @@ class NodeInit(BaseInit):
                    self.k8s_version,
                    self.pod_network)
         content = textwrap.dedent(content)
-        self.write_file("/etc/kubernetes/koris.env", content, "root", "root",
+        self.write_file("/etc/kubernetes/kiosk.env", content, "root", "root",
                         "0600")

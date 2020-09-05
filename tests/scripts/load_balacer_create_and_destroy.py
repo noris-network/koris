@@ -6,10 +6,10 @@ in OpenStack
 import asyncio
 import os
 
-from koris.cloud import OpenStackAPI
-from koris.cloud.builder import get_clients
-from koris.cloud.openstack import LoadBalancer, OSNetwork, OSSubnet, OSRouter
-from koris.deploy.dex import create_dex, create_oauth2
+from kiosk.cloud import OpenStackAPI
+from kiosk.cloud.builder import get_clients
+from kiosk.cloud.openstack import LoadBalancer, OSNetwork, OSSubnet, OSRouter
+from kiosk.deploy.dex import create_dex, create_oauth2
 
 _, CLIENT, _ = get_clients()
 
@@ -18,7 +18,7 @@ lb_name = lb_name.split('-lb')[0]
 config = {
     'cluster-name': lb_name,
     'private_net': {
-        'name': 'koris-test-net',
+        'name': 'kiosk-test-net',
         'subnet': {
             'name': 'test-subnet',
             'cidr': '192.168.0.0/16'

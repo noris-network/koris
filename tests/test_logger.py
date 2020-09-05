@@ -1,6 +1,6 @@
 import pytest
 
-from koris.util.logger import Logger, LOG_LEVELS, DEFAULT_LOG_LEVEL
+from kiosk.util.logger import Logger, LOG_LEVELS, DEFAULT_LOG_LEVEL
 
 # @pytest.fixture(scope="functiion")
 # def logger():

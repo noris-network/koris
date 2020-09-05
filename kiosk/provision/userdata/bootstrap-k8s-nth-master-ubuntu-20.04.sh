@@ -4,25 +4,23 @@
 # install nth master required packages if not alredy installed
 ###
 
-set -e
+set -eE
 
 iptables -P FORWARD ACCEPT
 swapoff -a
 
-# load koris environment file if available
-if [ -f /etc/kubernetes/koris.env ]; then
-    source /etc/kubernetes/koris.env
+# load kiosk environment file if available
+if [ -f /etc/kubernetes/kiosk.env ]; then
+    source /etc/kubernetes/kiosk.env
 fi
 
 #### Versions for Kube 1.14.1
-export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
+export KUBE_VERSION=${KUBE_VERSION:-1.18.8}
 export AUTO_JOIN=${AUTO_JOIN:-0}
-export DOCKER_VERSION=18.06
-export CALICO_VERSION=3.3
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-TRANSPORT_PACKAGES="apt-transport-https ca-certificates software-properties-common"
+TRANSPORT_PACKAGES="apt-transport-https ca-certificates curl software-properties-common gnupg2"
 
 LOGLEVEL=4
 V=${LOGLEVEL}
@@ -30,7 +28,7 @@ V=${LOGLEVEL}
 LOGFILE=/dev/stderr
 
 function log() {
-	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	datestring=$(date +"%Y-%m-%d %H:%M:%S")
 	echo -e "$datestring - $@" | tee $LOGFILE
 }
 
@@ -57,8 +55,26 @@ function get_docker() {
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update
-    apt-get -y install docker-ce="${DOCKER_VERSION}*"
     apt-get install -y socat conntrack ipset
+    apt-get update && apt-get install -y \
+       containerd.io=1.2.13-2 \
+       docker-ce=5:19.03.11~3-0~ubuntu-$(lsb_release -cs) \
+       docker-ce-cli=5:19.03.11~3-0~ubuntu-$(lsb_release -cs)
+    cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+    mkdir -p /etc/systemd/system/docker.service.d
+    # Restart Docker
+    systemctl daemon-reload
+    systemctl restart docker
+    systemctl enable docker
     log "Finished ${FUNCNAME[0]}"
 }
 
@@ -174,7 +190,21 @@ function main() {
 }
 
 
+# This line and the if condition bellow allow sourcing the script without executing
+# the main function
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+
 # The script is called as user 'root' in the directory '/'. Since we add some
 # files we want to change to root's home directory.
-cd /root
-main
+if [[ $sourced == 1 ]]; then
+    set +e
+    echo "You can now use any of these functions:"
+    echo ""
+    typeset -F |  cut -d" " -f 3
+else
+    set -eu
+    cd /root
+    iptables -P FORWARD ACCEPT
+    swapoff -a
+    main "$@"
+fi

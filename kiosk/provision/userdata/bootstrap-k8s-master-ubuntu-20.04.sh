@@ -14,7 +14,7 @@ set -e
 #
 # The addition of master nodes is done via SSH!
 #
-# This should be the content of /etc/kubernetes/koris.env
+# This should be the content of /etc/kubernetes/kiosk.env
 #
 #	export BOOTSTRAP_NODES=1  # for bootstrapping baremetal nodes (i.e. not an Openstack Image
 #	export SSH_USER="root"    # for ubuntu use ubuntu
@@ -31,9 +31,9 @@ set -e
 #
 ###
 
-# load koris environment file if available
-if [ -f /etc/kubernetes/koris.env ]; then
-    source /etc/kubernetes/koris.env
+# load kiosk environment file if available
+if [ -f /etc/kubernetes/kiosk.env ]; then
+    source /etc/kubernetes/kiosk.env
 fi
 
 export CURRENT_CLUSTER=""
@@ -42,8 +42,6 @@ export CLUSTER_STATE=""
 
 #### Versions for Kube 1.12.X
 export KUBE_VERSION=${KUBE_VERSION:-1.14.1}
-export DOCKER_VERSION=18.06
-export CALICO_VERSION=3.3
 export POD_SUBNET=${POD_SUBNET:-"10.233.0.0/16"}
 export SSH_USER=${SSH_USER:-"ubuntu"}
 export BOOTSTRAP_NODES=${BOOTSTRAP_NODES:-0}
@@ -52,11 +50,8 @@ export K8SNODES=${K8SNODES:-""}
 export OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
 export OIDC_CA_FILE=${OIDC_CA_FILE:-""}
 export ADDTOKEN=1
-
-# find if better way to compare versions exists
-# version numbers are splited in the "." and the second part is being compared
-# ex. "1.12 vs 1.13 means compare 12 with 13"
-KUBE_VERSION_COMPARE="$(echo $KUBE_VERSION | cut -d '.' -f 2 )"
+export CALICO_VERSION=3.16.0
+export DOCKER_VERSION=19.03
 
 LOGLEVEL=4
 V=${LOGLEVEL}
@@ -64,7 +59,7 @@ V=${LOGLEVEL}
 LOGFILE=/dev/stderr
 
 function log() {
-	datestring=`date +"%Y-%m-%d %H:%M:%S"`
+	datestring=$(date +"%Y-%m-%d %H:%M:%S")
 	echo -e "$datestring - $@" | tee $LOGFILE
 }
 
@@ -349,9 +344,12 @@ function bootstrap_first_master() {
 }
 
 
-function add_master_one_thirteen() {
-	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm join --token ${BOOTSTRAP_TOKEN} --discovery-token-ca-cert-hash \
-		 sha256:${DISCOVERY_HASH} --experimental-control-plane ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT}
+function add_master_kubeadm() {
+	ssh ${SSHOPTS} ${USER}@$1 sudo kubeadm -v=5 join ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:${LOAD_BALANCER_PORT} \
+		--token ${BOOTSTRAP_TOKEN} \
+		--discovery-token-ca-cert-hash \
+		 sha256:${DISCOVERY_HASH} \
+		--control-plane
 }
 
 # add a master to the cluster
@@ -363,9 +361,6 @@ function add_master {
 
     HOST_NAME=$1
     HOST_IP=$2
-    CURRENT_CLUSTER=$3
-    ETCD_HOST=$4
-    ETCD_IP=$5
 
     local CONFIG="/home/${USER}/kubeadm-${HOST_NAME}.yaml"
 
@@ -375,15 +370,13 @@ function add_master {
        sleep 2
     done
 
-    ssh ${SSHOPTS} ${USER}@1 "kubeadm | grep -qi ${KUBE_VERSION}" || BOOTSTRAP_NODES=1
+    ssh ${SSHOPTS} ${USER}@$1 "kubeadm | grep -qi ${KUBE_VERSION}" || BOOTSTRAP_NODES=1
     if [ ${BOOTSTRAP_NODES} -eq 1 ]; then
         bootstrap_deps_node $1
     fi
 
     echo "******* Preparing kubeadm config for $1 ******"
-    echo "bootstrapping 1.13"
-    create_kubeadm_config_new_version "${HOST_NAME}" "${HOST_IP}"
-    add_master_one_thirteen $HOST_NAME $CONFIG
+    add_master_kubeadm $HOST_NAME $CONFIG
 }
 
 
@@ -395,20 +388,28 @@ function wait_for_etcd () {
 }
 
 
-TRANSPORT_PACKAGES="apt-transport-https ca-certificates software-properties-common"
+TRANSPORT_PACKAGES="apt-transport-https ca-certificates curl software-properties-common gnupg2"
 
 # fetch and prepare calico manifests
+# following the documentation of calico for clusters with less than 50 nodes
+# https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises
 function get_calico(){
-    while [ ! -f rbac-kdd.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-    done
     while [ ! -f calico.yaml ]; do
-        curl --retry 10 -sfLO https://docs.projectcalico.org/v${CALICO_VERSION}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+	curl --retry 10 -sfLO https://docs.projectcalico.org/archive/v${CALICO_VERSION}/manifests/calico.yaml -O
     done
-
-    sed -i 's@192.168.0.0/16@'"${POD_SUBNET}"'@g' calico.yaml
+    sed -i 's@# - name: CALICO_IPV4POOL_CIDR@- name: CALICO_IPV4POOL_CIDR@g' calico.yaml
+    sed -i 's@#   value: "192.168.0.0/16"@  value: "192.168.0.0/16"@g'  calico.yaml
+    sed -i "s@192.168.0.0/16@${POD_SUBNET}@g" calico.yaml
+    # get calicoctl
+    test -x /usr/local/bin/calicoctl || ( curl --retry 10 -sfLO  https://github.com/projectcalico/calicoctl/releases/download/v${CALICO_VERSION}/calicoctl
+    mv calicoctl /usr/local/bin/ )
 }
 
+function get_cilium(){
+    while [ ! -f quick-install.yaml ]; do
+        curl --retry 10 -sfLO https://raw.githubusercontent.com/cilium/cilium/1.8.2/install/kubernetes/quick-install.yaml
+    done
+}
 
 # fetch the manifest for flannel
 function get_flannel(){
@@ -416,7 +417,7 @@ function get_flannel(){
          curl --retry 10 -sfLO https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
     done
     sed -i "s@\"Type\": \"vxlan\"@\"Type\": \"ipip\"@g" kube-flannel.yml
-    sed -i "s@10.244.0.0/16@${POD_SUBNET}@g" kube-flannel.yml
+    sed -i "s@10.233.0.0/16@${POD_SUBNET}@g" kube-flannel.yml
 }
 
 # get the correct network plugin
@@ -425,6 +426,9 @@ function get_net_plugin(){
         "CALICO"|"")
             get_calico
             ;;
+	"CILIUM")
+	    get_cilium
+	    ;;
         "FLANNEL")
             get_flannel
             sysctl net.bridge.bridge-nf-call-iptables=1
@@ -437,13 +441,16 @@ function apply_net_plugin(){
     case "${POD_NETWORK}" in
         "CALICO"|"")
             echo "installing calico"
-            kubectl apply -f rbac-kdd.yaml
             kubectl apply -f calico.yaml
             ;;
+	"CILIUM")
+	   echo "installing cilium"
+	   kubectl apply -f quick-install.yaml
+	   ;;
         "FLANNEL")
-            echo "installing flannel"
-            kubectl apply -f kube-flannel.yml
-            ;;
+           echo "installing flannel"
+           kubectl apply -f kube-flannel.yml
+           ;;
     esac
 }
 
@@ -455,7 +462,6 @@ iptables -P FORWARD ACCEPT;
 swapoff -a;
 export TRANSPORT_PACKAGES="${TRANSPORT_PACKAGES}";
 export KUBE_VERSION="${KUBE_VERSION}";
-export DOCKER_VERSION="${DOCKER_VERSION}";
 export first_master="${first_master}";
 $(typeset -f log);
 $(typeset -f get_yq);
@@ -469,14 +475,39 @@ EOF
 # enforce docker version
 function get_docker() {
     log "Started get_docker"
-    apt-get update
+
     dpkg -l software-properties-common | grep ^ii || apt-get install ${TRANSPORT_PACKAGES} -y
+
     curl --retry 10 -fssl https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    apt-get update
-    apt-get -y install docker-ce="${DOCKER_VERSION}*"
-    apt-get install -y socat conntrack ipset
-    log "started finished_docker"
+
+    cat <<EOF > /etc/apt/sources.list.d/docker.list
+deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable
+EOF
+
+    until apt-cache madison docker-ce | grep "${DOCKER_VERSION}" ; do
+        ( apt-cache madison docker-ce | grep "${DOCKER_VERSION}" | head -n 1 | cut -d "|" -f 2 | tr -d " " ) > /tmp/docker.version
+        apt update
+    done
+
+    until apt-get install -y socat conntrack ipset containerd.io docker-ce="$(</tmp/docker.version)" docker-ce-cli="$(</tmp/docker.version)"; do
+	    apt update
+    done
+    cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+    mkdir -p /etc/systemd/system/docker.service.d
+    # Restart Docker
+    systemctl daemon-reload
+    systemctl restart docker
+    systemctl enable docker
+    log "Finished ${FUNCNAME[0]}"
 }
 
 # enforce kubeadm version
@@ -490,8 +521,10 @@ function get_kubeadm() {
 
 function get_yq() {
 	if [ -z "$(type -P yq)" ]; then
+		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/3.3.2/yq_linux_amd64 -o /usr/local/bin/yq3
 		curl --retry 10 -fssL https://github.com/mikefarah/yq/releases/download/2.3.0/yq_linux_amd64 -o /usr/local/bin/yq
 		chmod +x /usr/local/bin/yq
+		chmod +x /usr/local/bin/yq3
 	fi
 }
 
@@ -518,7 +551,7 @@ function main() {
     apply_net_plugin
 
     # this is how we enbale the external CSI provider needed in kubenetes 1.16
-    # and later. Current, koris versions will provision volumes with the built
+    # and later. Current, kiosk versions will provision volumes with the built
     # in cloud-provider, all other cloud operations go through the external
     # cloud provider
     #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-controllerplugin-rbac.yaml
@@ -527,19 +560,14 @@ function main() {
     #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/cinder-csi-nodeplugin.yaml
     #kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-openstack/master/manifests/cinder-csi-plugin/csi-cinder-driver.yaml
 
-    # TODO: fix:
-    # [WARNING IsDockerSystemdCheck]: detected "cgroupfs" as the Docker cgroup driver.
-    # The recommended driver is "systemd". Please follow the guide at https://kubernetes.io/docs/setup/cri/
-
     for (( i=1; i<${#MASTERS[@]}; i++ )); do
         echo "bootstrapping master ${MASTERS[$i]}";
         HOST_NAME=${MASTERS[$i]}
         HOST_IP=${MASTERS_IPS[$i]}
-        CURRENT_CLUSTER="${CURRENT_CLUSTER},$HOST_NAME=https://${HOST_IP}:2380"
         copy_keys "${HOST_IP}"
-        until add_master $HOST_NAME $HOST_IP $CURRENT_CLUSTER $first_master $first_master_ip; do
+        until add_master $HOST_NAME $HOST_IP; do
             ssh ${SSHOPTS} $HOST_NAME sudo kubeadm reset -f
-            copy_keys $HOST_IP
+            copy_keys "${HOST_IP}"
         done
 
         wait_for_etcd $HOST_NAME
@@ -553,7 +581,6 @@ function main() {
 
     echo "the installation has finished."
 }
-
 
 # when building bare metal cluster or vSphere clusters this is used to
 # install dependencies on each host and join the host to the cluster
@@ -573,8 +600,6 @@ function join_all_hosts() {
        ssh ${K} sudo kubeadm join --token $BOOTSTRAP_TOKEN ${LOAD_BALANCER_DNS:-${LOAD_BALANCER_IP}}:$LOAD_BALANCER_PORT --discovery-token-ca-cert-hash sha256:${DISCOVERY_HASH}
    done
 }
-
-
 
 # keep this function here, although we don't use it really, it's usefull for
 # building bare metal cluster or vSphere clusters

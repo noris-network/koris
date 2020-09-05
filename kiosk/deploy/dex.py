@@ -4,12 +4,12 @@ The workflow is the following:
 
 1. Create certificates for Dex (via :class:`.DexSSL`)
 
-2. In :class:`koris.provision.cloud_init.FirstMasterInit` deploy the previously
+2. In :class:`kiosk.provision.cloud_init.FirstMasterInit` deploy the previously
 created CA to the first Master that is created. Additionally, create the extra
-arguments for the apiserver as environment variables in the ``koris.env`` file.
+arguments for the apiserver as environment variables in the ``kiosk.env`` file.
 
-3. In ``koris/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
-variables from ``koris.env`` and add their values as extra arguments to kubeadm's
+3. In ``kiosk/provision/userdata/bootstraph-k8s-master-ubuntu-16.04.sh``, take the
+variables from ``kiosk.env`` and add their values as extra arguments to kubeadm's
 ``init.tmpl``.
 
 4. Take the main LoadBalancer and add two new Listeners to it: one for the Dex service
@@ -42,8 +42,8 @@ Example:
 
 from netaddr import valid_ipv4, valid_ipv6
 
-from koris.cloud.openstack import LoadBalancer
-from koris.ssl import create_key, create_ca, CertBundle
+from kiosk.cloud.openstack import LoadBalancer
+from kiosk.ssl import create_key, create_ca, CertBundle
 
 
 def is_port(port):
@@ -407,7 +407,7 @@ class DexSSL:
     def save_certs(self, client_prefix="dex-client", ca_prefix="dex-ca"):
         """Saves certificate bundles to disc.
 
-        This function uses :meth:`koris.ssl.CertBundle.save` to save the certificate
+        This function uses :meth:`kiosk.ssl.CertBundle.save` to save the certificate
         bundles to disc.
 
         Args:
@@ -474,7 +474,7 @@ async def create_oauth2(lb: LoadBalancer, name="oauth2",
 
 # pylint: disable=too-many-branches
 def create_dex_conf(config, dex_ssl: DexSSL):
-    """Parse the koris config for dex parameters.
+    """Parse the kiosk config for dex parameters.
 
     The user needs to validate first if dex is wished to be installed.
     The following config arguments are optional username_claim (default: email),

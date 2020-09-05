@@ -56,10 +56,10 @@ munch = get_distribution('munch')
 osc_lib = get_distribution('osc_lib')
 
 
-a = Entrypoint('koris', 'console_scripts', 'koris',
-               datas=[('koris/provision/userdata/*', 'provision/userdata'),
-                      ('koris/provision/userdata/manifests/*', 'provision/userdata/manifests'),
-                      ('koris/deploy/manifests/*', 'deploy/manifests'),
+a = Entrypoint('kiosk', 'console_scripts', 'kiosk',
+               datas=[('kiosk/provision/userdata/*', 'provision/userdata'),
+                      ('kiosk/provision/userdata/manifests/*', 'provision/userdata/manifests'),
+                      ('kiosk/deploy/manifests/*', 'deploy/manifests'),
                       (os_service_types, 'os_service_types'),
                       (os_defaults, 'openstack'),
                       (keystoneauth1.egg_info,
@@ -98,7 +98,7 @@ exe = EXE(pyz,
           a.zipfiles,
           a.datas,
           [],
-          name='koris',
+          name='kiosk',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
@@ -112,7 +112,7 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    name='koris-dir',
+    name='kiosk-dir',
     strip=False,
     upx=True
 )

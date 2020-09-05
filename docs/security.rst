@@ -2,7 +2,7 @@
 Security
 ========
 
-This document describe the security features of Koris.
+This document describe the security features of Kiosk.
 
 Audit Logging
 -------------

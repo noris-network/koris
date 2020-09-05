@@ -2,7 +2,7 @@ import pytest
 
 from .testdata import ETCD_RESPONSE
 
-from koris.deploy.k8s import parse_etcd_response
+from kiosk.deploy.k8s import parse_etcd_response
 
 ETCD_PARSED_EXPECTED = {
     'master-1-ajk-test': {

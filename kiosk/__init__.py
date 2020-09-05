@@ -1,7 +1,7 @@
 # pylint: disable=missing-docstring
 try:
     import pkg_resources
-    __version__ = pkg_resources.get_distribution('koris').version
+    __version__ = pkg_resources.get_distribution('kiosk').version
 except pkg_resources.DistributionNotFound:
     __version__ = '1.3.4'
 

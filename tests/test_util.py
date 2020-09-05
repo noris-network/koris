@@ -1,15 +1,15 @@
 import io
 import unittest.mock
 
-from koris.util.util import (KorisVersionCheck, name_validation,
+from kiosk.util.util import (KorisVersionCheck, name_validation,
                              k8s_version_validation)
-from koris.util.hue import red
+from kiosk.util.hue import red
 
 phtml = """
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>Welcome to Koris’s ! &#8212; koris v0.9.2-14-g8a53b27 documentation</title>
+<title>Welcome to KIOSK’s ! &#8212; kiosk v0.9.2-14-g8a53b27 documentation</title>
 </head>
 <body>
 </body>
@@ -23,7 +23,7 @@ def test_version_is_older():
     with unittest.mock.patch('sys.stdout', new_callable=io.StringIO) as p:
         KorisVersionCheck(phtml).check_is_latest("0.9.1")
         val = p.getvalue()
-        xpctd = red("Version 0.9.2 of Koris was released, you should upgrade!") + "\n"
+        xpctd = red("Version 0.9.2 of Kiosk was released, you should upgrade!") + "\n"
         assert val == xpctd
 
 

@@ -1,11 +1,11 @@
-"""This module defines logging capabilities for koris."""
+"""This module defines logging capabilities for kiosk."""
 
 import logging
 import sys
 import time
 
 # pylint: disable=no-name-in-module
-from koris.util.hue import (bad, red, info as infomsg, yellow, run, grey,
+from kiosk.util.hue import (bad, red, info as infomsg, yellow, run, grey,
                             que, good, green)
 
 LOG_LEVELS = list(range(5))
@@ -45,7 +45,7 @@ def set_level(logger, level):
 
     See `Python Logging Levels
     <https://docs.python.org/3.6/library/logging.html#levels>`_ for
-    more information on how the koris levels relate to the original
+    more information on how the kiosk levels relate to the original
     Python levels.
 
     Args:
@@ -85,7 +85,7 @@ class Singleton(type):
 
     In our case, the metaclass holds a dictionary that keeps track of all the
     instances that have been created by the Singleton Metaclass. Everytime we
-    instantiate or call let's say :class:`koris.util.logger.Logger`, whose
+    instantiate or call let's say :class:`kiosk.util.logger.Logger`, whose
     Metaclass is the Singleton class, we check if we have already have such an
     instance. If yes, that one is returned. If not, we create such an instance,
     add it to the ``_instances`` dict and then return it. Subsequent calls will
@@ -102,7 +102,7 @@ class Singleton(type):
         [~] hello
         >>> log2.info("world")
         [~] world
-        >>> log3 = Logger("koris")
+        >>> log3 = Logger("kiosk")
         >>> id(log1) == id(log2) == id(log3)
         True
     """

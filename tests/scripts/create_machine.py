@@ -8,7 +8,7 @@ import asyncio
 import sys
 
 
-from koris.cloud.openstack import Instance, get_clients, get_or_create_sec_group
+from kiosk.cloud.openstack import Instance, get_clients, get_or_create_sec_group
 
 CONFIG = {'zone': 'de-nbg6-1a',
           'class': 'BSS-Performance-Storage',

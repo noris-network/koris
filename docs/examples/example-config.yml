@@ -1,4 +1,4 @@
-# This is an example koris config file you can use to deploy a
+# This is an example kiosk config file you can use to deploy a
 # KUbernetes cluster into your own noris.cloud project.
 ---
 # Noris.cloud instance flavors. For available options see
@@ -8,18 +8,18 @@ node_flavor: 'ECS.C1.4-8'
 version:
   k8s: "1.13.10"
 # Specify the name of an existing network and subnet with CIDR range. If it
-# doesn't exist, koris will create it for you.
+# doesn't exist, kiosk will create it for you.
 private_net:
-  name: 'koris-net'
+  name: 'kiosk-net'
   subnet:
-    name: 'koris-subnet'
+    name: 'kiosk-subnet'
     cidr: '10.0.0.0/24'
     #  This is optional - if no router name is given a new one will be created
     router:
-      name: 'koris-router'
+      name: 'kiosk-router'
 
 # The cluster name should be unique in your OpenStack project.
-cluster-name: 'koris-cluster'
+cluster-name: 'kiosk-cluster'
 availibility-zones:
  - de-nbg6-1b
  - de-nbg6-1a
@@ -30,20 +30,23 @@ n-masters: 3
 n-nodes: 3
 
 # The name of the keypair in your project.
-keypair: 'koris-key-pair'
+keypair: 'kiosk-key-pair'
 
 # TODO: add explanation
 user_data: 'cloud-init-parts/generic'
 
 # Any generic Ubuntu image should work but if you're
-# on noris.cloud, use our pre-built koris images of
-# the form 'koris-YYYY-MM-DD'.
-image: "koris-2019-09-12"
+# on noris.cloud, use our pre-built kiosk images of
+# the form 'kiosk-YYYY-MM-DD'.
+image: "kiosk-2019-09-12"
 
 loadbalancer:
 # This is optional - you can either remove loadbalancer and floatingip completely
 # or you can Specify the Floating IP you want to assign.
   floatingip: 1.2.3.4
+  # per default SSH through the loadbalancer is disabled.
+  # if set to true, SSH listeners will be added to the loadbalancer
+  # ssh: true
 
 # The noris.cloud storage class. For available options check
 # https://www.noris.cloud/services/storage/openstack-cinder/?lang=en#details

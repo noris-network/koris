@@ -14,16 +14,16 @@ import urllib
 import openstack
 from cryptography.hazmat.primitives import serialization
 
-from koris import KUBERNETES_BASE_VERSION
-from koris.cli import write_kubeconfig
-from koris.deploy.k8s import K8S, add_ingress_listeners
-from koris.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
-from koris.ssl import create_key, create_ca, CertBundle
-from koris.ssl import discovery_hash as get_discovery_hash
-from koris.deploy.dex import (create_dex, create_oauth2, DexSSL,
+from kiosk import KUBERNETES_BASE_VERSION
+from kiosk.cli import write_kubeconfig
+from kiosk.deploy.k8s import K8S, add_ingress_listeners, add_ssh_listeners
+from kiosk.provision.cloud_init import FirstMasterInit, NthMasterInit, NodeInit
+from kiosk.ssl import create_key, create_ca, CertBundle
+from kiosk.ssl import discovery_hash as get_discovery_hash
+from kiosk.deploy.dex import (create_dex, create_oauth2, DexSSL,
                               create_dex_conf, ValidationError)
-from koris.util.logger import Logger
-from koris.ssl import b64_cert, b64_key
+from kiosk.util.logger import Logger
+from kiosk.ssl import b64_cert, b64_key
 from .openstack import (Instance, OSCloudConfig, LoadBalancer, InstanceExists)
 
 
@@ -99,7 +99,7 @@ class NodeBuilder:
                            amount=1,
                            k8s_version=KUBERNETES_BASE_VERSION):
         """
-        Create tasks for adding nodes when running ``koris add --args ...``
+        Create tasks for adding nodes when running ``kiosk add --args ...``
 
         Args:
             ca_cert (CertBundle.cert)
@@ -138,7 +138,7 @@ class NodeBuilder:
     @staticmethod
     def launch_new_nodes(node_tasks):
         """
-        Launch all nodes when running ``koris add ...``
+        Launch all nodes when running ``kiosk add ...``
         """
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.gather(*node_tasks))
@@ -164,7 +164,7 @@ class NodeBuilder:
                              k8s_version=KUBERNETES_BASE_VERSION,
                              pod_network="CALICO"):
         """
-        Create all initial nodes when running ``koris apply <config>``
+        Create all initial nodes when running ``kiosk apply <config>``
         """
         self.cloud_config = cloud_config
 
@@ -303,7 +303,7 @@ class ControlPlaneBuilder:  # pylint: disable=too-many-locals,too-many-arguments
             flavor (str): The noris.cloude instance flavor of the master.
 
         Returns:
-            An instance of `:class:koris.cloud.openstack.Instance` which
+            An instance of `:class:kiosk.cloud.openstack.Instance` which
             represents the added master.
         """
         role = 'master'
@@ -460,6 +460,58 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
 
         return cloud_config
 
+    def _add_load_balancer(self, config):
+        # create a load balancer for accessing the API server of the cluster;
+        # do not add a listener, since we created no machines yet.
+        LOGGER.info("Creating the LoadBalancer ...")
+        lbinst = LoadBalancer(config, self.conn, self.neutron)
+        lb, floatingip = lbinst.get_or_create()
+        lb_port = "6443"
+
+        lb_dns = config.get('loadbalancer', {}).get('dnsname') or floatingip
+        lb_ip = floatingip if floatingip else lb['vip_address']
+        return lb_dns, lb_ip, lb_port, lbinst
+
+    def _add_dex(self, loop, lbinst, master_ips, node_ips):
+        LOGGER.info("Configuring the LoadBalancer for Dex ...")
+        dex_listener = self.dex_conf['ports']['listener']
+        dex_service = self.dex_conf['ports']['service']
+        dex_members = master_ips
+        dex_task = loop.create_task(create_dex(lbinst,
+                                               listener_port=dex_listener,
+                                               pool_port=dex_service,
+                                               members=dex_members))
+
+        client_listener = self.dex_conf['client']['ports']['listener']
+        client_service = self.dex_conf['client']['ports']['service']
+        client_members = node_ips
+        oauth_task = loop.create_task(create_oauth2(lbinst,
+                                                    listener_port=client_listener,
+                                                    pool_port=client_service,
+                                                    members=client_members))
+        tasks = [dex_task, oauth_task]
+        loop.run_until_complete(asyncio.gather(*tasks))
+        LOGGER.info("Finished configuring LoadBalancer for Dex")
+
+    def _configure_dex(self, lb_ip, lb_dns, cert_dir, config):
+        LOGGER.info("Setting up Dex SSL infrastructure ...")
+        # Dex Issuer will be set to the Floating IP, or LoadBalancer DNS Name
+        if lb_dns == lb_ip or lb_dns is None:
+            issuer = lb_ip
+        else:
+            issuer = lb_dns
+        LOGGER.info("Dex CA Issuer set to %s", issuer)
+        dex_ssl = DexSSL(cert_dir, issuer)
+        dex_ssl.save_certs()
+
+        try:
+            self.dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
+        except (ValidationError, TypeError, KeyError) as exc:
+            LOGGER.error(f"Unable to parse dex config: {exc}")
+            LOGGER.error("Skipping Dex deployment")
+            self.deploy_dex = False
+            self.dex_conf = None
+
     def run(self, config):  # pylint: disable=too-many-locals,too-many-statements
         """
         execute the complete cluster build
@@ -493,16 +545,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         # to the other nodes so that they can join the cluster
         ssh_key = self.create_ssh_keypair()
 
-        # create a load balancer for accessing the API server of the cluster;
-        # do not add a listener, since we created no machines yet.
-        LOGGER.info("Creating the LoadBalancer ...")
-        lbinst = LoadBalancer(config, self.conn, self.neutron)
-        lb, floatingip = lbinst.get_or_create()
-        lb_port = "6443"
-
-        lb_dns = config.get('loadbalancer', {}).get('dnsname') or floatingip
-        lb_ip = floatingip if floatingip else lb['vip_address']
-
+        lb_dns, lb_ip, lb_port, lb_inst = self._add_load_balancer(config)
         # calculate information needed for joining nodes to the cluster...
         # calculate bootstrap token
         bootstrap_token = ClusterBuilder.create_bootstrap_token()
@@ -511,24 +554,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         discovery_hash = self.calculate_discovery_hash(ca_bundle)
 
         if self.deploy_dex:
-            LOGGER.info("Setting up Dex SSL infrastructure ...")
-            # Dex Issuer will be set to the Floating IP, or LoadBalancer DNS Name
-            if lb_dns == lb_ip or lb_dns is None:
-                issuer = lb_ip
-            else:
-                issuer = lb_dns
-            LOGGER.info("Dex CA Issuer set to %s", issuer)
-            dex_ssl = DexSSL(cert_dir, issuer)
-            dex_ssl.save_certs()
-
-            try:
-                self.dex_conf = create_dex_conf(config['addons']['dex'], dex_ssl)
-            except (ValidationError, TypeError, KeyError) as exc:
-                LOGGER.error(f"Unable to parse dex config: {exc}")
-                LOGGER.error("Skipping Dex deployment")
-                self.deploy_dex = False
-                self.dex_conf = None
-
+            self._configure_dex(lb_ip, lb_dns, cert_dir, config)
         # create the master nodes with ssh_key (private and public key)
         # first task in returned list is task for first master node
         LOGGER.info("Waiting for master instances to be launched...")
@@ -550,7 +576,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         LOGGER.info("Configuring the LoadBalancer ...")
         first_master_ip = master_results[0].ip_address
         configure_lb_task = loop.create_task(
-            lbinst.configure([first_master_ip]))
+            lb_inst.configure([first_master_ip]))
 
         # create the worker nodes
         LOGGER.info("Waiting for worker instances to be launched and the "
@@ -568,25 +594,7 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         node_ips = [x.ip_address for x in node_results if isinstance(x, Instance)]
 
         if self.deploy_dex:
-            LOGGER.info("Configuring the LoadBalancer for Dex ...")
-            dex_listener = self.dex_conf['ports']['listener']
-            dex_service = self.dex_conf['ports']['service']
-            dex_members = master_ips
-            dex_task = loop.create_task(create_dex(lbinst,
-                                                   listener_port=dex_listener,
-                                                   pool_port=dex_service,
-                                                   members=dex_members))
-
-            client_listener = self.dex_conf['client']['ports']['listener']
-            client_service = self.dex_conf['client']['ports']['service']
-            client_members = node_ips
-            oauth_task = loop.create_task(create_oauth2(lbinst,
-                                                        listener_port=client_listener,
-                                                        pool_port=client_service,
-                                                        members=client_members))
-            tasks = [dex_task, oauth_task]
-            loop.run_until_complete(asyncio.gather(*tasks))
-            LOGGER.info("Finished configuring LoadBalancer for Dex")
+            self._add_dex(loop, lb_inst, master_ips, node_ips)
 
         # We should no be able to query the API server for available nodes
         # with a valid certificate from the generated CA. Hence, generate
@@ -625,12 +633,16 @@ class ClusterBuilder:  # pylint: disable=too-few-public-methods
         lb_nodes = [{"name": x.name,
                      "address": x.ip_address,
                      } for x in node_results if isinstance(x, Instance)]
-        if not lbinst.bulk_update_members(lb_masters):
+        if not lb_inst.bulk_update_members(lb_masters):
             k8s.add_all_masters_to_loadbalancer(config['cluster-name'],
-                                                len(master_tasks), lbinst)
+                                                len(master_tasks), lb_inst)
         k8s.apply_addons(config)
-        add_ingress_listeners(k8s.nginx_ingress_ports, lbinst,
+        add_ingress_listeners(k8s.nginx_ingress_ports, lb_inst,
                               lb_masters + lb_nodes)
+
+        if config.get('loadbalancer', {}).get('ssh'):
+            add_ssh_listeners(lb_inst, lb_masters)
+
         LOGGER.success("Configured LoadBalancer to use all API servers")
         LOGGER.success("Kubernetes cluster is ready to use !")
         loop.close()

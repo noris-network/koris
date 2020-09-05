@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 from .testdata import CONFIG
-from koris.koris import delete_node
+from kiosk.kiosk import delete_node
 
 
 def _get_clean_env():
@@ -21,23 +21,23 @@ def _get_clean_env():
 
 def test_help():
     """
-    It should be possible to call koris --help without sourcing an
+    It should be possible to call kiosk --help without sourcing an
     RC file.
     """
-    cmd = ['koris', '--help']
+    cmd = ['kiosk', '--help']
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=_get_clean_env())
     stdout, stderr = proc.communicate()
     output = stdout.decode("utf-8").strip()
     assert proc.returncode == 0
-    assert "usage: koris" in output
+    assert "usage: kiosk" in output
 
 
 def test_need_rc_file():
     """
     For building a cluster, we need to source the RC file.
     """
-    cmd = ['koris', 'apply', 'tests/koris_test.yml']
+    cmd = ['kiosk', 'apply', 'tests/koris_test.yml']
     try:
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, env=_get_clean_env())
