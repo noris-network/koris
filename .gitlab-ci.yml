@@ -54,12 +54,12 @@ build:
    - make install build-exec
    - ls dist
    - cp -v dist/kiosk kiosk-linux-amd64
-   - ./koris-linux-amd64 -h
+   - ./kiosk-linux-amd64 -h
    - python3 setup.py sdist
   artifacts:
     paths:
-     - dist/koris-*.tar.gz
-     - koris-linux-amd64
+     - dist/kiosk-*.tar.gz
+     - kiosk-linux-amd64
   only:
     - tags
     - master
@@ -81,7 +81,7 @@ wait-for-resources:
 # --[ BUILD ]--
 #bare-metal-build:
 #  stage: build-cluster
-#  image: oz123/koris-alpine:0.1.5
+#  image: oz123/kiosk-alpine:0.1.5
 #  script:
 #   - apk add openssh
 #   - pip install python-openstackclient python-octaviaclient
@@ -104,7 +104,7 @@ build-cluster:
   artifacts:
     paths:
       - "*-admin.conf"
-      - "tests/koris_test.yml"
+      - "tests/kiosk_test.yml"
       - ".coverage.build-cluster"
     expire_in: 1 week
   except:
@@ -116,13 +116,13 @@ build-cluster:
 build-cluster-with-vanilla-image:
   stage: build-cluster
   script:
-  - "make update-config TESTID=1 IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'koris-base' | head -n 1) CLUSTER_NAME=koris-pipeline-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}-vanilla"
-  - "cp tests/koris_test.yml tests/koris_test-vanilla.yml"
-  - ./koris-linux-amd64 apply tests/koris_test-vanilla.yml
+  - "make update-config TESTID=1 IMAGE=$(openstack image list -c Name -f value --sort name:desc | grep 'kiosk-base' | head -n 1) CLUSTER_NAME=kiosk-pipeline-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}-vanilla"
+  - "cp tests/kiosk_test.yml tests/kiosk_test-vanilla.yml"
+  - ./kiosk-linux-amd64 apply tests/kiosk_test-vanilla.yml
   artifacts:
     paths:
       - "*-admin.conf"
-      - "tests/koris_test-vanilla.yml"
+      - "tests/kiosk_test-vanilla.yml"
     expire_in: 1 week
   except:
     variables:
@@ -141,7 +141,7 @@ integration-test:
   artifacts:
     paths:
       - "*-admin.conf"
-      - "tests/koris_test.yml"
+      - "tests/kiosk_test.yml"
     expire_in: 1 week
   except:
     variables:
@@ -239,8 +239,8 @@ add-nodes:
   - "make rename-coverage NAME=\"add-nodes\""
   artifacts:
     paths:
-      - "tests/koris_test.add_node.yml"
-      - "tests/koris_test.yml"
+      - "tests/kiosk_test.add_node.yml"
+      - "tests/kiosk_test.yml"
       - ".coverage.add-nodes"
     expire_in: 1 week
   except:
@@ -268,8 +268,8 @@ add-master:
     - "make rename-coverage NAME=\"add-master\""
   artifacts:
     paths:
-      - "tests/koris_test.add_master.yml"
-      - "tests/koris_test.yml"
+      - "tests/kiosk_test.add_master.yml"
+      - "tests/kiosk_test.yml"
       - ".coverage.add-master"
     expire_in: 1 week
   except:
