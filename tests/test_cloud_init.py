@@ -146,7 +146,7 @@ def test_bootstrap_script_first_master(ci_first_master):
     ci_first_master.add_bootstrap_script()
     assert len(ci_first_master._attachments) == 1
     filename = ci_first_master._attachments[0].get_filename()
-    assert filename == 'bootstrap-k8s-master-ubuntu-16.04.sh'
+    assert filename == 'bootstrap-k8s-master-ubuntu-20.04.sh'
 
 
 def test_bootstrap_script_nth_master(ci_nth_master):
@@ -154,7 +154,7 @@ def test_bootstrap_script_nth_master(ci_nth_master):
     ci_nth_master.add_bootstrap_script()
     assert len(ci_nth_master._attachments) == 1
     filename = ci_nth_master._attachments[0].get_filename()
-    assert filename == 'bootstrap-k8s-nth-master-ubuntu-16.04.sh'
+    assert filename == 'bootstrap-k8s-nth-master-ubuntu-20.04.sh'
 
 
 def test_cloud_init(ci_nth_master):
