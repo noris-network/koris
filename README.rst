@@ -12,6 +12,9 @@ koris
   :target: https://noris-network.gitlab.io/koris/
 
 
+WARNING: This code is no longer actively maintained! 
+
+
 Launch kubernetes clusters on OpenStack.
 
 
